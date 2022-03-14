@@ -1,4 +1,4 @@
-// l-hyphen is a multi-purpose system made of cells that are themeself composed of bars
+// l-hyphen (lodge hyphen) is a multi-purpose system made of cells that are themeself composed of bars
 //
 // Zoom cell -- Z-cells -- H-cells
 // 12-cells
@@ -178,6 +178,8 @@ public:
   std::set<Neighbor> neighbors;
 
   double radius; // un seul rayon pour toute la cellule [m]
+  
+  Cell() : radius(0.0) {}
 
   /**
    * @brief ré-ordonne la position des noeuds de la cellule en fonction de leur angle
