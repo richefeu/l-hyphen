@@ -178,7 +178,7 @@ public:
   std::set<Neighbor> neighbors;
 
   double radius; // un seul rayon pour toute la cellule [m]
-  
+
   Cell() : radius(0.0) {}
 
   /**
@@ -384,7 +384,7 @@ public:
 
   /**
    * @brief affiche un petit entete sympatique
-   * 
+   *
    */
   void head() {
     std::cout << "    L-HYPHEN\n";
@@ -1501,6 +1501,17 @@ public:
         double d;
         file >> d;
         glue(d);
+      } else if (token == "setNodeControl") {
+        double xvalue, yvalue;
+        int xmode, ymode;
+        size_t c, n;
+        file >> c >> n >> xmode >> xvalue >> ymode >> yvalue;
+        setNodeControl(c, n, xmode, xvalue, ymode, yvalue);
+      } else if (token == "setNodeControlInBox") {
+        double xmin, xmax, ymin, ymax, xvalue, yvalue;
+        int xmode, ymode;
+        file >> xmin >> xmax >> ymin >> ymax >> xmode >> xvalue >> ymode >> yvalue;
+        setNodeControlInBox(xmin, xmax, ymin, ymax, xmode, xvalue, ymode, yvalue);
       } else if (token == "setCellControl") {
         size_t icell;
         int xmode, ymode;
