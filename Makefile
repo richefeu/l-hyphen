@@ -5,6 +5,9 @@ CXX = g++
 CXXFLAGS = -Wall -Wextra -ansi -O3 -Wwrite-strings -Wstrict-prototypes -Wuninitialized \
 -Wunreachable-code -Wno-missing-braces  -Wno-missing-field-initializers \
 -std=c++0x -I /usr/local/include/toofus
+
+# Notice that you need to install toofus before compiling
+
 APP = l-hyphen
 
 .PHONY: all clean
