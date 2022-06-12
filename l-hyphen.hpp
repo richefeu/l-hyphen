@@ -333,6 +333,17 @@ struct CellProperties {
   double mz_max;
 };
 
+struct CellNodeID {
+  size_t c, n;
+  CellNodeID(size_t c_, size_t n_) : c(c_), n(n_) {}
+};
+
+struct CapturedNodes {
+  std::vector<CellNodeID> cellNodeIDs;
+  std::string filename;
+  CapturedNodes(const char *name) : filename(name) {}
+};
+
 /**
  * @brief Le système entier
  *
@@ -341,6 +352,8 @@ class Sample {
 public:
   std::vector<Cell> cells;
   std::vector<Control> controls;
+
+  std::vector<CapturedNodes> capturedNodes;
 
   // pour les sorties SVG
   double xmin, xmax;
@@ -423,6 +436,12 @@ public:
       }
     }
 
+    std::cout << "limites des noeuds:\n";
+    std::cout << "xmin = " << xmin << '\n';
+    std::cout << "xmax = " << xmax << '\n';
+    std::cout << "ymin = " << ymin << '\n';
+    std::cout << "ymax = " << ymax << '\n';
+
     double halfL = 0.5 * (xmax - xmin);
     double halfH = 0.5 * (ymax - ymin);
     double x0 = 0.5 * (xmin + xmax);
@@ -448,6 +467,7 @@ public:
       C.nodes.emplace_back(h.x + Rcell * cos(theta), h.y + Rcell * sin(theta));
     }
     C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, true);
+    // C.print();
     cells.push_back(C);
   }
 
@@ -613,9 +633,9 @@ public:
    * @brief ajoute un control à tous les noeuds de la cellule c
    *
    * @param c numéro de la cellule
-   * @param xmode VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
+   * @param xmode VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
    * @param xvalue valeur suivant x (une force ou une vitesse selon xmode)
-   * @param ymode VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
+   * @param ymode VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
    * @param yvalue valeur suivant y (une force ou une vitesse selon ymode)
    */
   void setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue) {
@@ -644,11 +664,13 @@ public:
     Control C(xmode, xvalue, ymode, yvalue);
 
     controls.push_back(C);
+    size_t ictrl = controls.size() - 1;
     for (size_t c = 0; c < cells.size(); c++) {
       for (size_t n = 0; n < cells[c].nodes.size(); n++) {
         vec2r pos = cells[c].nodes[n].pos;
         if (pos.x >= xmin && pos.x <= xmax && pos.y >= ymin && pos.y <= ymax) {
-          cells[c].nodes[n].ictrl = controls.size() - 1;
+          cells[c].nodes[n].ictrl = ictrl;
+          std::cout << "node pos = " << pos << "\n";
         }
       }
     }
@@ -1267,7 +1289,7 @@ public:
           } else if (ctrl->xmode == VELOCITY_CONTROL) {
             cells[c].nodes[n].vel.x = ctrl->xvalue;
             cells[c].nodes[n].force.x = 0.0;
-            cells[c].nodes[n].pos.x += cells[c].nodes[n].vel.x;
+            cells[c].nodes[n].pos.x += cells[c].nodes[n].vel.x * dt;
           }
 
           if (ctrl->ymode == FORCE_CONTROL) {
@@ -1276,7 +1298,7 @@ public:
           } else if (ctrl->ymode == VELOCITY_CONTROL) {
             cells[c].nodes[n].vel.y = ctrl->yvalue;
             cells[c].nodes[n].force.y = 0.0;
-            cells[c].nodes[n].pos.y += cells[c].nodes[n].vel.y;
+            cells[c].nodes[n].pos.y += cells[c].nodes[n].vel.y * dt;
           }
         }
       }
@@ -1315,12 +1337,33 @@ public:
    *
    */
   void run() {
+    std::ofstream of[capturedNodes.size()];
+    for (size_t c = 0; c < capturedNodes.size(); c++) {
+      of[c].open(capturedNodes[c].filename.c_str());
+    }
+
     for (int step = 0; step < nstep; step++) {
       if (step % nstepPeriodVerlet == 0) {
         updateNeighbors();
       }
 
       if (step % nstepPeriodSVG == 0) {
+
+        for (size_t c = 0; c < capturedNodes.size(); c++) {
+          vec2r meanPos, meanForce;
+          for (size_t cn = 0; cn < capturedNodes[c].cellNodeIDs.size(); cn++) {
+            size_t C = capturedNodes[c].cellNodeIDs[cn].c;
+            size_t N = capturedNodes[c].cellNodeIDs[cn].n;
+            meanPos += cells[C].nodes[N].pos;
+            meanForce += cells[C].nodes[N].force;
+          }
+          if (capturedNodes[c].cellNodeIDs.size() > 0) {
+            meanPos /= (double)capturedNodes[c].cellNodeIDs.size();
+            meanForce /= (double)capturedNodes[c].cellNodeIDs.size();
+          }
+          of[c] << meanPos << ' ' << meanForce << '\n' << std::flush;
+        }
+
         saveSVG(isvg);
         isvg++;
       }
@@ -1512,6 +1555,22 @@ public:
         int xmode, ymode;
         file >> xmin >> xmax >> ymin >> ymax >> xmode >> xvalue >> ymode >> yvalue;
         setNodeControlInBox(xmin, xmax, ymin, ymax, xmode, xvalue, ymode, yvalue);
+      } else if (token == "captureNodes") {
+        double xmin, xmax, ymin, ymax;
+        std::string filename;
+        file >> filename >> xmin >> xmax >> ymin >> ymax;
+        CapturedNodes CN(filename.c_str());
+        for (size_t c = 0; c < cells.size(); c++) {
+          for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+
+            if (cells[c].nodes[n].pos.x >= xmin && cells[c].nodes[n].pos.x <= xmax && cells[c].nodes[n].pos.y >= ymin &&
+                cells[c].nodes[n].pos.y <= ymax) {
+              CellNodeID CNID(c, n);
+              CN.cellNodeIDs.push_back(CNID);
+            }
+          }
+        }
+        capturedNodes.push_back(CN);
       } else if (token == "setCellControl") {
         size_t icell;
         int xmode, ymode;
