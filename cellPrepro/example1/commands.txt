@@ -1,0 +1,6 @@
+read_pgm V.pgm
+make_histo
+segmentation 210
+fill_cells
+write_pgm cellColors.pgm
+create_cell_dataset centers.txt
