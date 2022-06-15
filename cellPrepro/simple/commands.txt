@@ -1,0 +1,21 @@
+read_pgm Bench_Cell1.pgm
+make_histo
+segmentation 150
+write_pgm segment.pgm
+fill_cells
+write_pgm cellColors.pgm
+
+create_cell_dataset
+save_cell_dataset centers.txt
+add_centers_image 1
+write_pgm cellColorsCenters.pgm
+
+#clean_cell_data 32
+#save_cell_dataset centers_clean.txt
+
+#add_centers_image 1
+#write_pgm cellColorsCentersClean.pgm
+
+neighbor_strategy delaunay
+max_wall_width 20
+build_cells

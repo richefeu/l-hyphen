@@ -2,13 +2,17 @@
 #define CELLPREPRO_HPP
 
 #include "ColorTable.hpp"
+#include "convexHull.hpp"
+#include "fastSort3.hpp"
 #include "fileTool.hpp"
 #include "kwParser.hpp"
+#include "vec2.hpp"
 
 #include "./delaunator.hpp"
 
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -22,14 +26,18 @@
 struct Cell {
   double x;
   double y;
-  // double a; // area
+  double Req;
   std::vector<int> stack_pixels;
+  std::vector<int> neighbors;
+  std::vector<vec2r> convex_hull;
 };
 
 class CellPrepro {
 private:
   kwParser parser;
   int nb_fill_colors;
+  std::string neighbor_strategy;
+  double max_wall_width;
 
 public:
   std::vector<std::vector<int>> pixels;
@@ -41,7 +49,8 @@ public:
 
   CellPrepro() {
     init_command_parser();
-
+    neighbor_strategy = "disks";
+    max_wall_width = 50.0;
     nb_fill_colors = 0;
   }
 
@@ -86,6 +95,13 @@ public:
       int minPixNumber;
       file >> minPixNumber;
       clean_cell_data(minPixNumber);
+    };
+
+    parser.kwMap["neighbor_strategy"] = __DO__(file) {
+      file >> neighbor_strategy;
+    };
+    parser.kwMap["max_wall_width"] = __DO__(file) {
+      file >> max_wall_width;
     };
 
     parser.kwMap["build_cells"] = __DO__() { build_cells(); };
@@ -264,8 +280,10 @@ public:
     }
 
     for (size_t i = 0; i < cells.size(); i++) {
-      cells[i].x /= (double)cells[i].stack_pixels.size();
-      cells[i].y /= (double)cells[i].stack_pixels.size();
+      double nbPix = (double)cells[i].stack_pixels.size();
+      cells[i].x /= nbPix;
+      cells[i].y /= nbPix;
+      cells[i].Req = sqrt(nbPix/3.14159);
     }
   }
 
@@ -280,9 +298,68 @@ public:
     }
   }
 
-  void build_cells() { 
+  void build_cells() {
     std::cout << "build_cells\n";
-    
+
+    if (neighbor_strategy == "delaunay") {
+      find_neighbors_delaunay();
+    } else if (neighbor_strategy == "disks") {
+      find_neighbors_disks();
+    }
+
+    for (size_t i = 0; i < cells.size(); i++) {
+      std::vector<vec2r> tmp;
+      tmp.push_back(vec2r(0.0, 0.0));
+      tmp.push_back(vec2r(lx, 0.0));
+      tmp.push_back(vec2r(lx, ly));
+      tmp.push_back(vec2r(0.0, ly));
+      cells[i].convex_hull = convexHull(tmp);
+    }
+
+    std::ofstream pp("cuts.txt");
+    for (size_t i = 0; i < cells.size(); i++) {
+      for (size_t k = 0; k < cells[i].neighbors.size(); k++) {
+        size_t j = cells[i].neighbors[k];
+
+        // vec2r pos_plan(0.5 * (cells[i].x + cells[j].x), 0.5 * (cells[i].y + cells[j].y));
+        vec2r pos_plan = find_wall_pos(i, j);
+
+        vec2r normal(cells[i].x - cells[j].x, cells[i].y - cells[j].y);
+
+        pp << pos_plan << '\n';
+        normal.normalize();
+        // std::cout << "normal = " << normal << '\n';
+        cut_polyg_with_plan(cells[i].convex_hull, pos_plan, normal);
+      }
+    }
+
+    std::ofstream file("voro.txt");
+    for (size_t i = 0; i < cells.size(); i++) {
+      if (cells[i].convex_hull.empty())
+        continue;
+      for (size_t k = 0; k < cells[i].convex_hull.size(); k++) {
+        file << cells[i].convex_hull[k] << '\n';
+      }
+      file << cells[i].convex_hull[0] << "\n\n";
+    }
+  }
+
+private:
+  void find_neighbors_disks() {
+    for (size_t i = 0 ; i < cells.size(); i++) {
+      for (size_t j = i+1 ; j < cells.size(); j++) {
+        double dx = cells[j].x - cells[i].x;
+        double dy = cells[j].y - cells[i].y;
+        double dist = sqrt(dx*dx+dy*dy) -  (cells[i].Req + cells[j].Req);
+        if (dist <= max_wall_width) {
+          cells[i].neighbors.push_back(j);
+          cells[j].neighbors.push_back(i);
+        }
+      } 
+    } 
+  }
+
+  void find_neighbors_delaunay() {
     std::vector<double> coords;
     for (size_t i = 0; i < cells.size(); i++) {
       coords.push_back(cells[i].x);
@@ -292,22 +369,125 @@ public:
     // triangulation happens here
     delaunator::Delaunator d(coords);
 
-    for(size_t i = 0; i < d.triangles.size(); i+=3) {
-        printf(
-            "Triangle points: [[%f, %f], [%f, %f], [%f, %f]]\n",
-            d.coords[2 * d.triangles[i]],        //tx0
-            d.coords[2 * d.triangles[i] + 1],    //ty0
-            d.coords[2 * d.triangles[i + 1]],    //tx1
-            d.coords[2 * d.triangles[i + 1] + 1],//ty1
-            d.coords[2 * d.triangles[i + 2]],    //tx2
-            d.coords[2 * d.triangles[i + 2] + 1] //ty2
-        );
+    std::set<std::pair<int, int>> set_close_cells;
+
+    std::ofstream tt("triang.txt");
+
+    for (size_t i = 0; i < d.triangles.size(); i += 3) {
+      int i0 = d.triangles[i];
+      int i1 = d.triangles[i + 1];
+      int i2 = d.triangles[i + 2];
+      fastSort3(i0, i1, i2);
+      // std::cout << i0 << ' ' << i1 << ' ' << i2 << '\n';
+
+      tt << cells[i0].x << ' ' << cells[i0].y << '\n';
+      tt << cells[i1].x << ' ' << cells[i1].y << '\n';
+      tt << cells[i2].x << ' ' << cells[i2].y << '\n';
+      tt << cells[i0].x << ' ' << cells[i0].y << '\n';
+      tt << '\n';
+
+      set_close_cells.insert(std::make_pair(i0, i1));
+      set_close_cells.insert(std::make_pair(i1, i2));
+      set_close_cells.insert(std::make_pair(i0, i2));
     }
-    
-    
+
+    std::ofstream ll("lines.txt");
+    for (auto p : set_close_cells) {
+      int i0 = p.first;
+      int i1 = p.second;
+      ll << cells[i0].x << ' ' << cells[i0].y << '\n';
+      ll << cells[i1].x << ' ' << cells[i1].y << '\n';
+      ll << '\n';
+
+      cells[i0].neighbors.push_back(i1);
+      cells[i1].neighbors.push_back(i0);
+    }
   }
 
-private:
+  vec2r find_wall_pos(size_t i, size_t j) {
+
+    vec2r branch(cells[j].x - cells[i].x, cells[j].y - cells[i].y);
+    vec2r u = branch;
+    double len = u.normalize();
+
+    double iprojmax = 0.0;
+    for (size_t k = 0; k < cells[i].stack_pixels.size(); k++) {
+      int p = cells[i].stack_pixels[k];
+      double x = (double)(p / ly);
+      double y = (double)(p % ly);
+      vec2r a(x - cells[i].x, y - cells[i].y);
+      double proj = a * u;
+      if (proj > iprojmax)
+        iprojmax = proj;
+    }
+    if (iprojmax > len)
+      iprojmax = 0.5 * len;
+
+    double jprojmin = len;
+    for (size_t k = 0; k < cells[j].stack_pixels.size(); k++) {
+      int p = cells[j].stack_pixels[k];
+      double x = (double)(p / ly);
+      double y = (double)(p % ly);
+      vec2r a(x - cells[i].x, y - cells[i].y);
+      double proj = a * u;
+      if (proj < jprojmin)
+        jprojmin = proj;
+    }
+    if (jprojmin < 0.0)
+      jprojmin = 0.5 * len;
+
+    vec2r mid(cells[i].x, cells[i].y);
+    mid += 0.5 * (iprojmax + jprojmin) * u;
+    return mid;
+  }
+
+  // alpha = 0.0 means intersect in A
+  // alpha = 1.0 means intersect in B
+  // alpha in [0.0; 1.0] -> intersect segment AB
+  bool intersect(const vec2r &A, const vec2r &B, const vec2r &pl_pos, const vec2r &pl_normal, double &alpha) {
+    vec2r PA = A - pl_pos;
+    vec2r u = B - A; // do not normalize!
+    double un = u * pl_normal;
+    if (fabs(un) < 1e-20)
+      return false;
+    double PAn = PA * pl_normal;
+    alpha = -PAn / un;
+    return true;
+  }
+
+  void cut_polyg_with_plan(std::vector<vec2r> &polyg, vec2r &pos_plan, vec2r &normal) {
+    if (polyg.size() < 3) {
+      polyg.clear();
+      return;
+    }
+    std::vector<vec2r> hull0 = convexHull(polyg);
+    std::vector<vec2r> lstPts;
+    for (size_t i0 = 0; i0 < hull0.size(); i0++) {
+      size_t i1 = i0 + 1;
+      if (i1 == hull0.size())
+        i1 = 0;
+      double alpha;
+      if (!intersect(hull0[i0], hull0[i1], pos_plan, normal, alpha))
+        return;
+      if (alpha > 0.0 && alpha < 1.0) {
+        vec2r newPt = hull0[i0] + alpha * (hull0[i1] - hull0[i0]);
+        lstPts.push_back(newPt);
+      }
+    }
+
+    for (size_t i = 0; i < hull0.size(); i++) {
+      vec2r a = hull0[i] - pos_plan;
+      double sgn = a * normal;
+      if (sgn >= 0.0)
+        lstPts.push_back(hull0[i]);
+    }
+    if (lstPts.size() < 3) {
+      return;
+    }
+    polyg.clear();
+    polyg = convexHull(lstPts);
+  }
+
   //
   // Floodfill algorithm (adapted from http://lodev.org/cgtutor/floodfill.html)
   //

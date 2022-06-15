@@ -3,4 +3,8 @@ make_histo
 segmentation 210
 fill_cells
 write_pgm cellColors.pgm
-create_cell_dataset centers.txt
+create_cell_dataset
+
+neighbor_strategy disks
+max_wall_width 20
+build_cells

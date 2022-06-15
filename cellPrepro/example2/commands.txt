@@ -10,10 +10,13 @@ create_cell_dataset
 #add_centers_image 1
 #write_pgm cellColorsCenters.pgm
 
-clean_cell_data 32
+clean_cell_data 64
 save_cell_dataset centers_clean.txt
 
 #add_centers_image 1
 #write_pgm cellColorsCentersClean.pgm
 
+neighbor_strategy disks
+max_wall_width 50
 build_cells
+#export_l_hyphen fichier.truc scaleFactor scaled_width 
