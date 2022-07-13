@@ -30,6 +30,7 @@ struct Cell {
   std::vector<int> stack_pixels;
   std::vector<int> neighbors;
   std::vector<vec2r> convex_hull;
+  std::vector<vec2r> shifted;
 };
 
 class CellPrepro {
@@ -44,6 +45,7 @@ public:
   int lx, ly;
   int maxPGMGreyLevel;
   int MinPixelsPerCell;
+  int repair_cell_flag;
 
   std::vector<Cell> cells;
 
@@ -52,6 +54,7 @@ public:
     neighbor_strategy = "disks";
     max_wall_width = 50.0;
     nb_fill_colors = 0;
+    repair_cell_flag = 0;
   }
 
   void init_command_parser() {
@@ -97,14 +100,18 @@ public:
       clean_cell_data(minPixNumber);
     };
 
-    parser.kwMap["neighbor_strategy"] = __DO__(file) {
-      file >> neighbor_strategy;
-    };
-    parser.kwMap["max_wall_width"] = __DO__(file) {
-      file >> max_wall_width;
-    };
+    parser.kwMap["neighbor_strategy"] = __DO__(file) { file >> neighbor_strategy; };
+    parser.kwMap["max_wall_width"] = __DO__(file) { file >> max_wall_width; };
 
     parser.kwMap["build_cells"] = __DO__() { build_cells(); };
+
+    parser.kwMap["create_lhyphen_input"] = __DO__(file) {
+      double pixSize, barWidth;
+      file >> pixSize >> barWidth;
+      create_lhyphen_input(pixSize, barWidth);
+    };
+
+    parser.kwMap["repair_cell"] = __DO__(file) { file >> repair_cell_flag; };
   }
 
   void prepro_commands(const char *name) {
@@ -283,7 +290,7 @@ public:
       double nbPix = (double)cells[i].stack_pixels.size();
       cells[i].x /= nbPix;
       cells[i].y /= nbPix;
-      cells[i].Req = sqrt(nbPix/3.14159);
+      cells[i].Req = sqrt(nbPix / 3.14159);
     }
   }
 
@@ -344,19 +351,124 @@ public:
     }
   }
 
+  void place(double Px, double Py, double w, double n1x, double n1y, double n2x, double n2y, double &newPx,
+             double &newPy) {
+    double A1 = (Px + 0.5 * w * n1x) * n1x + (Py + 0.5 * w * n1y) * n1y;
+    double A2 = (Px + 0.5 * w * n2x) * n2x + (Py + 0.5 * w * n2y) * n2y;
+    double cross = n1x * n2y - n1y * n2x;
+    newPx = (n2y * A1 - n1y * A2) / cross;
+    newPy = (n1x * A2 - n2x * A1) / cross;
+  }
+
+  bool repair_cell(size_t i) {
+    if (cells[i].shifted.size() < 4)
+      return true;
+
+    int nbVertices = cells[i].shifted.size();
+    for (int k0 = 0; k0 < nbVertices; k0++) {
+      int k1 = k0 + 1;
+      if (k1 >= nbVertices)
+        k1 -= nbVertices;
+      int k2 = k1 + 1;
+      if (k2 >= nbVertices)
+        k2 -= nbVertices;
+      int k3 = k2 + 1;
+      if (k3 >= nbVertices)
+        k3 -= nbVertices;
+
+      vec2r A = cells[i].shifted[k0];
+      vec2r B = cells[i].shifted[k1];
+      vec2r C = cells[i].shifted[k2];
+      vec2r D = cells[i].shifted[k3];
+      double alphaAB=0.0;
+      if (intersectSeg(A, B, C, D, alphaAB)) {
+        cells[i].shifted[k2] = A + alphaAB * (B - A);
+        cells[i].shifted.erase(cells[i].shifted.begin() + k1);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void create_lhyphen_input(double pixSize, double barWidth) {
+    std::ofstream file("sample.txt");
+
+    for (size_t i = 0; i < cells.size(); i++) {
+      if (cells[i].convex_hull.empty())
+        continue;
+
+      int nbVertices = (int)cells[i].convex_hull.size();
+      for (int k = 0; k < nbVertices; k++) {
+        int knext = k + 1;
+        if (knext >= nbVertices)
+          knext = 0;
+        int kprev = k - 1;
+        if (kprev < 0)
+          kprev = nbVertices - 1;
+
+        vec2r t = cells[i].convex_hull[knext] - cells[i].convex_hull[k];
+        t.y *= -1.0;
+        t.normalize();
+        vec2r nnext(t.y, -t.x);
+        t = cells[i].convex_hull[k] - cells[i].convex_hull[kprev];
+        t.y *= -1.0;
+        t.normalize();
+        vec2r nprev(t.y, -t.x);
+
+        double Sx, Sy;
+        double Px = pixSize * cells[i].convex_hull[k].x;
+        double Py = pixSize * (ly - cells[i].convex_hull[k].y);
+        place(Px, Py, barWidth, nprev.x, nprev.y, nnext.x, nnext.y, Sx, Sy);
+        cells[i].shifted.emplace_back(Sx, Sy);
+      }
+    }
+
+    //
+    if (repair_cell_flag > 0) {
+      for (size_t i = 0; i < cells.size(); i++) {
+        while (!repair_cell(i)) {
+        }
+      }
+    }
+
+    //
+    for (size_t i = 0; i < cells.size(); i++) {
+      if (cells[i].convex_hull.empty())
+        continue;
+      for (int k = 0; k < (int)cells[i].shifted.size(); k++) {
+        file << cells[i].shifted[k].x << ' ' << cells[i].shifted[k].y << '\n';
+      }
+      file << cells[i].shifted[0].x << ' ' << cells[i].shifted[0].y << "\n\n";
+    }
+    
+    
+    std::ofstream nodefile("nodeFile.txt");
+    int ID = 0;
+    for (size_t i = 0; i < cells.size(); i++) {
+      if (cells[i].convex_hull.empty())
+        continue;
+      
+      for (int k = 0; k < (int)cells[i].shifted.size(); k++) {
+        nodefile << cells[i].shifted[k].x << ' ' << cells[i].shifted[k].y << ' ' << ID << '\n';
+      }
+      ID++;
+    }
+    
+  }
+
 private:
   void find_neighbors_disks() {
-    for (size_t i = 0 ; i < cells.size(); i++) {
-      for (size_t j = i+1 ; j < cells.size(); j++) {
+    for (size_t i = 0; i < cells.size(); i++) {
+      for (size_t j = i + 1; j < cells.size(); j++) {
         double dx = cells[j].x - cells[i].x;
         double dy = cells[j].y - cells[i].y;
-        double dist = sqrt(dx*dx+dy*dy) -  (cells[i].Req + cells[j].Req);
+        double dist = sqrt(dx * dx + dy * dy) - (cells[i].Req + cells[j].Req);
         if (dist <= max_wall_width) {
           cells[i].neighbors.push_back(j);
           cells[j].neighbors.push_back(i);
         }
-      } 
-    } 
+      }
+    }
   }
 
   void find_neighbors_delaunay() {
@@ -452,6 +564,24 @@ private:
       return false;
     double PAn = PA * pl_normal;
     alpha = -PAn / un;
+    return true;
+  }
+
+  bool intersectSeg(const vec2r &A, const vec2r &B, const vec2r &C, const vec2r &D, double &alphaAB) {
+    vec2r t = C - D;
+    vec2r n(t.y, -t.x);
+    n.normalize();
+    intersect(A, B, C, n, alphaAB);
+    if (alphaAB < 0.0 || alphaAB > 1.0)
+      return false;
+    t = B - A;
+    n.set(t.y, -t.x);
+    n.normalize();
+    double alphaCD = 0.0;
+    intersect(C, D, A, n, alphaCD);
+    if (alphaCD < 0.0 || alphaCD > 1.0)
+      return false;
+
     return true;
   }
 

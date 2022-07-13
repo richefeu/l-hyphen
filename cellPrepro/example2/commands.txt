@@ -19,4 +19,5 @@ save_cell_dataset centers_clean.txt
 neighbor_strategy disks
 max_wall_width 50
 build_cells
-#export_l_hyphen fichier.truc scaleFactor scaled_width 
+repair_cell 1
+create_lhyphen_input 1.0 2.0 
