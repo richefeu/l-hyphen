@@ -6,6 +6,7 @@ Welcome to the documentation of l-hyphen!
    :caption: Contents:
 
    quickStart
+   model
    prepro
    syntax
 
