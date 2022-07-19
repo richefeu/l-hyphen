@@ -1,19 +1,5 @@
 // l-hyphen (lodge hyphen) is a multi-purpose system made of cells that are themeself composed of bars
 //
-// Zoom cell -- Z-cells -- H-cells
-// 12-cells
-// cells made of bars (CMB)
-// bar-cells
-// P-cells
-// cells of bars
-// CIC (cells in cells)
-// bars for cells (B4C) *****
-// P-cells (P = poly, polygonal, plain, ... )
-// Soft cells
-// grenade - granada (espagnol)
-// grain na damaged
-// Joinable, l-hyphen
-//
 // ============================================
 // Ce fichier contient tout le code du modèle !
 // Pour l'utiliser il suffit de l'inclure
