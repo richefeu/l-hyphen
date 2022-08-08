@@ -1,6 +1,6 @@
-#include "l-hyphen.hpp"
+#include "Lhyphen.hpp"
 
-// This is the command line interface (CLI) for using Joinable
+// This is the command line interface (CLI) for using l-hyphen
 int main(int argc, char const *argv[]) {
 
   if (argc != 2) {
@@ -8,7 +8,7 @@ int main(int argc, char const *argv[]) {
     return 0;
   }
 
-  Sample S;
+  Lhyphen S;
 
   // All the inputs for a simulation is read from a file
   S.loadCONF(argv[1]);

@@ -57,6 +57,7 @@ public:
     repair_cell_flag = 0;
   }
 
+private:
   void init_command_parser() {
 
     parser.kwMap["read_pgm"] = __DO__(file) {
@@ -157,7 +158,8 @@ public:
     }
     ifile.close();
   }
-
+  
+public:
   // Save a PGM P3 file (rgb colors)
   void write_pgm(const std::string &output_file) {
     std::cout << "write_pgm " << output_file << '\n';

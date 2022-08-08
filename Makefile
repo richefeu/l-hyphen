@@ -1,22 +1,37 @@
 # The compiler to be used
 CXX = g++
+LINK = $(CXX)
+
+# Paths
+TOOFUSPATH = ~/toofus
 
 # The list of flags passed to the compiler
-CXXFLAGS = -Wall -Wextra -ansi -O3 -Wwrite-strings -Wstrict-prototypes -Wuninitialized \
--Wunreachable-code -Wno-missing-braces  -Wno-missing-field-initializers \
--std=c++0x -I ~/toofus
+CXXFLAGS = -Wall -Wextra -O3 -std=c++11 -I $(TOOFUSPATH)
 
-# Notice that you need to install toofus before compiling
 
-APP = l-hyphen
+GLUTFLAGS = `pkg-config --cflags glut`
+GLUTLINK = `pkg-config --libs glut` -framework OpenGL
+
+
+SOURCES = Neighbor.cpp Control.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
+HEADERS = $(SOURCES:%.cpp=%.hpp)
+OBJECTS = $(SOURCES:%.cpp=%.o)
+
+
+%.o:%.cpp
+	$(CXX) $(CXXFLAGS) -c $<
 
 .PHONY: all clean
 
-all: $(APP)
+all: run
 
 clean:
-	rm -f *.o $(APP)
+	rm -f *~ *.o run
 
-$(APP): $(APP).cpp $(APP).hpp
-	$(CXX) $(CXXFLAGS) $(APP).cpp -o $(APP)
+run: run.cpp $(HEADERS) $(SOURCES) $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -c $<
+	$(LINK) $(CXXFLAGS) -o $@ $@.o $(OBJECTS)
 
+see: see.cpp see.hpp 
+	$(CXX) $(CXXFLAGS) $(GLUTFLAGS) -c $<
+	$(LINK) $(CXXFLAGS) -o $@ $@.o $(OBJECTS) $(GLUTLINK)
