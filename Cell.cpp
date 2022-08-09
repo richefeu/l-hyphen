@@ -50,7 +50,7 @@ void Cell::reorderNodes() {
 }
 
 /**
- * @brief ajoute ou bien supprime un voisin. isNear doit être fourni et la methode déterminera si il faut ajouter ou
+ * @brief ajoute ou supprime un voisin. isNear doit être fourni et la methode déterminera si il faut ajouter ou
  *        bien supprimer (c'est basé sur le fait que la 'liste' de voisin est un std::set, et donc ordonnée et le
  *        'find' est rapide)
  *

@@ -13,7 +13,7 @@ int main(int argc, char const *argv[]) {
   // All the inputs for a simulation is read from a file
   S.loadCONF(argv[1]);
   S.head();
-  S.run();
+  S.integrate();
 
   return 0;
 }
