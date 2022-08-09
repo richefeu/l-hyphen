@@ -1,5 +1,5 @@
 # The compiler to be used
-CXX = g++
+CXX = g++-12
 LINK = $(CXX)
 
 # Paths
@@ -23,10 +23,10 @@ OBJECTS = $(SOURCES:%.cpp=%.o)
 
 .PHONY: all clean
 
-all: run
+all: run see
 
 clean:
-	rm -f *~ *.o run
+	rm -f *~ *.o run see
 
 run: run.cpp $(HEADERS) $(SOURCES) $(OBJECTS)
 	$(CXX) $(CXXFLAGS) -c $<

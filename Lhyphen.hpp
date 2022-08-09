@@ -97,7 +97,7 @@ public:
 
   double distVerlet; // entre noeuds et barres
 
-  // parametres mécaniques d'interactions entre les cellules
+  // parametres mécaniques d'interactions (contact frottant avec ou sans adhésion) entre les cellules
   double kn; // raideur normale de contact
   double kt; // raideur tangentielle de contact
   double mu;   // coefficient de frottement (entre les cellules)
