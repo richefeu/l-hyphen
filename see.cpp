@@ -27,14 +27,37 @@ void printInfo() {
 void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   switch (Key) {
 
+  case 'b': {
+    show_bar_colors = 1 - show_bar_colors;
+  } break;
+
+  case 'c': {
+    show_cells = 1 - show_cells;
+  } break;
+
+  case 'f': {
+    show_inter_cells_forces = 1 - show_inter_cells_forces;
+  } break;
+
+  case 'g': {
+    show_glue_points = 1 - show_glue_points;
+  } break;
+
   case 'i': {
     printInfo();
   } break;
-   
+
   case 'q': {
     exit(0);
   } break;
-
+  
+  case 's': {
+    vScale *= 0.9;
+  } break;
+  case 'S': {
+    vScale *= 1.1;
+  } break;
+  
   case '-': {
     std::cout << "Current Configuration: ";
     if (confNum > 0)
@@ -125,7 +148,12 @@ void display() {
   glShadeModel(GL_SMOOTH);
   glEnable(GL_DEPTH_TEST);
 
-  drawCells();
+  if (show_cells)
+    drawCells();
+  if (show_glue_points)
+    drawGluePoints();
+  if (show_inter_cells_forces)
+    drawForces();
 
   glFlush();
   glutSwapBuffers();
@@ -174,8 +202,6 @@ void reshape(int w, int h) {
   glutPostRedisplay();
 }
 
-
-
 void drawBar(size_t ci, size_t i, size_t j, double radius) {
   if (i == null_size_t || j == null_size_t)
     return;
@@ -216,15 +242,190 @@ void drawBar(size_t ci, size_t i, size_t j, double radius) {
 }
 
 void drawCells() {
-  glLineWidth(4.0f);
+  glLineWidth(1.0f);
   glColor4f(0.8f, 0.8f, 0.9f, 1.0f);
 
+  colorRGBA color;
+
+  /*
   for (size_t i = 0; i < Conf.cells.size(); ++i) {
     for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
+      if (n < Conf.cells[i].nodes.size()-1) redTable.getColor4f(fabs(Conf.cells[i].bars[n].fn), &color);
+      glColor4f(color.r, color.g, color.b, color.a);
       size_t nextNode = Conf.cells[i].nodes[n].nextNode;
       drawBar(i, n, nextNode, Conf.cells[i].radius);
     }
   }
+  */
+
+  double fnredmax = 0.0;
+  double fnbluemax = 0.0;
+  for (size_t i = 0; i < Conf.cells.size(); ++i) {
+    for (size_t b = 0; b < Conf.cells[i].bars.size(); ++b) {
+      if (Conf.cells[i].bars[b].fn >= 0.0) {
+        fnredmax = std::max(fnredmax, Conf.cells[i].bars[b].fn);
+      } else {
+        fnbluemax = std::max(fnbluemax, -Conf.cells[i].bars[b].fn);
+      }
+    }
+  }
+  redTable.setMinMax(0.0, fnredmax);
+  blueTable.setMinMax(0.0, fnbluemax);
+  std::cout << "fnredmax = " << fnredmax << '\n';
+  std::cout << "fnbluemax = " << fnbluemax << '\n';
+
+  for (size_t i = 0; i < Conf.cells.size(); ++i) {
+    for (size_t b = 0; b < Conf.cells[i].bars.size(); ++b) {
+      if (Conf.cells[i].bars[b].fn >= 0.0) {
+        redTable.getRGB(Conf.cells[i].bars[b].fn, &color);
+      } else {
+        blueTable.getRGB(-Conf.cells[i].bars[b].fn, &color);
+      }
+
+      glColor4ub(color.r, color.g, color.b, color.a);
+      size_t in = Conf.cells[i].bars[b].i;
+      size_t jn = Conf.cells[i].bars[b].j;
+      drawBar(i, in, jn, Conf.cells[i].radius);
+    }
+  }
+}
+
+void drawGluePoints() {
+  glPointSize(4.0f);
+  glEnable(GL_POINT_SMOOTH);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
+  glBegin(GL_POINTS);
+
+  for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
+    for (std::set<Neighbor>::iterator InterIt = Conf.cells[ci].neighbors.begin();
+         InterIt != Conf.cells[ci].neighbors.end(); ++InterIt) {
+      if (InterIt->glueState > 0) {
+        size_t cj = InterIt->jc;
+        size_t in = InterIt->in;
+        size_t jn = InterIt->jn;
+
+        if (Conf.cells[cj].nodes[jn].nextNode == null_size_t) {
+          vec2r b = Conf.cells[cj].nodes[jn].pos - Conf.cells[ci].nodes[in].pos;
+          b *= (Conf.cells[ci].radius / Conf.cells[ci].radius + Conf.cells[cj].radius);
+          vec2r pos = Conf.cells[cj].nodes[jn].pos + b;
+          glVertex2f(pos.x, pos.y);
+        } else {
+          size_t jnext = Conf.cells[cj].nodes[jn].nextNode;
+          // jnext est le numéro du noeud à la fin de la barre dans la cellule cj (jn c'est le début)
+          vec2r b = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
+          vec2r u = Conf.cells[cj].nodes[jnext].pos - Conf.cells[cj].nodes[jn].pos;
+          double u_length = u.normalize();
+          double proj = b * u;
+
+          double fact = Conf.cells[cj].radius / (Conf.cells[ci].radius + Conf.cells[cj].radius);
+          if (proj <= 0.0) {
+            vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
+            vec2r pos = Conf.cells[cj].nodes[jn].pos + fact * ut;
+            glVertex2f(pos.x, pos.y);
+          } else if (proj >= u_length) {
+            vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jnext].pos;
+            vec2r pos = Conf.cells[cj].nodes[jn].pos + u_length * u + fact * ut;
+            glVertex2f(pos.x, pos.y);
+          } else {
+            vec2r pos = Conf.cells[cj].nodes[jn].pos + proj * u;
+            vec2r ut = Conf.cells[ci].nodes[in].pos - (Conf.cells[cj].nodes[jn].pos + proj * u);
+            pos += fact * ut;
+            glVertex2f(pos.x, pos.y);
+          }
+        }
+      }
+    }
+  }
+  glEnd();
+}
+
+void arrow(double x0, double y0, double x1, double y1) {
+
+  double nx = x1 - x0;
+  double ny = y1 - y0;
+  double len = sqrt(nx * nx + ny * ny);
+  if (len == 0.0)
+    return;
+  nx /= len;
+  ny /= len;
+
+  glVertex2f(x0, y0);
+  glVertex2f(x1, y1);
+
+  double c = cos(arrowAngle);
+  double s = sin(arrowAngle);
+
+  double ex = c * nx - s * ny;
+  double ey = s * nx + c * ny;
+  glVertex2f(x1, y1);
+  glVertex2f(x1 - arrowSize * ex, y1 - arrowSize * ey);
+
+  ex = c * nx + s * ny;
+  ey = -s * nx + c * ny;
+  glVertex2f(x1, y1);
+  glVertex2f(x1 - arrowSize * ex, y1 - arrowSize * ey);
+}
+
+void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos) {   
+  vec2r T(-InterIt.n.y, InterIt.n.x);
+  vec2r vf = InterIt.n * InterIt.fn + T * InterIt.ft;
+  vf *= vScale;
+  if (InterIt.fn > 0.0) {
+    arrow(pos.x - vf.x, pos.y - vf.y, pos.x, pos.y);
+    arrow(pos.x + vf.x, pos.y + vf.y, pos.x, pos.y);
+  } else {
+    arrow(pos.x, pos.y, pos.x - vf.x, pos.y - vf.y);
+    arrow(pos.x, pos.y, pos.x + vf.x, pos.y + vf.y);
+  }
+}
+
+void drawForces() {
+  glLineWidth(1.0f);
+  glBegin(GL_LINES);
+  glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
+
+  for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
+    for (std::set<Neighbor>::iterator InterIt = Conf.cells[ci].neighbors.begin();
+         InterIt != Conf.cells[ci].neighbors.end(); ++InterIt) {
+
+      size_t cj = InterIt->jc;
+      size_t in = InterIt->in;
+      size_t jn = InterIt->jn;
+
+      if (Conf.cells[cj].nodes[jn].nextNode == null_size_t) {
+        vec2r b = Conf.cells[cj].nodes[jn].pos - Conf.cells[ci].nodes[in].pos;
+        b *= (Conf.cells[ci].radius / Conf.cells[ci].radius + Conf.cells[cj].radius);
+        vec2r pos = Conf.cells[cj].nodes[jn].pos + b;
+        drawForceActionReaction(*InterIt, pos);
+      } else {
+        size_t jnext = Conf.cells[cj].nodes[jn].nextNode;
+        // jnext est le numéro du noeud à la fin de la barre dans la cellule cj (jn c'est le début)
+        vec2r b = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
+        vec2r u = Conf.cells[cj].nodes[jnext].pos - Conf.cells[cj].nodes[jn].pos;
+        double u_length = u.normalize();
+        double proj = b * u;
+
+        double fact = Conf.cells[cj].radius / (Conf.cells[ci].radius + Conf.cells[cj].radius);
+        if (proj <= 0.0) {
+          vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
+          vec2r pos = Conf.cells[cj].nodes[jn].pos + fact * ut;
+          drawForceActionReaction(*InterIt, pos);
+        } else if (proj >= u_length) {
+          vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jnext].pos;
+          vec2r pos = Conf.cells[cj].nodes[jn].pos + u_length * u + fact * ut;
+          drawForceActionReaction(*InterIt, pos);
+        } else {
+          vec2r pos = Conf.cells[cj].nodes[jn].pos + proj * u;
+          vec2r ut = Conf.cells[ci].nodes[in].pos - (Conf.cells[cj].nodes[jn].pos + proj * u);
+          pos += fact * ut;
+          drawForceActionReaction(*InterIt, pos);
+        }
+      }
+    }
+  }
+  glEnd();
 }
 
 /// Robust and portable function to test if a file exists
@@ -266,6 +467,12 @@ int main(int argc, char *argv[]) {
   try_to_readConf(confNum, Conf, confNum);
   Conf.findDisplayArea(1.1);
 
+  // init color tables
+  redTable.setSize(128);
+  redTable.rebuild_interp_hsv({0, 127}, {{204, 204, 230}, {255, 0, 0}});
+  blueTable.setSize(128);
+  blueTable.rebuild_interp_hsv({0, 127}, {{204, 204, 230}, {0, 0, 255}});
+
   // ==== Init GLUT and create window
   glutInit(&argc, argv);
   glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA);
@@ -279,7 +486,6 @@ int main(int argc, char *argv[]) {
   glutKeyboardFunc(keyboard);
   glutMouseFunc(mouse);
   glutMotionFunc(motion);
-
 
   mouse_mode = NOTHING;
 

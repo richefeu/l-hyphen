@@ -32,6 +32,6 @@ run: run.cpp $(HEADERS) $(SOURCES) $(OBJECTS)
 	$(CXX) $(CXXFLAGS) -c $<
 	$(LINK) $(CXXFLAGS) -o $@ $@.o $(OBJECTS)
 
-see: see.cpp see.hpp 
+see: see.cpp see.hpp run
 	$(CXX) $(CXXFLAGS) $(GLUTFLAGS) -c $<
 	$(LINK) $(CXXFLAGS) -o $@ $@.o $(OBJECTS) $(GLUTLINK)

@@ -11,7 +11,7 @@
 #include "Lhyphen.hpp"
 #include "null_size_t.hpp"
 
-//#include "ColorTable.hpp"
+#include "ColorTable.hpp"
 
 Lhyphen Conf;
 int confNum = 1;
@@ -22,16 +22,21 @@ struct AABB {
 
 AABB worldBox;
 
+ColorTable redTable;
+ColorTable blueTable;
+
 int main_window;
 
 // flags
 int show_cells = 1;
+int show_glue_points = 0;
+int show_bar_colors = 0;
+int show_inter_cells_forces = 0;
 
 // arrow sizes
-double arrowSize = 0.0005;
-double arrowAngle = 0.7;
-double vScale = 10.0;
-
+double arrowSize = 0.15;
+double arrowAngle = 0.35;
+double vScale = 0.05;
 
 // window sizes
 int width = 800;
@@ -46,6 +51,10 @@ int mouse_start[2];
 // drawing functions
 void drawBar(size_t ci, size_t in, size_t jn, double radius);
 void drawCells();
+void drawGluePoints();
+void arrow(double x0, double y0, double x1, double y1);
+void drawForceActionReaction(const Neighbor & InterIt, vec2r & pos);
+void drawForces();
 
 // Callback functions
 void keyboard(unsigned char Key, int x, int y);
