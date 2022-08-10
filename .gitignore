@@ -1,1 +1,14 @@
-l-hyphen
+run
+see
+*.o
+movies
+old
+work_sessions
+.vscode
+cellPrepro/example1
+cellPrepro/example2
+cellPrepro/simple
+cellPrepro/cellPrepro
+cellPrepro/cutcut.cpp
+cellPrepro/delaunator-cpp-master
+sphinxdoc/build

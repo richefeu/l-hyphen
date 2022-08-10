@@ -2,7 +2,7 @@
 CXX = g++-11
 
 # The list of flags passed to the compiler
-CXXFLAGS = -Wall -Wextra -ansi -O3 -std=c++11 -I /usr/local/include/toofus
+CXXFLAGS = -Wall -Wextra -ansi -O3 -std=c++11 -I ~/toofus
 
 # Notice that you need to install toofus before compiling
 # JYD : -I /Users/jyd/Documents/Codes/richefeu-toofus-6c99da3
