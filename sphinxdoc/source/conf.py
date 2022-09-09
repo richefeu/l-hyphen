@@ -18,12 +18,11 @@
 # -- Project information -----------------------------------------------------
 
 project = 'l-hyphen'
-copyright = '2022'
-author = 'Vincent Richefeu, Yohann Trivano, Jean-Yves Delenne'
+copyright = 'blabla'
+author = 'Vincent Richefeu, Jean-Yves Delenne, Yohann Trivino'
 
 # The full version, including alpha/beta/rc tags
-version = '0.0.1'
-release = '0.0.1'
+release = '1.0.0'
 
 
 # -- General configuration ---------------------------------------------------

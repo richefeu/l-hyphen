@@ -4,6 +4,8 @@ LINK = $(CXX)
 
 # Paths
 TOOFUSPATH = ~/toofus
+#TOOFUSPATH = /usr/local/include/toofus
+
 
 # The list of flags passed to the compiler
 CXXFLAGS = -Wall -Wextra -O3 -std=c++11 -I $(TOOFUSPATH)
