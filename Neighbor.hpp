@@ -1,7 +1,6 @@
 #ifndef NEIGHBOR_HPP
 #define NEIGHBOR_HPP
 
-//#include <cstddef>
 #include "vec2.hpp"
 
 /**

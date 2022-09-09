@@ -530,6 +530,7 @@ void Lhyphen::computeInteractionForces() {
         //   disque (ci, in)   ---   disque (cj, jn) début de la barre
         //   disque (ci, in)   ---   disque (cj, jnext) fin de la barre
         //   disque (ci, in)   ---   barre (cj, jn--jnext)
+
         if (proj <= 0.0) { // ====================== disque j du début
 
           double sqrDist = norm2(b);
@@ -539,18 +540,30 @@ void Lhyphen::computeInteractionForces() {
             double b_lenght = sqrt(sqrDist);
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
-            Inter->fn = -kn * dn - fadh;
+            Inter->fn = -kn * dn;
+            
+            // ...vrel T ft (TODO)
 
+            if (Inter->glueState == 0)
+              Inter->fn -= fadh; // cette adhesion ne peut agir que si il n'y a pas de cohésion solide
+
+            // transfert des force vers les noeuds concernés
+            vec2r finc = Inter->fn * Inter->n;
+            cells[ci].nodes[in].force += finc;
+            cells[cj].nodes[jn].force -= finc;
           } else {
             Inter->contactState = 0;
+            Inter->fn = 0.0;
+            Inter->ft = 0.0;
           }
 
-          // transfert des force vers les noeuds concernés
-          vec2r finc = Inter->fn * Inter->n;
-          cells[ci].nodes[in].force += finc;
-          cells[cj].nodes[jn].force -= finc;
+          if (Inter->glueState == 1) {
+            // TODO
+          }
 
         } else if (proj >= u_length) { // ====================== disque jnext (de fin)
+        // ? doit on traiter ce cas ?
+        // ! sinon il peut y avoir des forces d'interaction calculées deux fois !
 
           b = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
           double sqrDist = norm2(b);
@@ -560,7 +573,7 @@ void Lhyphen::computeInteractionForces() {
             double b_lenght = sqrt(sqrDist);
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
-            Inter->fn = -kn * dn - fadh;
+            Inter->fn = -kn * dn;
 
             vrel = cells[ci].nodes[in].vel - cells[cj].nodes[jnext].vel;
             T.set(-Inter->n.y, Inter->n.x);
@@ -573,7 +586,7 @@ void Lhyphen::computeInteractionForces() {
             }
 
             if (Inter->glueState == 0)
-              Inter->fn -= fadh;
+              Inter->fn -= fadh; // cette adhesion ne peut agir que si il n'y a pas de cohésion solide
 
             // transfert des force vers les noeuds concernés
             vec2r finc = Inter->fn * Inter->n;
@@ -730,11 +743,11 @@ void Lhyphen::computeNodeForces() {
       vec2r n = branch;
       double l = n.normalize();            // n est orienté de i vers j
       double dn = l - cells[c].bars[b].l0; // dn positif = allongement
-      double fn = -cells[c].bars[b].kn * dn;
+      cells[c].bars[b].fn = -cells[c].bars[b].kn * dn;
 
-      // TODO: ajouter plasticité dans les barres
+      // TODO: ajouter plasticité dans les barres (?)
 
-      vec2r finc = fn * n; // en cas d'allongement finc est orienté de j vers i
+      vec2r finc = cells[c].bars[b].fn * n; // en cas d'allongement finc est orienté de j vers i
       cells[c].nodes[i].force -= finc;
       cells[c].nodes[j].force += finc;
     }
@@ -789,7 +802,7 @@ void Lhyphen::computeNodeForces() {
     }
   }
 
-  // visco globale
+  // viscosité globale
   if (globalViscosity > 0.0) {
     for (size_t c = 0; c < cells.size(); c++) {
       for (size_t n = 0; n < cells[c].nodes.size(); n++) {

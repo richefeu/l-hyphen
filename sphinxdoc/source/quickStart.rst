@@ -1,16 +1,16 @@
 Quick-start guid
 ================
 
-What is Rockable?
+What is l-hyphen?
 -----------------
 
-``l-hyphen`` is a DEM code written in C++11. blabla
+``l-hyphen`` is a DEM code written in C++. blabla
 
 
 Compilation
 -----------
 
-The compilation is managed by a makefile that should be similar to that one:
+The compilation is managed by a ``makefile`` that should be similar to that one:
 
 .. code-block:: makefile
    :caption: Makefile
@@ -38,11 +38,7 @@ The compilation is managed by a makefile that should be similar to that one:
    	$(CXX) $(CXXFLAGS) $(APP).cpp -o $(APP)
 
 
-Blabla la vie est belle...
-
-
-
-Finally, the applications run and see can be compiled with the following command:
+The applications run and see can be compiled with the following command:
 
 .. code-block:: sh
 
@@ -55,16 +51,16 @@ It is sometimes necessary to remove all object files (.o) together with the comp
    make clean
 
 
-Running a simulation
---------------------
+Running a simulation (brief overview)
+-------------------------------------
 
 
-To run a simulation, a configuration file has to be written. The format of such a file is described in the section Syntax for conf-files. We show here a simple example simulating a sphere bouncing on a plan.
+To run a simulation, a configuration file has to be written. The format of such a file is described in the section "Format of input file" for conf-files. We show here a simple example simulating cell being crushed.
 
 .. code-block:: text
    :caption: input.txt
    
-   example truc
+   example truc (TODO)
    
    
    

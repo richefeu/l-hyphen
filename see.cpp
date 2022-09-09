@@ -50,14 +50,14 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   case 'q': {
     exit(0);
   } break;
-  
+
   case 's': {
     vScale *= 0.9;
   } break;
   case 'S': {
     vScale *= 1.1;
   } break;
-  
+
   case '-': {
     std::cout << "Current Configuration: ";
     if (confNum > 0)
@@ -202,7 +202,7 @@ void reshape(int w, int h) {
   glutPostRedisplay();
 }
 
-void drawBar(size_t ci, size_t i, size_t j, double radius) {
+void drawBar(size_t ci, size_t i, size_t j, double radius, color4f &BarColor, color4f &NodeColor) {
   if (i == null_size_t || j == null_size_t)
     return;
 
@@ -219,12 +219,16 @@ void drawBar(size_t ci, size_t i, size_t j, double radius) {
   double txij = -nyij;
   double tyij = nxij;
 
+  glColor4f(BarColor.r, BarColor.g, BarColor.b, 1.0f);
+
   glBegin(GL_POLYGON);
   glVertex2f(xi - radius * txij, yi - radius * tyij);
   glVertex2f(xj - radius * txij, yj - radius * tyij);
   glVertex2f(xj + radius * txij, yj + radius * tyij);
   glVertex2f(xi + radius * txij, yi + radius * tyij);
   glEnd();
+
+  glColor4f(NodeColor.r, NodeColor.g, NodeColor.b, 1.0f);
 
   glBegin(GL_POLYGON);
   for (double a = 0.0; a < 2.0 * M_PI; a += M_PI / 18.0) {
@@ -243,49 +247,48 @@ void drawBar(size_t ci, size_t i, size_t j, double radius) {
 
 void drawCells() {
   glLineWidth(1.0f);
-  glColor4f(0.8f, 0.8f, 0.9f, 1.0f);
 
-  colorRGBA color;
+  color4f BarColor, NodeColor;
+  BarColor.r = NodeColor.r = 0.8f;
+  BarColor.g = NodeColor.g = 0.8f;
+  BarColor.b = NodeColor.b = 0.9f;
+  BarColor.a = NodeColor.a = 1.0f;
 
-  /*
-  for (size_t i = 0; i < Conf.cells.size(); ++i) {
-    for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
-      if (n < Conf.cells[i].nodes.size()-1) redTable.getColor4f(fabs(Conf.cells[i].bars[n].fn), &color);
-      glColor4f(color.r, color.g, color.b, color.a);
-      size_t nextNode = Conf.cells[i].nodes[n].nextNode;
-      drawBar(i, n, nextNode, Conf.cells[i].radius);
-    }
-  }
-  */
-
-  double fnredmax = 0.0;
-  double fnbluemax = 0.0;
-  for (size_t i = 0; i < Conf.cells.size(); ++i) {
-    for (size_t b = 0; b < Conf.cells[i].bars.size(); ++b) {
-      if (Conf.cells[i].bars[b].fn >= 0.0) {
-        fnredmax = std::max(fnredmax, Conf.cells[i].bars[b].fn);
-      } else {
-        fnbluemax = std::max(fnbluemax, -Conf.cells[i].bars[b].fn);
+  if (show_bar_colors) {
+    double fnredmax = 0.0;
+    double fnbluemax = 0.0;
+    for (size_t i = 0; i < Conf.cells.size(); ++i) {
+      for (size_t b = 0; b < Conf.cells[i].bars.size(); ++b) {
+        if (Conf.cells[i].bars[b].fn >= 0.0) {
+          fnredmax = (fnredmax > Conf.cells[i].bars[b].fn) ? fnredmax : Conf.cells[i].bars[b].fn;
+        } else {
+          fnbluemax = std::max(fnbluemax, -Conf.cells[i].bars[b].fn);
+        }
       }
     }
+    BarRedTable.setMinMax(0.0, fnredmax);
+    BarBlueTable.setMinMax(0.0, fnbluemax);
   }
-  redTable.setMinMax(0.0, fnredmax);
-  blueTable.setMinMax(0.0, fnbluemax);
-  std::cout << "fnredmax = " << fnredmax << '\n';
-  std::cout << "fnbluemax = " << fnbluemax << '\n';
 
   for (size_t i = 0; i < Conf.cells.size(); ++i) {
     for (size_t b = 0; b < Conf.cells[i].bars.size(); ++b) {
-      if (Conf.cells[i].bars[b].fn >= 0.0) {
-        redTable.getRGB(Conf.cells[i].bars[b].fn, &color);
-      } else {
-        blueTable.getRGB(-Conf.cells[i].bars[b].fn, &color);
-      }
 
-      glColor4ub(color.r, color.g, color.b, color.a);
+      if (show_bar_colors) {
+        if (Conf.cells[i].bars[b].fn > 0.0) {
+          BarRedTable.getColor4f(Conf.cells[i].bars[b].fn, &BarColor);
+        } else if (Conf.cells[i].bars[b].fn < 0.0) {
+          BarBlueTable.getColor4f(-Conf.cells[i].bars[b].fn, &BarColor);
+        } else {
+          BarColor.r = 0.8f;
+          BarColor.g = 0.8f;
+          BarColor.b = 0.9f;
+          BarColor.a = 1.0f;
+        }
+      }
+      
       size_t in = Conf.cells[i].bars[b].i;
       size_t jn = Conf.cells[i].bars[b].j;
-      drawBar(i, in, jn, Conf.cells[i].radius);
+      drawBar(i, in, jn, Conf.cells[i].radius, BarColor, NodeColor);
     }
   }
 }
@@ -368,7 +371,7 @@ void arrow(double x0, double y0, double x1, double y1) {
   glVertex2f(x1 - arrowSize * ex, y1 - arrowSize * ey);
 }
 
-void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos) {   
+void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos) {
   vec2r T(-InterIt.n.y, InterIt.n.x);
   vec2r vf = InterIt.n * InterIt.fn + T * InterIt.ft;
   vf *= vScale;
@@ -465,13 +468,20 @@ int main(int argc, char *argv[]) {
 
   std::cout << "Current Configuration: ";
   try_to_readConf(confNum, Conf, confNum);
-  Conf.findDisplayArea(1.1);
+  Conf.findDisplayArea(1.15);
 
   // init color tables
-  redTable.setSize(128);
-  redTable.rebuild_interp_hsv({0, 127}, {{204, 204, 230}, {255, 0, 0}});
-  blueTable.setSize(128);
-  blueTable.rebuild_interp_hsv({0, 127}, {{204, 204, 230}, {0, 0, 255}});
+  BarRedTable.setSize(128);
+  BarRedTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {255, 0, 0, 255}});
+  // BarRedTable.savePpm("BarRedTable.ppm");
+  BarBlueTable.setSize(128);
+  BarBlueTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {0, 0, 255, 255}});
+  // BarBlueTable.savePpm("BarBlueTable.ppm");
+  
+  NodeRedTable.setSize(128);
+  NodeRedTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {255, 0, 0, 255}});
+  NodeBlueTable.setSize(128);
+  NodeBlueTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {0, 0, 255, 255}});
 
   // ==== Init GLUT and create window
   glutInit(&argc, argv);
