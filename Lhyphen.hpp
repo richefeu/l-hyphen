@@ -118,6 +118,7 @@ public:
   void addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_CellProperties p);
   void addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties p);
   void addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p);
+  void addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p, int n);
   void addRegularPolygonalCellsOnTriangularGrid(int nx, int ny, double horizontalDistance, double verticalDistance,
                                                 named_arg_RegularCellDataset h, named_arg_CellProperties p);
   void addSquareBrickWallCells(int nx, int ny, double horizontalDistance, double xleft, double ybottom, double barWidth,

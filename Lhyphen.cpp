@@ -74,6 +74,21 @@ void Lhyphen::addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p) 
   cells.push_back(C);
 }
 
+void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p, int n) {
+  double dx = (h.xe - h.xo) / (double)n;
+  double dy = (h.ye - h.yo) / (double)n;
+
+  Cell C;
+  C.nodes.emplace_back(h.xo, h.yo);
+  
+  for (int i = 1; i <= n; i++) {
+    C.nodes.emplace_back(h.xo + i * dx, h.yo + i * dy);
+  }
+  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, false);
+
+  cells.push_back(C);
+}
+
 /**
  * @brief
  *
@@ -541,7 +556,7 @@ void Lhyphen::computeInteractionForces() {
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
             Inter->fn = -kn * dn;
-            
+
             // ...vrel T ft (TODO)
 
             if (Inter->glueState == 0)
@@ -562,8 +577,8 @@ void Lhyphen::computeInteractionForces() {
           }
 
         } else if (proj >= u_length) { // ====================== disque jnext (de fin)
-        // ? doit on traiter ce cas ?
-        // ! sinon il peut y avoir des forces d'interaction calculées deux fois !
+                                       // ? doit on traiter ce cas ?
+                                       // ! sinon il peut y avoir des forces d'interaction calculées deux fois !
 
           b = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
           double sqrDist = norm2(b);
@@ -1117,6 +1132,13 @@ void Lhyphen::loadCONF(const char *fname) {
           cells[ci].neighbors.insert(K);
         }
       }
+    } else if (token == "addMultiLine") {
+      named_arg_TwoPointsDataset h;
+      named_arg_CellProperties p;
+      int n;
+      file >> h.xo >> h.yo >> h.xe >> h.ye >> h.barWidth >> n;
+      file >> p.kn >> p.kr >> p.mz_max;
+      addMultiLine(h, p, n);
     } else if (token == "addRegularPolygonalCell") {
       named_arg_RegularCellDataset h;
       named_arg_CellProperties p;

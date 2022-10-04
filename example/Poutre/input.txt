@@ -1,0 +1,50 @@
+# SIMULATION INPUTS ===================================================
+
+# time flow
+# t 0
+dt 1e-5 
+nstep  1000000
+
+# dissipation
+numericalDissipation 0.000
+globalViscosity      0.0001
+
+# volume forces
+gravity 0 0
+
+# proximity 
+distVerlet 0.15
+nstepPeriodVerlet 100
+
+# outputs
+isvg              0
+nstepPeriodSVG    0
+iconf             0
+nstepPeriodConf   10000
+
+# contact adhésif frottant entre les cellules
+kn 100000
+kt 100000
+mu 0.4
+fadh 0.0
+
+# SAMPLE ===================================================
+#             xo    yo xe ye bw   n     Kb      Kv     mz_max
+addMultiLine  -0.1  0  1  0  0.04 55   800000000   3810    1e12
+
+#E = 1e10
+#h = 0.02
+#b = 0.02
+#l0 = 0.1
+#Kb = 2*E*b*h/l0 = 1e10*0.02*0.02/0.01 =   40000
+#Kv = E*b*h^3/(6*l0) = 1e10*
+# Kv = fact * EI/l0 = (1/14) * 13333= 950
+# Kv = 1/14 * 53333 = 475
+
+# IMPOSED CONTROLS (mode 0 = V, 1 = F)
+#                    xmin     xmax   ymin    ymax   xmode  xvalue  ymode  yvalue      
+setNodeControlInBox  -0.11   0.001  -0.001  0.001   0      0       0      0 
+setNodeControlInBox  0.99    1.001  -0.001  0.001   1      0       1      -1
+
+
+findDisplayArea 1.0 
