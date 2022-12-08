@@ -4,6 +4,7 @@
 #include "Node.hpp"
 #include "Bar.hpp"
 #include "Neighbor.hpp"
+#include "null_size_t.hpp"
 
 #include <vector>
 #include <set>

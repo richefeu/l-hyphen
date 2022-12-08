@@ -74,13 +74,20 @@ void Lhyphen::addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p) 
   cells.push_back(C);
 }
 
+/**
+ * @brief ajoute une ligne formée de plusieurs barres (cellule non fermée) entre deux points
+ *
+ * @param h les deux points
+ * @param p les propriétés mécaniques
+ * @param n nombre de barres
+ */
 void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p, int n) {
   double dx = (h.xe - h.xo) / (double)n;
   double dy = (h.ye - h.yo) / (double)n;
 
   Cell C;
   C.nodes.emplace_back(h.xo, h.yo);
-  
+
   for (int i = 1; i <= n; i++) {
     C.nodes.emplace_back(h.xo + i * dx, h.yo + i * dy);
   }
@@ -182,6 +189,14 @@ void Lhyphen::setTimeStep(double dt_) {
   dt2_2 = dt_2 * dt;
 }
 
+void Lhyphen::setCellDensities(double /*rho*/) {
+  // TODO
+}
+
+void Lhyphen::setCellMasses(double m) {
+  // todo
+}
+
 void Lhyphen::setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_max, double ft_coh_max,
                                     double yieldPower) {
 
@@ -258,7 +273,7 @@ void Lhyphen::setNodeControlInBox(double xmin, double xmax, double ymin, double 
       vec2r pos = cells[c].nodes[n].pos;
       if (pos.x >= xmin && pos.x <= xmax && pos.y >= ymin && pos.y <= ymax) {
         cells[c].nodes[n].ictrl = ictrl;
-        std::cout << "node pos = " << pos << "\n";
+        std::cout << "@Lhyphen::setNodeControlInBox, node pos = " << pos << "\n";
       }
     }
   }
@@ -771,13 +786,14 @@ void Lhyphen::computeNodeForces() {
   // Moment au niveau des noeuds (entre les barres d'une même cellule).
   // Puisque les noeuds n'ont pas de ddl en rotation, imposer un moment est fait ici
   // en imposant une force à chaque extrémité de barre
-  for (size_t c = 0; c < cells.size(); c++) {
+  for (size_t c = 0; c < cells.size(); c++) { 
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
-      if (cells[c].nodes[n].prevNode == null_size_t || cells[c].nodes[n].nextNode == null_size_t) {
-        continue;
-      }
       size_t prev = cells[c].nodes[n].prevNode;
       size_t next = cells[c].nodes[n].nextNode;
+
+      if (prev == null_size_t || next == null_size_t) { // si c'est une extrémité...
+        continue;
+      }
 
       double omegaNext = getRotationVelocityBar(cells[c].nodes[n].pos, cells[c].nodes[next].pos, cells[c].nodes[n].vel,
                                                 cells[c].nodes[next].vel);
@@ -795,12 +811,11 @@ void Lhyphen::computeNodeForces() {
       vec2r nextVector = cells[c].nodes[next].pos - cells[c].nodes[n].pos;
       vec2r prevVector = cells[c].nodes[n].pos - cells[c].nodes[prev].pos;
 
-      // TODO: ici c'est optimisable....
+      // TODO: ici c'est optimisable...
       vec2r nextDir = nextVector;
       vec2r prevDir = prevVector;
       double nextL = nextDir.normalize();
       double prevL = prevDir.normalize();
-      vec2r prevDirRot(-prevDir.y, prevDir.x);
 
       // mz sur next
       vec2r nextDirRot(-nextDir.y, nextDir.x);
@@ -810,6 +825,7 @@ void Lhyphen::computeNodeForces() {
       cells[c].nodes[n].force -= finc;
 
       // -mz sur prev
+      vec2r prevDirRot(-prevDir.y, prevDir.x);
       F = cells[c].nodes[n].mz / prevL;
       finc = F * prevDirRot;
       cells[c].nodes[prev].force += finc;
@@ -875,7 +891,7 @@ void Lhyphen::SingleStep() {
           cells[c].nodes[n].vel.x += cells[c].nodes[n].acc.x * dt_2;
         } else if (ctrl->xmode == VELOCITY_CONTROL) {
           cells[c].nodes[n].vel.x = ctrl->xvalue;
-          cells[c].nodes[n].force.x = 0.0;
+          // cells[c].nodes[n].force.x = 0.0;
           cells[c].nodes[n].pos.x += cells[c].nodes[n].vel.x * dt;
         }
 
@@ -884,7 +900,7 @@ void Lhyphen::SingleStep() {
           cells[c].nodes[n].vel.y += cells[c].nodes[n].acc.y * dt_2;
         } else if (ctrl->ymode == VELOCITY_CONTROL) {
           cells[c].nodes[n].vel.y = ctrl->yvalue;
-          cells[c].nodes[n].force.y = 0.0;
+          // cells[c].nodes[n].force.y = 0.0;
           cells[c].nodes[n].pos.y += cells[c].nodes[n].vel.y * dt;
         }
       }

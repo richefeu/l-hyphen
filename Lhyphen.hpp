@@ -126,6 +126,8 @@ public:
   void addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                          named_arg_CellProperties p);
   void setTimeStep(double dt_);
+  void setCellDensities(double rho);
+  void setCellMasses(double m);
   void setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_max, double ft_coh_max, double yieldPower);
   void setNodeControl(size_t c, size_t n, int xmode, double xvalue, int ymode, double yvalue);
   void setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue);

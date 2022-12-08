@@ -107,11 +107,20 @@ void Cell::connectOrderedNodes(double width, double kn_, double kr_, double mz_m
 
   // init nodes
   if (nodes.size() > 2) {
-    nodes[0].init(kr_, mz_max_, nodes.size() - 1, 1);
+    if (closed == true) {
+      nodes[0].init(kr_, mz_max_, nodes.size() - 1, 1);
+    } else {
+      nodes[0].init(kr_, mz_max_, null_size_t, 1);
+    }
+    
     for (size_t n = 1; n < nodes.size() - 1; n++) {
       nodes[n].init(kr_, mz_max_, n - 1, n + 1);
     }
-    if (closed == true)
+    if (closed == true) {
       nodes.back().init(kr_, mz_max_, nodes.size() - 2, 0);
+    } else {
+      nodes.back().init(kr_, mz_max_, nodes.size() - 2, null_size_t);
+    }
+      
   }
 }
