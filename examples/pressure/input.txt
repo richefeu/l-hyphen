@@ -1,0 +1,49 @@
+# SIMULATION INPUTS ===================================================
+
+# time flow
+# t 0
+dt 1e-5 
+nstep  2000000
+
+# dissipation
+numericalDissipation 1e-4
+globalViscosity      0.1
+
+# volume forces
+gravity 0 0
+
+# proximity 
+distVerlet 0.0001
+nstepPeriodVerlet 100
+
+# outputs
+isvg              0
+nstepPeriodSVG    10000
+iconf             0
+nstepPeriodConf   10000
+
+# contact adhésif frottant entre les cellules
+kn 1000000
+kt 1000000
+mu 0.3
+#fadh 1e5
+
+# cohésion avec 3eme corps
+#kn_coh  1000000
+#kt_coh  1000000
+
+# SAMPLE ===================================================
+
+#             filename              barWidth   kn      kr      mz_max.    pressure
+readNodeFile  lhyphen0000.txt       0.0015     1e4     1e-1    1e12       1000
+setCellInternalPressure 0 0.0
+setOpen 0
+enablePressures
+
+# IMPOSED CONTROLS (mode 0 = V, 1 = F)
+#                   xmin  xmax   ymin        ymax     xmode  xvalue  ymode  yvalue   
+setNodeControlInBox -0.0001  2.49e-1  -0.0001   0.0001   0    0   0   0
+setNodeControlInBox -00001   2.49e-01  2.60e-01   2.62e-1 0      0     0  -1e-2
+
+
+findDisplayArea 2.0 

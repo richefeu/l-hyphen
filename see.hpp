@@ -12,6 +12,7 @@
 #include "null_size_t.hpp"
 
 #include "ColorTable.hpp"
+//#include "triangulatePolygon.hpp"
 
 Lhyphen Conf;
 int confNum = 1;
@@ -34,6 +35,7 @@ int show_cells = 1;
 int show_glue_points = 0;
 int show_bar_colors = 0;
 int show_inter_cells_forces = 0;
+int show_pressure = 0;
 
 // arrow sizes
 double arrowSize = 0.15;
@@ -57,6 +59,7 @@ void drawGluePoints();
 void arrow(double x0, double y0, double x1, double y1);
 void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos);
 void drawForces();
+void drawPressure();
 
 // Callback functions
 void keyboard(unsigned char Key, int x, int y);

@@ -7,8 +7,8 @@
  */
 Lhyphen::Lhyphen()
     : xmin(0.0), xmax(0.0), ymin(0.0), ymax(0.0), dt(0.0), globalViscosity(0.0), numericalDissipation(0.0), gravity(),
-      distVerlet(0.0), kn(1000.0), kt(1000.0), mu(0.0), fadh(0.0), nstep(1000), nstepPeriodVerlet(1),
-      nstepPeriodSVG(10), nstepPeriodRecord(1), nstepPeriodConf(10), isvg(0), iconf(0) {}
+      enablePressures(0), distVerlet(0.0), kn(1000.0), kt(1000.0), mu(0.0), fadh(0.0), nstep(1000),
+      nstepPeriodVerlet(1), nstepPeriodSVG(10), nstepPeriodRecord(1), nstepPeriodConf(10), isvg(0), iconf(0) {}
 
 /**
  * @brief affiche un petit entete sympatique
@@ -32,6 +32,8 @@ void Lhyphen::head() {
  */
 void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_CellProperties p) {
   Cell C;
+  C.p_int = p.p_int;
+  C.close = true;
   double a0 = 2.0 * M_PI / (double)(h.nbFaces);
   double Rcell = h.Rext - 0.5 * h.barWidth;
   for (double a = 0.0; a < 2.0 * M_PI - 0.99 * a0; a += a0) {
@@ -51,6 +53,8 @@ void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_
  */
 void Lhyphen::addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties p) {
   Cell C;
+  C.p_int = p.p_int;
+  C.close = true;
   double r = 0.5 * h.barWidth;
   C.nodes.emplace_back(h.xo + r, h.yo + r);
   C.nodes.emplace_back(h.xe - r, h.yo + r);
@@ -193,7 +197,7 @@ void Lhyphen::setCellDensities(double /*rho*/) {
   // TODO
 }
 
-void Lhyphen::setCellMasses(double m) {
+void Lhyphen::setCellMasses(double /*m*/) {
   // todo
 }
 
@@ -262,7 +266,7 @@ void Lhyphen::setCellControl(size_t c, int xmode, double xvalue, int ymode, doub
  * @param ymode imposed mode in the y-direction (VELOCITY_CONTROL or FORCE_CONTROL)
  * @param yvalue imposed value in the y-direction
  */
-void Lhyphen::setNodeControlInBox(double xmin, double xmax, double ymin, double ymax, int xmode, double xvalue,
+void Lhyphen::setNodeControlInBox(double xmin_, double xmax_, double ymin_, double ymax_, int xmode, double xvalue,
                                   int ymode, double yvalue) {
   Control C(xmode, xvalue, ymode, yvalue);
 
@@ -271,7 +275,7 @@ void Lhyphen::setNodeControlInBox(double xmin, double xmax, double ymin, double 
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
       vec2r pos = cells[c].nodes[n].pos;
-      if (pos.x >= xmin && pos.x <= xmax && pos.y >= ymin && pos.y <= ymax) {
+      if (pos.x >= xmin_ && pos.x <= xmax_ && pos.y >= ymin_ && pos.y <= ymax_) {
         cells[c].nodes[n].ictrl = ictrl;
         std::cout << "@Lhyphen::setNodeControlInBox, node pos = " << pos << "\n";
       }
@@ -342,7 +346,7 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
  * @param name nom du fichier
  * @param barWidth épaisseur de toutes les barres
  */
-void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max) {
+void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int) {
   std::ifstream file(name);
 
   struct data {
@@ -382,7 +386,7 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
 
   for (size_t i = 0; i < cells.size(); i++) {
     cells[i].reorderNodes();
-    cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, true);
+    cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
   }
 }
 
@@ -531,7 +535,7 @@ void Lhyphen::computeInteractionForces() {
 
         if (Inter->glueState == 1) {
           // ...
-          vec2r vrel = cells[cj].nodes[jn].vel - cells[ci].nodes[in].vel;
+          vrel = cells[cj].nodes[jn].vel - cells[ci].nodes[in].vel;
           // vec2r T(-n.y, n.x);
           Inter->fn_coh += -Inter->kn_coh * vrel * Inter->n * dt;
           // Inter->ft_coh += -kt_coh * vrel * T * dt;
@@ -786,7 +790,7 @@ void Lhyphen::computeNodeForces() {
   // Moment au niveau des noeuds (entre les barres d'une même cellule).
   // Puisque les noeuds n'ont pas de ddl en rotation, imposer un moment est fait ici
   // en imposant une force à chaque extrémité de barre
-  for (size_t c = 0; c < cells.size(); c++) { 
+  for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
       size_t prev = cells[c].nodes[n].prevNode;
       size_t next = cells[c].nodes[n].nextNode;
@@ -865,6 +869,8 @@ void Lhyphen::NodeAccelerations() {
 
   computeNodeForces();
   computeInteractionForces();
+  if (enablePressures > 0)
+    InternalPressureForce();
 
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
@@ -940,7 +946,8 @@ void Lhyphen::SingleStep() {
  *
  */
 void Lhyphen::integrate() {
-  std::ofstream of[capturedNodes.size()];
+  // std::ofstream of[capturedNodes.size()];
+  std::vector<std::ofstream> of(capturedNodes.size());
   for (size_t c = 0; c < capturedNodes.size(); c++) {
     of[c].open(capturedNodes[c].filename.c_str());
   }
@@ -1008,7 +1015,9 @@ void Lhyphen::saveCONF(const char *fname) {
 
   file << "cells " << cells.size() << '\n';
   for (size_t i = 0; i < cells.size(); i++) {
-    file << cells[i].radius << ' ' << cells[i].nodes.size() << ' ' << cells[i].bars.size() << '\n';
+    cells[i].CellSurface();
+    file << cells[i].radius << ' ' << cells[i].nodes.size() << ' ' << cells[i].bars.size() << ' ' << cells[i].p_int
+         << ' ' << cells[i].surface << ' ' << (int)cells[i].close << '\n';
     for (size_t n = 0; n < cells[i].nodes.size(); n++) {
       file << cells[i].nodes[n].pos << ' ' << cells[i].nodes[n].vel << ' ' << cells[i].nodes[n].force << ' ';
       put_Ptr_size_t<'x'>(file, cells[i].nodes[n].ictrl);
@@ -1115,7 +1124,7 @@ void Lhyphen::loadCONF(const char *fname) {
       for (size_t i = 0; i < nbCells; i++) {
         Cell C;
         size_t nbNodes, nbBars;
-        file >> C.radius >> nbNodes >> nbBars;
+        file >> C.radius >> nbNodes >> nbBars >> C.p_int >> C.surface >> C.close;
         Node N(0.0, 0.0);
         for (size_t n = 0; n < nbNodes; n++) {
           file >> N.pos >> N.vel >> N.force;
@@ -1185,20 +1194,20 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> c >> n >> xmode >> xvalue >> ymode >> yvalue;
       setNodeControl(c, n, xmode, xvalue, ymode, yvalue);
     } else if (token == "setNodeControlInBox") {
-      double xmin, xmax, ymin, ymax, xvalue, yvalue;
+      double xmin_, xmax_, ymin_, ymax_, xvalue, yvalue;
       int xmode, ymode;
-      file >> xmin >> xmax >> ymin >> ymax >> xmode >> xvalue >> ymode >> yvalue;
-      setNodeControlInBox(xmin, xmax, ymin, ymax, xmode, xvalue, ymode, yvalue);
+      file >> xmin_ >> xmax_ >> ymin_ >> ymax_ >> xmode >> xvalue >> ymode >> yvalue;
+      setNodeControlInBox(xmin_, xmax_, ymin_, ymax_, xmode, xvalue, ymode, yvalue);
     } else if (token == "captureNodes") {
-      double xmin, xmax, ymin, ymax;
+      double xmin_, xmax_, ymin_, ymax_;
       std::string filename;
-      file >> filename >> xmin >> xmax >> ymin >> ymax;
+      file >> filename >> xmin_ >> xmax_ >> ymin_ >> ymax_;
       CapturedNodes CN(filename.c_str());
       for (size_t c = 0; c < cells.size(); c++) {
         for (size_t n = 0; n < cells[c].nodes.size(); n++) {
 
-          if (cells[c].nodes[n].pos.x >= xmin && cells[c].nodes[n].pos.x <= xmax && cells[c].nodes[n].pos.y >= ymin &&
-              cells[c].nodes[n].pos.y <= ymax) {
+          if (cells[c].nodes[n].pos.x >= xmin_ && cells[c].nodes[n].pos.x <= xmax_ &&
+              cells[c].nodes[n].pos.y >= ymin_ && cells[c].nodes[n].pos.y <= ymax_) {
             CellNodeID CNID(c, n);
             CN.cellNodeIDs.push_back(CNID);
           }
@@ -1213,10 +1222,27 @@ void Lhyphen::loadCONF(const char *fname) {
       setCellControl(icell, xmode, xvalue, ymode, yvalue);
     } else if (token == "readNodeFile") {
       std::string fileName;
-      double barWidth, Kn, Kr, Mz_max;
-      file >> fileName >> barWidth >> Kn >> Kr >> Mz_max;
-      readNodeFile(fileName.c_str(), barWidth, Kn, Kr, Mz_max);
-    } else {
+      double barWidth, Kn, Kr, Mz_max, p_int;
+      file >> fileName >> barWidth >> Kn >> Kr >> Mz_max >> p_int;
+      readNodeFile(fileName.c_str(), barWidth, Kn, Kr, Mz_max, p_int);
+    } else if (token == "setCellInternalPressure") {
+      double p_int;
+      size_t c;
+      file >> c >> p_int;
+      setCellInternalPressure(c, p_int);
+    } else if (token == "enablePressures") {
+      enablePressures = 1;
+    } else if (token == "disablePressures") {
+      enablePressures = 0;
+    } else if (token == "setOpen") {
+      size_t c;
+      file >> c;
+      cells[c].close = false;
+    } else if (token == "setClose") {
+      size_t c;
+      file >> c;
+      cells[c].close = true;
+    }else {
       std::cout << "@Lhyphen::loadCONF, this token is not known: " << token << '\n';
     }
 
@@ -1290,7 +1316,7 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int Canvaswidth) {
   std::ofstream ofs(name);
   SVGfile svg(ofs);
 
-  int CanvasHeight = Canvaswidth * (ymax - ymin) / (xmax - xmin);
+  int CanvasHeight = Canvaswidth * (int)floor((ymax - ymin) / (xmax - xmin));
   svg.begin(Canvaswidth, CanvasHeight);
   viewZone vz(0, 0, Canvaswidth, CanvasHeight);
   double delta = (xmax - xmin) * 0.05; // c'est une bordure
@@ -1326,4 +1352,35 @@ double Lhyphen::getRotationVelocityBar(vec2r &a, vec2r &b, vec2r &va, vec2r &vb)
   double l = u.normalize();
   vec2r t(-u.y, u.x);
   return ((vb - va) * t / l);
+}
+
+void Lhyphen::InternalPressureForce() {
+  for (size_t c = 0; c < cells.size(); c++) {
+    if (cells[c].close == true && cells[c].p_int != 0.0) {
+      double PrevSurface = cells[c].surface;
+      double PrevPint = cells[c].p_int;
+      cells[c].CellSurface();
+      // P(k-1) S(k-1) = P(k)S(k) -> P(k) = P(k-1) S(k-1)/S(k)
+      cells[c].p_int = PrevSurface * PrevPint / cells[c].surface;
+      for (size_t b = 0; b < cells[c].bars.size(); b++) {
+        // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
+        size_t i = cells[c].bars[b].i;
+        size_t j = cells[c].bars[b].j;
+        vec2r barVector = cells[c].nodes[i].pos - cells[c].nodes[j].pos;
+        vec2r barDir = barVector;
+        double barL = barDir.normalize();
+        vec2r barDirRot(-barDir.y, barDir.x);
+        vec2r Fp_bar = cells[c].p_int * barL * barDirRot;
+        cells[c].nodes[i].force += Fp_bar * 0.5;
+        cells[c].nodes[j].force += Fp_bar * 0.5;
+      }
+    } else {
+      continue;
+    }
+  }
+}
+
+void Lhyphen::setCellInternalPressure(size_t c, double p) {
+  cells[c].p_int = p;
+  //cells[c].close = false;
 }

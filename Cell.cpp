@@ -12,7 +12,7 @@ void Cell::reorderNodes() {
     return;
   }
 
-  // cette structure permet de trier les noeuds dans le sens trigo 
+  // cette structure permet de trier les noeuds dans le sens trigo
   struct sortedNode {
     double x0, y0;
     double x, y;
@@ -85,21 +85,22 @@ void Cell::insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEA
  * @param mz_max_ moment seuil plastique
  * @param closed spécifie si les barres forment une boucle (true par defaut)
  */
-void Cell::connectOrderedNodes(double width, double kn_, double kr_, double mz_max_, bool closed) {
+void Cell::connectOrderedNodes(double width, double kn_, double kr_, double mz_max_, double pint, bool closed) {
   if (nodes.empty()) {
     std::cout << "@Cell::connectOrderedNodes, Cannot connect the nodes because there's no node!\n";
     return;
   }
-
+  close = closed;
   radius = 0.5 * width;
   bars.clear();
 
   for (size_t i = 1; i < nodes.size(); i++) {
     bars.push_back(Bar(i - 1, i));
   }
-  if (closed == true)
+  if (closed == true) {
     bars.push_back(Bar(nodes.size() - 1, 0));
-
+    p_int = pint;
+  }
   // init bars
   for (size_t b = 0; b < bars.size(); b++) {
     bars[b].init(kn_, nodes[bars[b].i].pos, nodes[bars[b].j].pos);
@@ -112,7 +113,7 @@ void Cell::connectOrderedNodes(double width, double kn_, double kr_, double mz_m
     } else {
       nodes[0].init(kr_, mz_max_, null_size_t, 1);
     }
-    
+
     for (size_t n = 1; n < nodes.size() - 1; n++) {
       nodes[n].init(kr_, mz_max_, n - 1, n + 1);
     }
@@ -121,6 +122,27 @@ void Cell::connectOrderedNodes(double width, double kn_, double kr_, double mz_m
     } else {
       nodes.back().init(kr_, mz_max_, nodes.size() - 2, null_size_t);
     }
-      
   }
+}
+
+// Cette fonction calcul la surface d'une cellule fermée
+// par la méthode des produits vectoriels
+void Cell::CellSurface() {
+  surface = 0.0;
+  if (close == false) {
+    return;
+  }
+
+  for (size_t i = 1; i < nodes.size() - 1; i++) {
+    surface += 0.5 * (cross((nodes[i].pos - nodes[0].pos), (nodes[i + 1].pos - nodes[0].pos)));
+  }
+  surface = fabs(surface);
+}
+
+void Cell::CellCenter() {
+  // Determination of the center of closed cell
+  for (size_t i = 0; i < nodes.size(); i++) {
+    center += nodes[i].pos;
+  }
+  center /= double(nodes.size());
 }

@@ -47,6 +47,10 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
     printInfo();
   } break;
 
+  case 'p': {
+    show_pressure = 1 - show_pressure;
+  } break;
+
   case 'q': {
     exit(0);
   } break;
@@ -148,6 +152,8 @@ void display() {
   glShadeModel(GL_SMOOTH);
   glEnable(GL_DEPTH_TEST);
 
+  if (show_pressure)
+    drawPressure();
   if (show_cells)
     drawCells();
   if (show_glue_points)
@@ -222,27 +228,93 @@ void drawBar(size_t ci, size_t i, size_t j, double radius, color4f &BarColor, co
   glColor4f(BarColor.r, BarColor.g, BarColor.b, 1.0f);
 
   glBegin(GL_POLYGON);
-  glVertex2f(xi - radius * txij, yi - radius * tyij);
-  glVertex2f(xj - radius * txij, yj - radius * tyij);
-  glVertex2f(xj + radius * txij, yj + radius * tyij);
-  glVertex2f(xi + radius * txij, yi + radius * tyij);
+  glVertex2d(xi - radius * txij, yi - radius * tyij);
+  glVertex2d(xj - radius * txij, yj - radius * tyij);
+  glVertex2d(xj + radius * txij, yj + radius * tyij);
+  glVertex2d(xi + radius * txij, yi + radius * tyij);
   glEnd();
 
   glColor4f(NodeColor.r, NodeColor.g, NodeColor.b, 1.0f);
 
   glBegin(GL_POLYGON);
   for (double a = 0.0; a < 2.0 * M_PI; a += M_PI / 18.0) {
-    glVertex2f(xi + radius * cos(a), yi + radius * sin(a));
+    glVertex2d(xi + radius * cos(a), yi + radius * sin(a));
   }
   glEnd();
 
   if (Conf.cells[ci].nodes[j].nextNode == null_size_t) {
     glBegin(GL_POLYGON);
     for (double a = 0.0; a < 2.0 * M_PI; a += M_PI / 18.0) {
-      glVertex2f(xj + radius * cos(a), yj + radius * sin(a));
+      glVertex2d(xj + radius * cos(a), yj + radius * sin(a));
     }
     glEnd();
   }
+}
+
+void drawPressure() {
+  double pmax = -1.0e20;
+  double pmin = 1.0e20;
+  for (size_t i = 0; i < Conf.cells.size(); ++i) {
+    if (Conf.cells[i].close == false)
+      continue;
+    if (Conf.cells[i].p_int < pmin)
+      pmin = Conf.cells[i].p_int;
+    if (Conf.cells[i].p_int > pmax)
+      pmax = Conf.cells[i].p_int;
+  }
+
+  color4f col;
+  ColorTable pTable;
+  pTable.setTableID(MATLAB_HOT);
+  pTable.setMinMax((float)pmin, (float)pmax);
+  // std::cout << "pmax = " << pmax << '\n';
+  pTable.Rebuild();
+
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
+
+  // This version is ok only for convexe shapes
+  for (size_t i = 0; i < Conf.cells.size(); ++i) {
+    if (Conf.cells[i].close == false)
+      continue;
+
+    pTable.getColor4f((float)Conf.cells[i].p_int, &col);
+    glColor3f(col.r, col.g, col.b);
+
+    glBegin(GL_TRIANGLES);
+    for (size_t s = 2; s < Conf.cells[i].nodes.size(); s += 1) {
+      vec2r p0 = Conf.cells[i].nodes[0].pos;
+      vec2r p1 = Conf.cells[i].nodes[s - 1].pos;
+      vec2r p2 = Conf.cells[i].nodes[s].pos;
+
+      glVertex2d(p0.x, p0.y);
+      glVertex2d(p1.x, p1.y);
+      glVertex2d(p2.x, p2.y);
+    }
+    glEnd();
+  }
+
+  /*
+  for (size_t i = 1; i < Conf.cells.size(); ++i) {
+    std::vector<vec2r> contour;
+    for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
+      contour.push_back(Conf.cells[i].nodes[n].pos);
+    }
+    std::vector<int> result;
+    TriangulatePolygon::Process(contour, result);
+    glBegin(GL_TRIANGLES);
+    for (size_t s = 0; s < result.size() - 3; s += 3) {
+      vec2r p0 = contour[s];
+      vec2r p1 = contour[s + 1];
+      vec2r p2 = contour[s + 2];
+
+      glVertex2f(p0.x, p0.y);
+      glVertex2f(p1.x, p1.y);
+      glVertex2f(p2.x, p2.y);
+    }
+    glEnd();
+  }
+  */
 }
 
 void drawCells() {
@@ -266,8 +338,8 @@ void drawCells() {
         }
       }
     }
-    BarRedTable.setMinMax(0.0, fnredmax);
-    BarBlueTable.setMinMax(0.0, fnbluemax);
+    BarRedTable.setMinMax(0.0f, (float)fnredmax);
+    BarBlueTable.setMinMax(0.0f, (float)fnbluemax);
   }
 
   for (size_t i = 0; i < Conf.cells.size(); ++i) {
@@ -275,9 +347,9 @@ void drawCells() {
 
       if (show_bar_colors) {
         if (Conf.cells[i].bars[b].fn > 0.0) {
-          BarRedTable.getColor4f(Conf.cells[i].bars[b].fn, &BarColor);
+          BarRedTable.getColor4f((float)(Conf.cells[i].bars[b].fn), &BarColor);
         } else if (Conf.cells[i].bars[b].fn < 0.0) {
-          BarBlueTable.getColor4f(-Conf.cells[i].bars[b].fn, &BarColor);
+          BarBlueTable.getColor4f((float)(-Conf.cells[i].bars[b].fn), &BarColor);
         } else {
           BarColor.r = 0.8f;
           BarColor.g = 0.8f;
@@ -285,7 +357,7 @@ void drawCells() {
           BarColor.a = 1.0f;
         }
       }
-      
+
       size_t in = Conf.cells[i].bars[b].i;
       size_t jn = Conf.cells[i].bars[b].j;
       drawBar(i, in, jn, Conf.cells[i].radius, BarColor, NodeColor);
@@ -313,7 +385,7 @@ void drawGluePoints() {
           vec2r b = Conf.cells[cj].nodes[jn].pos - Conf.cells[ci].nodes[in].pos;
           b *= (Conf.cells[ci].radius / Conf.cells[ci].radius + Conf.cells[cj].radius);
           vec2r pos = Conf.cells[cj].nodes[jn].pos + b;
-          glVertex2f(pos.x, pos.y);
+          glVertex2d(pos.x, pos.y);
         } else {
           size_t jnext = Conf.cells[cj].nodes[jn].nextNode;
           // jnext est le numéro du noeud à la fin de la barre dans la cellule cj (jn c'est le début)
@@ -326,16 +398,16 @@ void drawGluePoints() {
           if (proj <= 0.0) {
             vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
             vec2r pos = Conf.cells[cj].nodes[jn].pos + fact * ut;
-            glVertex2f(pos.x, pos.y);
+            glVertex2d(pos.x, pos.y);
           } else if (proj >= u_length) {
             vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jnext].pos;
             vec2r pos = Conf.cells[cj].nodes[jn].pos + u_length * u + fact * ut;
-            glVertex2f(pos.x, pos.y);
+            glVertex2d(pos.x, pos.y);
           } else {
             vec2r pos = Conf.cells[cj].nodes[jn].pos + proj * u;
             vec2r ut = Conf.cells[ci].nodes[in].pos - (Conf.cells[cj].nodes[jn].pos + proj * u);
             pos += fact * ut;
-            glVertex2f(pos.x, pos.y);
+            glVertex2d(pos.x, pos.y);
           }
         }
       }
@@ -354,21 +426,21 @@ void arrow(double x0, double y0, double x1, double y1) {
   nx /= len;
   ny /= len;
 
-  glVertex2f(x0, y0);
-  glVertex2f(x1, y1);
+  glVertex2d(x0, y0);
+  glVertex2d(x1, y1);
 
   double c = cos(arrowAngle);
   double s = sin(arrowAngle);
 
   double ex = c * nx - s * ny;
   double ey = s * nx + c * ny;
-  glVertex2f(x1, y1);
-  glVertex2f(x1 - arrowSize * ex, y1 - arrowSize * ey);
+  glVertex2d(x1, y1);
+  glVertex2d(x1 - arrowSize * ex, y1 - arrowSize * ey);
 
   ex = c * nx + s * ny;
   ey = -s * nx + c * ny;
-  glVertex2f(x1, y1);
-  glVertex2f(x1 - arrowSize * ex, y1 - arrowSize * ey);
+  glVertex2d(x1, y1);
+  glVertex2d(x1 - arrowSize * ex, y1 - arrowSize * ey);
 }
 
 void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos) {
@@ -477,7 +549,7 @@ int main(int argc, char *argv[]) {
   BarBlueTable.setSize(128);
   BarBlueTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {0, 0, 255, 255}});
   // BarBlueTable.savePpm("BarBlueTable.ppm");
-  
+
   NodeRedTable.setSize(128);
   NodeRedTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {255, 0, 0, 255}});
   NodeBlueTable.setSize(128);
@@ -499,6 +571,7 @@ int main(int argc, char *argv[]) {
 
   mouse_mode = NOTHING;
 
+  glCullFace(GL_FRONT_AND_BACK);
   glEnable(GL_BLEND);
   glBlendEquation(GL_FUNC_ADD);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

@@ -58,6 +58,7 @@ struct named_arg_CellProperties {
   double kn;
   double kr;
   double mz_max;
+  double p_int;
 };
 
 struct CellNodeID {
@@ -96,10 +97,12 @@ public:
   vec2r gravity;
 
   double distVerlet; // entre noeuds et barres
+  
+  int enablePressures;
 
   // parametres mécaniques d'interactions (contact frottant avec ou sans adhésion) entre les cellules
-  double kn; // raideur normale de contact
-  double kt; // raideur tangentielle de contact
+  double kn;   // raideur normale de contact
+  double kt;   // raideur tangentielle de contact
   double mu;   // coefficient de frottement (entre les cellules)
   double fadh; // force normale d'adhésion au contact
 
@@ -134,7 +137,7 @@ public:
   void setNodeControlInBox(double xmin, double xmax, double ymin, double ymax, int xmode, double xvalue, int ymode,
                            double yvalue);
   void addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds = 0.0);
-  void readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max);
+  void readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int);
 
   void updateNeighbors();
   void glue(double epsilonDist);
@@ -151,6 +154,8 @@ public:
 
   void findDisplayArea(double factor = 1.0);
   void saveSVG(int num, const char *nameBase = "sample%04d.svg", int Canvaswidth = 400);
+  void InternalPressureForce();
+  void setCellInternalPressure(size_t c, double p);
 
 private:
   double getRotationVelocityBar(vec2r &a, vec2r &b, vec2r &va, vec2r &vb);
