@@ -265,7 +265,8 @@ void drawPressure() {
 
   color4f col;
   ColorTable pTable;
-  pTable.setTableID(MATLAB_HOT);
+  pTable.setTableID(16);
+  pTable.setSwap(true);
   pTable.setMinMax((float)pmin, (float)pmax);
   // std::cout << "pmax = " << pmax << '\n';
   pTable.Rebuild();
@@ -274,6 +275,7 @@ void drawPressure() {
   glDisable(GL_LIGHTING);
 
   // This version is ok only for convexe shapes
+  /*
   for (size_t i = 0; i < Conf.cells.size(); ++i) {
     if (Conf.cells[i].close == false)
       continue;
@@ -293,9 +295,15 @@ void drawPressure() {
     }
     glEnd();
   }
+  */
 
-  /*
   for (size_t i = 1; i < Conf.cells.size(); ++i) {
+    if (Conf.cells[i].close == false)
+      continue;
+
+    pTable.getColor4f((float)Conf.cells[i].p_int, &col);
+    glColor3f(col.r, col.g, col.b);
+      
     std::vector<vec2r> contour;
     for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
       contour.push_back(Conf.cells[i].nodes[n].pos);
@@ -303,18 +311,18 @@ void drawPressure() {
     std::vector<int> result;
     TriangulatePolygon::Process(contour, result);
     glBegin(GL_TRIANGLES);
-    for (size_t s = 0; s < result.size() - 3; s += 3) {
-      vec2r p0 = contour[s];
-      vec2r p1 = contour[s + 1];
-      vec2r p2 = contour[s + 2];
+    for (size_t s = 0; s < result.size(); s += 3) {
+      vec2r p0 = contour[result[s]];
+      vec2r p1 = contour[result[s + 1]];
+      vec2r p2 = contour[result[s + 2]];
 
-      glVertex2f(p0.x, p0.y);
-      glVertex2f(p1.x, p1.y);
-      glVertex2f(p2.x, p2.y);
+      glVertex2d(p0.x, p0.y);
+      glVertex2d(p1.x, p1.y);
+      glVertex2d(p2.x, p2.y);
     }
     glEnd();
   }
-  */
+
 }
 
 void drawCells() {

@@ -12,7 +12,7 @@
 #include "null_size_t.hpp"
 
 #include "ColorTable.hpp"
-//#include "triangulatePolygon.hpp"
+#include "triangulatePolygon.hpp"
 
 Lhyphen Conf;
 int confNum = 1;
@@ -60,6 +60,7 @@ void arrow(double x0, double y0, double x1, double y1);
 void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos);
 void drawForces();
 void drawPressure();
+//void drawColorTable(ColorTable &CT, const char * title);
 
 // Callback functions
 void keyboard(unsigned char Key, int x, int y);

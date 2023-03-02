@@ -7,7 +7,7 @@
  */
 Lhyphen::Lhyphen()
     : xmin(0.0), xmax(0.0), ymin(0.0), ymax(0.0), dt(0.0), globalViscosity(0.0), numericalDissipation(0.0), gravity(),
-      enablePressures(0), distVerlet(0.0), kn(1000.0), kt(1000.0), mu(0.0), fadh(0.0), nstep(1000),
+      distVerlet(0.0), enablePressures(0), kn(1000.0), kt(1000.0), mu(0.0), fadh(0.0), nstep(1000),
       nstepPeriodVerlet(1), nstepPeriodSVG(10), nstepPeriodRecord(1), nstepPeriodConf(10), isvg(0), iconf(0) {}
 
 /**
@@ -1242,7 +1242,7 @@ void Lhyphen::loadCONF(const char *fname) {
       size_t c;
       file >> c;
       cells[c].close = true;
-    }else {
+    } else {
       std::cout << "@Lhyphen::loadCONF, this token is not known: " << token << '\n';
     }
 
@@ -1382,5 +1382,5 @@ void Lhyphen::InternalPressureForce() {
 
 void Lhyphen::setCellInternalPressure(size_t c, double p) {
   cells[c].p_int = p;
-  //cells[c].close = false;
+  // cells[c].close = false;
 }
