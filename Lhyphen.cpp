@@ -7,8 +7,20 @@
  */
 Lhyphen::Lhyphen()
     : xmin(0.0), xmax(0.0), ymin(0.0), ymax(0.0), dt(0.0), globalViscosity(0.0), numericalDissipation(0.0), gravity(),
-      distVerlet(0.0), cellContent(CELL_CONTAIN_NOTHING), compressFactor(0.0), kn(1000.0), kt(1000.0), mu(0.0), fadh(0.0), nstep(1000),
-      nstepPeriodVerlet(1), nstepPeriodSVG(10), nstepPeriodRecord(1), nstepPeriodConf(10), isvg(0), iconf(0) {}
+      distVerlet(0.0), cellContent(CELL_CONTAIN_NOTHING), compressFactor(0.0), kn(1000.0), kt(1000.0), mu(0.0),
+      fadh(0.0), nstep(1000), nstepPeriodVerlet(1), nstepPeriodSVG(10), nstepPeriodRecord(1), nstepPeriodConf(10),
+      isvg(0), iconf(0) {
+
+  SVG_colorCells = 2;
+  SVG_colorTableRescale = 0;
+  SVG_colorTableMin = -10000.0;
+  SVG_colorTableMax = 10000.0;
+	
+	SVG_cellForces = 1;
+
+  ctNeg.rebuild_interp_rgba({0, ctNeg.getSize() - 1}, {{255, 255, 255}, {0, 0, 255}});
+  ctPos.rebuild_interp_rgba({0, ctPos.getSize() - 1}, {{255, 255, 255}, {255, 0, 0}});
+}
 
 /**
  * @brief affiche un petit entete sympatique
@@ -426,10 +438,10 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
     cells.push_back(C);
 
   for (size_t i = 0; i < cells.size(); i++) {
-    cells[i].reorderNodes(); 
-		// il faudrait un flag pour que cette fonction ne soit pas appelée si l'utilisateur le souhaite
-		// Dans ce cas, il faudra que les noeuds du fichier soient positionnés dans le sens trigo (à vérifier)
-		
+    cells[i].reorderNodes();
+    // il faudrait un flag pour que cette fonction ne soit pas appelée si l'utilisateur le souhaite
+    // Dans ce cas, il faudra que les noeuds du fichier soient positionnés dans le sens trigo (à vérifier)
+
     cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
   }
 }
@@ -1412,8 +1424,68 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int Canvaswidth) {
 
   char opt[256];
 
+  colorRGBA col;
+
+  switch (SVG_colorCells) {
+  case 1: { // pression
+    double pmin = 1e20;
+    double pmax = -1e20;
+    for (size_t c = 0; c < cells.size(); c++) {
+      if (cells[c].p_int > pmax)
+        pmax = cells[c].p_int;
+      if (cells[c].p_int < pmin)
+        pmin = cells[c].p_int;
+    }
+
+    double pp = std::max(fabs(pmax), fabs(pmin));
+    ctNeg.setMinMax(-(float)pp, 0.0);
+    ctPos.setMinMax(0.0, (float)pp);
+  } break;
+	
+  case 2: { // NRJ elast
+		
+    double NRJmax = 0.0;
+    for (size_t c = 0; c < cells.size(); c++) {
+			double NRJ = cells[c].getElasticNRJ(compressFactor);
+			//std::cout << "NRJ(" << c << ") = " << NRJ << '\n';
+      if (NRJ > NRJmax)
+        NRJmax = NRJ;
+    }
+    ctPos.setMinMax(0.0, (float)NRJmax);
+		//std::cout << "NRJmax = " << NRJmax << '\n';
+  } break;
+	
+  }
+
+  // draw the cells
   for (size_t c = 0; c < cells.size(); c++) {
 
+    if (SVG_colorCells > 0 && cells[c].close == true) {
+
+			switch (SVG_colorCells) {
+				case 1: {
+		      if (cells[c].p_int >= 0.0)
+		        ctPos.getRGB((float)cells[c].p_int, &col);
+		      else
+		        ctNeg.getRGB((float)cells[c].p_int, &col);
+				} break;
+				
+				case 2: {
+					double NRJ = cells[c].getElasticNRJ(compressFactor);
+					ctPos.getRGB((float)NRJ, &col);
+				} break;
+			}  
+
+      snprintf(opt, 256, "stroke:none;fill:rgb(%d,%d,%d)", col.r, col.g, col.b);
+
+      std::vector<vec2r> contour;
+      for (size_t s = 0; s < cells[c].nodes.size(); s++) {
+        contour.push_back(cells[c].nodes[s].pos);
+      }
+      svg.polygon(vz, contour, opt);
+    }
+
+    // contour de la cellule
     for (size_t b = 0; b < cells[c].bars.size(); b++) {
       snprintf(opt, 256, "stroke:blue;fill:none;stroke-linecap:round;stroke-width:%g", 2 * cells[c].radius * vz.scalex);
       size_t i = cells[c].bars[b].i;
@@ -1422,6 +1494,52 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int Canvaswidth) {
                opt);
     }
   }
+	
+	// draw the forces 
+	if (SVG_cellForces > 0) {
+		std::map<std::pair<size_t, size_t>, vec2r> force_map;
+		
+		std::pair<size_t, size_t> duo;
+		double surfMin = 1.0e20;
+		for (size_t c = 0; c < cells.size(); c++) {
+			cells[c].CellCenter();
+			if (cells[c].close == true && cells[c].surface0 < surfMin) surfMin = cells[c].surface0;
+			for (auto &in :  cells[c].neighbors) {
+				duo.first = in.ic;
+				duo.second = in.jc;
+				if (cells[in.ic].close == false || cells[in.jc].close == false) continue;
+				
+				if (in.contactState == 1) {
+					auto it = force_map.find(duo);
+					if (it != force_map.end()) it->second += in.fn * in.n;
+					else force_map[duo] = in.fn * in.n;
+				}				
+			}
+		}
+		
+		double fnMax = 0.0;
+		for (auto &fm : force_map) {
+			double fn = norm(fm.second);
+			if (fn > fnMax) fnMax = fn;
+		}
+		if (fabs(fnMax) > 1e-12) {
+			double req = sqrt(surfMin / M_PI);
+			
+			for (auto &fm : force_map) {
+				size_t ic = fm.first.first;
+				size_t jc = fm.first.second;
+				//vec2r branch = cells[jc].center - cells[ic].center;
+				double width = norm(fm.second) / fnMax;
+				snprintf(opt, 256, "stroke:black;fill:none;stroke-linecap:round;stroke-width:%g", req * width * vz.scalex);
+	      svg.line(vz, cells[ic].center.x, cells[ic].center.y, cells[jc].center.x, cells[jc].center.y,
+	               opt);
+			}
+			
+		}
+		
+		
+	}
+	
 
   svg.end();
 }
@@ -1475,9 +1593,9 @@ void Lhyphen::InternalLiquidPressureForce() {
   for (size_t c = 0; c < cells.size(); c++) {
     if (cells[c].close == true) {
 
-      cells[c].CellSurface();		
-      cells[c].p_int = compressFactor * (cells[c].surface - cells[c].surface0);
-				
+      cells[c].CellSurface();
+      cells[c].p_int = -compressFactor * (cells[c].surface - cells[c].surface0);
+
       for (size_t b = 0; b < cells[c].bars.size(); b++) {
         // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
         size_t i = cells[c].bars[b].i;

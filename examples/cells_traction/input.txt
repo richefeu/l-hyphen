@@ -1,0 +1,66 @@
+# SIMULATION INPUTS ===================================================
+
+# time flow
+# t 0
+dt 1e-4 
+nstep  2000000
+
+# dissipation
+numericalDissipation 1e-4
+globalViscosity      0.0
+
+# volume forces
+gravity 0 0
+
+# proximity 
+distVerlet 0.01
+nstepPeriodVerlet 100
+
+# outputs
+isvg              0
+nstepPeriodSVG    10000
+iconf             0
+nstepPeriodConf   10000
+
+# contact adhésif frottant entre les cellules
+kn 1e6
+kt 1e6
+mu 0.3
+#fadh 1e5
+
+# cohésion avec 3eme corps
+#kn_coh  1000000
+#kt_coh  1000000
+
+# SAMPLE ===================================================
+
+#E = 12GPa
+#             filename       barWidth  kv/kn     kb/kr          mz_max   pressure
+readNodeFile  nodeFile.txt   0.006    3.66782  305.652    4.401e-04        0
+#    Plasticity -------^
+#readNodeFile  nodeFile.txt   0.006     2e8  2e6   100000      1000
+#    Full Elastic -----^
+
+setNodeMasses 1.00
+
+setCellInternalPressure 0 0.0
+setCellAsOpen 0
+cellContent 0
+compressFactor 1e10
+
+# IMPOSED CONTROLS
+#              icell  V       V
+#setNodeControlInBox 0 1 -0.5 0.05 0 0.0 0 1e-2
+#setNodeControlInBox 0 1 0.95 1.5 0 0.0 0 -1e-2
+setNodeControlInBox 0 10 -0.5 0.05 0 0.0 0 -5e-3
+setNodeControlInBox 0 10 1.95 2.5 0 0.0 0 5e-3
+
+# PREPRO ===================================================
+# activation de la colle si la distance est inférieure à 0.02
+glue 0.005
+
+#setGlueSameProperties 1e5 1e5 2000 2000 5
+#setGlueSameProperties 1e5 1e5 5000 5000 5
+setGlueSameProperties 36.678  3056.524  0.0432  0.0432  2
+
+findDisplayArea 1.5 

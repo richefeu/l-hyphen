@@ -44,8 +44,8 @@ setNodeMasses 1.00
 
 setCellInternalPressure 0 0.0
 setCellAsOpen 0
-cellContent 2
-compressFactor 1e6
+cellContent 0
+compressFactor 1e10
 
 # IMPOSED CONTROLS (mode 0 = V, 1 = F)
 #                   xmin  xmax   ymin        ymax     xmode  xvalue  ymode  yvalue   

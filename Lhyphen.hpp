@@ -12,9 +12,12 @@
 
 #include <set>
 #include <vector>
+#include <map>
+#include <utility>
 
 #include "svgtools.hpp"
 #include "vec2.hpp"
+#include "ColorTable.hpp"
 
 #include "Bar.hpp"
 #include "Cell.hpp"
@@ -119,6 +122,14 @@ public:
   int nstepPeriodConf;
   int isvg;
   int iconf;
+	
+	int SVG_colorCells; // 0=rien, 1=pressure, 2=NRJ elast
+	int SVG_colorTableRescale;
+	double SVG_colorTableMin;
+	double SVG_colorTableMax;
+	int SVG_cellForces; // 0=rien, 1=rouge/bleu
+	
+	ColorTable ctNeg, ctPos;
 
   Lhyphen();
 
