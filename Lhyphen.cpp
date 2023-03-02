@@ -7,8 +7,22 @@
  */
 Lhyphen::Lhyphen()
     : xmin(0.0), xmax(0.0), ymin(0.0), ymax(0.0), dt(0.0), globalViscosity(0.0), numericalDissipation(0.0), gravity(),
-      distVerlet(0.0), enablePressures(0), kn(1000.0), kt(1000.0), mu(0.0), fadh(0.0), nstep(1000),
-      nstepPeriodVerlet(1), nstepPeriodSVG(10), nstepPeriodRecord(1), nstepPeriodConf(10), isvg(0), iconf(0) {}
+      distVerlet(0.0), cellContent(CELL_CONTAIN_NOTHING), compressFactor(0.0), kn(1000.0), kt(1000.0), mu(0.0),
+      fadh(0.0), nstep(1000), nstepPeriodVerlet(1), nstepPeriodSVG(10), nstepPeriodRecord(1), nstepPeriodConf(10),
+      isvg(0), iconf(0) {
+
+  SVG_colorCells = 2;
+  SVG_colorTableRescale = 0;
+  SVG_colorTableMin = -10000.0;
+  SVG_colorTableMax = 10000.0;
+
+  SVG_cellForces = 1;
+
+  ctNeg.setSize(128);
+  ctPos.setSize(128);
+  ctNeg.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {0, 0, 255, 255}});
+  ctPos.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {255, 0, 0, 255}});
+}
 
 /**
  * @brief affiche un petit entete sympatique
@@ -193,12 +207,53 @@ void Lhyphen::setTimeStep(double dt_) {
   dt2_2 = dt_2 * dt;
 }
 
-void Lhyphen::setCellDensities(double /*rho*/) {
-  // TODO
+void Lhyphen::setCellWallDensities(double rho, double thickness) {
+  for (size_t c = 0; c < cells.size(); c++) {
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      cells[c].nodes[n].mass = 0.0;
+    }
+  }
+
+  for (size_t c = 0; c < cells.size(); c++) {
+    for (size_t b = 0; b < cells[c].bars.size(); b++) {
+      double barMass = rho * (cells[c].bars[b].l0 * 2.0 * cells[c].radius * thickness);
+      cells[c].nodes[cells[c].bars[b].i].mass += 0.5 * barMass;
+      cells[c].nodes[cells[c].bars[b].j].mass += 0.5 * barMass;
+    }
+  }
 }
 
-void Lhyphen::setCellMasses(double /*m*/) {
-  // todo
+void Lhyphen::setCellDensities(double rho, double thickness) {
+  setCellWallDensities(rho, thickness);
+  for (size_t c = 0; c < cells.size(); c++) {
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      cells[c].nodes[n].mass *=
+          0.5; // parce que ce sera comptabilisé dans la surface (qui chevauche la barre de moitié)
+    }
+    cells[c].CellSurface();
+    double massNodeInc = rho * (cells[c].surface * thickness);
+    massNodeInc /= (double)cells[c].nodes.size();
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      cells[c].nodes[n].mass += massNodeInc;
+    }
+  }
+}
+
+void Lhyphen::setCellMasses(double cellMass) {
+  for (size_t c = 0; c < cells.size(); c++) {
+    double nodeMass = cellMass / (double)cells[c].nodes.size();
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      cells[c].nodes[n].mass = nodeMass;
+    }
+  }
+}
+
+void Lhyphen::setNodeMasses(double nodeMass) {
+  for (size_t c = 0; c < cells.size(); c++) {
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      cells[c].nodes[n].mass = nodeMass;
+    }
+  }
 }
 
 void Lhyphen::setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_max, double ft_coh_max,
@@ -386,6 +441,9 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
 
   for (size_t i = 0; i < cells.size(); i++) {
     cells[i].reorderNodes();
+    // il faudrait un flag pour que cette fonction ne soit pas appelée si l'utilisateur le souhaite
+    // Dans ce cas, il faudra que les noeuds du fichier soient positionnés dans le sens trigo (à vérifier)
+
     cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
   }
 }
@@ -869,8 +927,11 @@ void Lhyphen::NodeAccelerations() {
 
   computeNodeForces();
   computeInteractionForces();
-  if (enablePressures > 0)
-    InternalPressureForce();
+
+  if (cellContent == CELL_CONTAIN_GAS)
+    InternalGasPressureForce();
+  else if (cellContent == CELL_CONTAIN_LIQUID)
+    InternalLiquidPressureForce();
 
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
@@ -1017,9 +1078,10 @@ void Lhyphen::saveCONF(const char *fname) {
   for (size_t i = 0; i < cells.size(); i++) {
     cells[i].CellSurface();
     file << cells[i].radius << ' ' << cells[i].nodes.size() << ' ' << cells[i].bars.size() << ' ' << cells[i].p_int
-         << ' ' << cells[i].surface << ' ' << (int)cells[i].close << '\n';
+         << ' ' << cells[i].surface << ' ' << cells[i].surface0 << ' ' << (int)cells[i].close << '\n';
     for (size_t n = 0; n < cells[i].nodes.size(); n++) {
-      file << cells[i].nodes[n].pos << ' ' << cells[i].nodes[n].vel << ' ' << cells[i].nodes[n].force << ' ';
+      file << cells[i].nodes[n].mass << ' ' << cells[i].nodes[n].pos << ' ' << cells[i].nodes[n].vel << ' '
+           << cells[i].nodes[n].force << ' ';
       put_Ptr_size_t<'x'>(file, cells[i].nodes[n].ictrl);
       file << ' ';
       put_Ptr_size_t<'x'>(file, cells[i].nodes[n].prevNode);
@@ -1053,7 +1115,7 @@ void Lhyphen::saveCONF(const char *fname) {
 
 void Lhyphen::saveCONF(int ifile) {
   char fname[256];
-  sprintf(fname, "conf%d", ifile);
+  snprintf(fname, 256, "conf%d", ifile);
   std::cout << "save CONF file: " << fname << '\n';
   saveCONF(fname);
 }
@@ -1103,6 +1165,8 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> kn;
     } else if (token == "kt") {
       file >> kt;
+    } else if (token == "compressFactor") {
+      file >> compressFactor;
     } else if (token == "setGlueSameProperties") {
       double kn_coh;
       double kt_coh;
@@ -1124,10 +1188,10 @@ void Lhyphen::loadCONF(const char *fname) {
       for (size_t i = 0; i < nbCells; i++) {
         Cell C;
         size_t nbNodes, nbBars;
-        file >> C.radius >> nbNodes >> nbBars >> C.p_int >> C.surface >> C.close;
+        file >> C.radius >> nbNodes >> nbBars >> C.p_int >> C.surface >> C.surface0 >> C.close;
         Node N(0.0, 0.0);
         for (size_t n = 0; n < nbNodes; n++) {
-          file >> N.pos >> N.vel >> N.force;
+          file >> N.mass >> N.pos >> N.vel >> N.force;
           N.ictrl = get_Ptr_size_t<'x'>(file);
           N.prevNode = get_Ptr_size_t<'x'>(file);
           N.nextNode = get_Ptr_size_t<'x'>(file);
@@ -1187,6 +1251,22 @@ void Lhyphen::loadCONF(const char *fname) {
       double d;
       file >> d;
       glue(d);
+    } else if (token == "setCellMasses") {
+      double mass;
+      file >> mass;
+      setCellMasses(mass);
+    } else if (token == "setNodeMasses") {
+      double mass;
+      file >> mass;
+      setNodeMasses(mass);
+    } else if (token == "setCellWallDensities") {
+      double rho, thickness;
+      file >> rho >> thickness;
+      setCellWallDensities(rho, thickness);
+    } else if (token == "setCellDensities") {
+      double rho, thickness;
+      file >> rho >> thickness;
+      setCellDensities(rho, thickness);
     } else if (token == "setNodeControl") {
       double xvalue, yvalue;
       int xmode, ymode;
@@ -1231,10 +1311,20 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> c >> p_int;
       setCellInternalPressure(c, p_int);
     } else if (token == "enablePressures") {
-      enablePressures = 1;
+      // enablePressures = 1;
+      std::cout << "enablePressures has been replaced by cellContent\n";
     } else if (token == "disablePressures") {
-      enablePressures = 0;
-    } else if (token == "setOpen") {
+      // enablePressures = 0;
+      std::cout << "disablePressures has been replaced by cellContent\n";
+    } else if (token == "cellContent") {
+      file >> cellContent;
+      if (cellContent == CELL_CONTAIN_NOTHING)
+        std::cout << "cellContent = CELL_CONTAIN_NOTHING\n";
+      else if (cellContent == CELL_CONTAIN_GAS)
+        std::cout << "cellContent = CELL_CONTAIN_GAS\n";
+      else if (cellContent == CELL_CONTAIN_LIQUID)
+        std::cout << "cellContent = CELL_CONTAIN_LIQUID\n";
+    } else if (token == "setCellAsOpen") {
       size_t c;
       file >> c;
       cells[c].close = false;
@@ -1248,12 +1338,24 @@ void Lhyphen::loadCONF(const char *fname) {
 
     file >> token;
   }
+
+  initCellInitialSurfaces();
 }
 
 void Lhyphen::loadCONF(int ifile) {
   char fname[256];
-  sprintf(fname, "conf%d", ifile);
+  snprintf(fname, 256, "conf%d", ifile);
   loadCONF(fname);
+}
+
+void Lhyphen::initCellInitialSurfaces() {
+  for (size_t c = 0; c < cells.size(); c++) {
+
+    if (cells[c].close == true && cells[c].surface0 == 0.0) {
+      cells[c].CellSurface();
+      cells[c].surface0 = cells[c].surface;
+    }
+  }
 }
 
 /**
@@ -1311,7 +1413,7 @@ void Lhyphen::findDisplayArea(double factor) {
  */
 void Lhyphen::saveSVG(int num, const char *nameBase, int Canvaswidth) {
   char name[256];
-  sprintf(name, nameBase, num);
+  snprintf(name, 256, nameBase, num);
   std::cout << "save file: " << name << '\n';
   std::ofstream ofs(name);
   SVGfile svg(ofs);
@@ -1324,14 +1426,119 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int Canvaswidth) {
 
   char opt[256];
 
+  colorRGBA col;
+
+  switch (SVG_colorCells) {
+  case 1: { // pression
+    double pmin = 1e20;
+    double pmax = -1e20;
+    for (size_t c = 0; c < cells.size(); c++) {
+      if (cells[c].p_int > pmax)
+        pmax = cells[c].p_int;
+      if (cells[c].p_int < pmin)
+        pmin = cells[c].p_int;
+    }
+
+    double pp = std::max(fabs(pmax), fabs(pmin));
+    ctNeg.setMinMax(-(float)pp, 0.0);
+    ctPos.setMinMax(0.0, (float)pp);
+  } break;
+
+  case 2: { // NRJ elast
+
+    double NRJmax = 0.0;
+    for (size_t c = 0; c < cells.size(); c++) {
+      double NRJ = cells[c].getElasticNRJ(compressFactor);
+      // std::cout << "NRJ(" << c << ") = " << NRJ << '\n';
+      if (NRJ > NRJmax)
+        NRJmax = NRJ;
+    }
+    ctPos.setMinMax(0.0, (float)NRJmax);
+    // std::cout << "NRJmax = " << NRJmax << '\n';
+  } break;
+  }
+
+  // draw the cells
   for (size_t c = 0; c < cells.size(); c++) {
 
+    if (SVG_colorCells > 0 && cells[c].close == true) {
+
+      switch (SVG_colorCells) {
+      case 1: {
+        if (cells[c].p_int >= 0.0)
+          ctPos.getRGB((float)cells[c].p_int, &col);
+        else
+          ctNeg.getRGB((float)cells[c].p_int, &col);
+      } break;
+
+      case 2: {
+        double NRJ = cells[c].getElasticNRJ(compressFactor);
+        ctPos.getRGB((float)NRJ, &col);
+      } break;
+      }
+
+      snprintf(opt, 256, "stroke:none;fill:rgb(%d,%d,%d)", col.r, col.g, col.b);
+
+      std::vector<vec2r> contour;
+      for (size_t s = 0; s < cells[c].nodes.size(); s++) {
+        contour.push_back(cells[c].nodes[s].pos);
+      }
+      svg.polygon(vz, contour, opt);
+    }
+
+    // contour de la cellule
     for (size_t b = 0; b < cells[c].bars.size(); b++) {
-      sprintf(opt, "stroke:blue;fill:none;stroke-linecap:round;stroke-width:%g", 2 * cells[c].radius * vz.scalex);
+      snprintf(opt, 256, "stroke:blue;fill:none;stroke-linecap:round;stroke-width:%g", 2 * cells[c].radius * vz.scalex);
       size_t i = cells[c].bars[b].i;
       size_t j = cells[c].bars[b].j;
       svg.line(vz, cells[c].nodes[i].pos.x, cells[c].nodes[i].pos.y, cells[c].nodes[j].pos.x, cells[c].nodes[j].pos.y,
                opt);
+    }
+  }
+
+  // draw the forces
+  if (SVG_cellForces > 0) {
+    std::map<std::pair<size_t, size_t>, vec2r> force_map;
+
+    std::pair<size_t, size_t> duo;
+    double surfMin = 1.0e20;
+    for (size_t c = 0; c < cells.size(); c++) {
+      cells[c].CellCenter();
+      if (cells[c].close == true && cells[c].surface0 < surfMin)
+        surfMin = cells[c].surface0;
+      for (auto &in : cells[c].neighbors) {
+        duo.first = in.ic;
+        duo.second = in.jc;
+        if (cells[in.ic].close == false || cells[in.jc].close == false)
+          continue;
+
+        if (in.contactState == 1) {
+          auto it = force_map.find(duo);
+          if (it != force_map.end())
+            it->second += in.fn * in.n;
+          else
+            force_map[duo] = in.fn * in.n;
+        }
+      }
+    }
+
+    double fnMax = 0.0;
+    for (auto &fm : force_map) {
+      double fn = norm(fm.second);
+      if (fn > fnMax)
+        fnMax = fn;
+    }
+    if (fabs(fnMax) > 1e-12) {
+      double req = sqrt(surfMin / M_PI);
+
+      for (auto &fm : force_map) {
+        size_t ic = fm.first.first;
+        size_t jc = fm.first.second;
+        // vec2r branch = cells[jc].center - cells[ic].center;
+        double width = norm(fm.second) / fnMax;
+        snprintf(opt, 256, "stroke:black;fill:none;stroke-linecap:round;stroke-width:%g", req * width * vz.scalex);
+        svg.line(vz, cells[ic].center.x, cells[ic].center.y, cells[jc].center.x, cells[jc].center.y, opt);
+      }
     }
   }
 
@@ -1354,14 +1561,42 @@ double Lhyphen::getRotationVelocityBar(vec2r &a, vec2r &b, vec2r &va, vec2r &vb)
   return ((vb - va) * t / l);
 }
 
-void Lhyphen::InternalPressureForce() {
+// loi des gaz parfaits à température constante
+void Lhyphen::InternalGasPressureForce() {
   for (size_t c = 0; c < cells.size(); c++) {
-    if (cells[c].close == true && cells[c].p_int != 0.0) {
-      double PrevSurface = cells[c].surface;
+    if (cells[c].close == true) {
+      double PrevSurface = cells[c].surface; // plus utile
       double PrevPint = cells[c].p_int;
       cells[c].CellSurface();
       // P(k-1) S(k-1) = P(k)S(k) -> P(k) = P(k-1) S(k-1)/S(k)
       cells[c].p_int = PrevSurface * PrevPint / cells[c].surface;
+
+      for (size_t b = 0; b < cells[c].bars.size(); b++) {
+        // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
+        size_t i = cells[c].bars[b].i;
+        size_t j = cells[c].bars[b].j;
+        vec2r barVector = cells[c].nodes[i].pos - cells[c].nodes[j].pos;
+        vec2r barDir = barVector;
+        double barL = barDir.normalize();
+        vec2r barDirRot(-barDir.y, barDir.x);
+        vec2r Fp_bar = cells[c].p_int * barL * barDirRot;
+        cells[c].nodes[i].force += Fp_bar * 0.5;
+        cells[c].nodes[j].force += Fp_bar * 0.5;
+      }
+    } else {
+      continue;
+    }
+  }
+}
+
+// remarque : COMPRESSIBLE plutot que liquide
+void Lhyphen::InternalLiquidPressureForce() {
+  for (size_t c = 0; c < cells.size(); c++) {
+    if (cells[c].close == true) {
+
+      cells[c].CellSurface();
+      cells[c].p_int = -compressFactor * (cells[c].surface - cells[c].surface0);
+
       for (size_t b = 0; b < cells[c].bars.size(); b++) {
         // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
         size_t i = cells[c].bars[b].i;

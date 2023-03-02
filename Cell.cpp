@@ -1,6 +1,6 @@
 #include "Cell.hpp"
 
-Cell::Cell() : radius(0.0) {}
+Cell::Cell() : radius(0.0), surface(0.0), surface0(0.0), close(false) {}
 
 /**
  * @brief ré-ordonne la position des noeuds de la cellule en fonction de leur angle
@@ -141,8 +141,22 @@ void Cell::CellSurface() {
 
 void Cell::CellCenter() {
   // Determination of the center of closed cell
+	center.reset();
   for (size_t i = 0; i < nodes.size(); i++) {
     center += nodes[i].pos;
   }
   center /= double(nodes.size());
+}
+
+double Cell::getElasticNRJ(double compressFactor_) {
+	if (close == false) return 0.0;
+  double NRJ = 0.0;
+  for (size_t b = 0; b < bars.size(); b++) {
+    NRJ += 0.5 * bars[b].fn * bars[b].fn / bars[b].kn;
+  }
+  for (size_t n = 0; n < nodes.size(); n++) {
+    NRJ += 0.5 * nodes[n].mz * nodes[n].mz / nodes[n].kr;
+  }
+	NRJ += 0.5 * p_int * p_int / compressFactor_;
+  return NRJ;
 }
