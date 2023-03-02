@@ -35,10 +35,17 @@ mu 0.3
 # SAMPLE ===================================================
 
 #             filename              barWidth   kn      kr      mz_max.    pressure
-readNodeFile  lhyphen0000.txt       0.0015     1e4     1e-1    1e12       1000
+readNodeFile  lhyphen0000.txt       0.0015     1e4     1e-1    1e12       10
+
+# setCellDensities 1000.0 1.0
+# setCellWallDensities 1000.0 1.0
+# setCellMasses 1.0
+setNodeMasses 1.00
+
 setCellInternalPressure 0 0.0
-setOpen 0
-enablePressures
+setCellAsOpen 0
+cellContent 2
+compressFactor 1e6
 
 # IMPOSED CONTROLS (mode 0 = V, 1 = F)
 #                   xmin  xmax   ymin        ymax     xmode  xvalue  ymode  yvalue   

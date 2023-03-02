@@ -19,11 +19,12 @@ public:
   std::vector<Bar> bars;
   std::set<Neighbor> neighbors;
 
-  double radius;  // un seul rayon pour toute la cellule [m]
-  double surface; // surface (volume) intérieure
-  bool close;     //  flag pour dire si la cellule est fermée ou pas
-  vec2r center;   // "centre" de la cellule
-  double p_int;   // pression interieure (éventuelle) pour cellule fermée
+  double radius;   // un seul rayon pour toute la cellule
+  double surface;  // surface (volume) intérieure
+  double surface0; // surface (volume) intérieure initial
+  bool close;      //  flag pour dire si la cellule est fermée ou pas
+  vec2r center;    // "centre" de la cellule
+  double p_int;    // pression interieure (éventuelle) pour cellule fermée
 
   Cell();
 

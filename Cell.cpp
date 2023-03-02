@@ -1,6 +1,6 @@
 #include "Cell.hpp"
 
-Cell::Cell() : radius(0.0) {}
+Cell::Cell() : radius(0.0), surface(0.0), surface0(0.0), close(false) {}
 
 /**
  * @brief ré-ordonne la position des noeuds de la cellule en fonction de leur angle

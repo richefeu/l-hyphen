@@ -265,10 +265,12 @@ void drawPressure() {
 
   color4f col;
   ColorTable pTable;
-  pTable.setTableID(MATLAB_HOT);
+  //pTable.setTableID(MATLAB_HOT);
   pTable.setMinMax((float)pmin, (float)pmax);
   // std::cout << "pmax = " << pmax << '\n';
-  pTable.Rebuild();
+	std::cout << "pmin = " << pmin << '\n';
+	std::cout << "pmax = " << pmax << '\n';
+  //pTable.Rebuild();
 
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
@@ -517,7 +519,7 @@ bool fileExists(const char *fileName) {
 
 void try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
   char file_name[256];
-  sprintf(file_name, "conf%d", num);
+  snprintf(file_name, 256, "conf%d", num);
   if (fileExists(file_name)) {
     std::cout << "Read " << file_name << std::endl;
     OKNum = num;

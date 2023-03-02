@@ -72,6 +72,10 @@ struct CapturedNodes {
   CapturedNodes(const char *name) : filename(name) {}
 };
 
+#define CELL_CONTAIN_NOTHING 0
+#define CELL_CONTAIN_GAS 1
+#define CELL_CONTAIN_LIQUID 2
+
 /**
  * @brief Le système entier
  *
@@ -98,7 +102,9 @@ public:
 
   double distVerlet; // entre noeuds et barres
   
-  int enablePressures;
+  //int enablePressures;
+	int cellContent;
+	double compressFactor;
 
   // parametres mécaniques d'interactions (contact frottant avec ou sans adhésion) entre les cellules
   double kn;   // raideur normale de contact
@@ -129,8 +135,10 @@ public:
   void addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                          named_arg_CellProperties p);
   void setTimeStep(double dt_);
-  void setCellDensities(double rho);
+  void setCellWallDensities(double rho, double thickness = 1.0);
+	void setCellDensities(double rho, double thickness = 1.0);
   void setCellMasses(double m);
+	void setNodeMasses(double m);
   void setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_max, double ft_coh_max, double yieldPower);
   void setNodeControl(size_t c, size_t n, int xmode, double xvalue, int ymode, double yvalue);
   void setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue);
@@ -151,10 +159,12 @@ public:
   void saveCONF(int ifile);
   void loadCONF(const char *fname);
   void loadCONF(int ifile);
+	void initCellInitialSurfaces();
 
   void findDisplayArea(double factor = 1.0);
   void saveSVG(int num, const char *nameBase = "sample%04d.svg", int Canvaswidth = 400);
-  void InternalPressureForce();
+  void InternalGasPressureForce();
+	void InternalLiquidPressureForce();
   void setCellInternalPressure(size_t c, double p);
 
 private:
