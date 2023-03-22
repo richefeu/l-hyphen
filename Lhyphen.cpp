@@ -162,14 +162,14 @@ void Lhyphen::addRegularPolygonalCellsOnTriangularGrid(int nx, int ny, double ho
  */
 void Lhyphen::addSquareBrickWallCells(int nx, int ny, double horizontalDistance, double xleft, double ybottom,
                                       double barWidth, named_arg_CellProperties p) {
-  addRegularPolygonalCellsOnTriangularGrid(nx, ny, horizontalDistance, horizontalDistance,
-                                           {.nbFaces = 4,
-                                            .x = xleft - horizontalDistance,
-                                            .y = ybottom - horizontalDistance,
-                                            .rot = M_PI / 4.,
-                                            .Rext = 0.5 * (horizontalDistance - barWidth) * sqrt(2.0) + 0.5 * barWidth,
-                                            .barWidth = barWidth},
-                                           p);
+  named_arg_RegularCellDataset h;
+  h.nbFaces = 4;
+  h.x = xleft - horizontalDistance;
+  h.y = ybottom - horizontalDistance;
+  h.rot = M_PI / 4.0;
+  h.Rext = 0.5 * (horizontalDistance - barWidth) * sqrt(2.0) + 0.5 * barWidth;
+  h.barWidth = barWidth;
+  addRegularPolygonalCellsOnTriangularGrid(nx, ny, horizontalDistance, horizontalDistance, h, p);
 }
 
 /**
@@ -186,14 +186,14 @@ void Lhyphen::addSquareBrickWallCells(int nx, int ny, double horizontalDistance,
 void Lhyphen::addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                                 named_arg_CellProperties p) {
   double verticalDistance = 1.5 * CellExternWidth / sqrt(3.0);
-  addRegularPolygonalCellsOnTriangularGrid(nx, ny, CellExternWidth, verticalDistance,
-                                           {.nbFaces = 6,
-                                            .x = xleft + 0.5 * CellExternWidth + 0.5 * barWidth,
-                                            .y = ybottom + 0.5 * verticalDistance + 0.5 * barWidth,
-                                            .rot = M_PI / 6.0,
-                                            .Rext = (CellExternWidth - barWidth) / sqrt(3.0) + 0.5 * barWidth,
-                                            .barWidth = barWidth},
-                                           p);
+  named_arg_RegularCellDataset h;
+  h.nbFaces = 6;
+  h.x = xleft + 0.5 * CellExternWidth + 0.5 * barWidth;
+  h.y = ybottom + 0.5 * verticalDistance + 0.5 * barWidth;
+  h.rot = M_PI / 6.0;
+  h.Rext = (CellExternWidth - barWidth) / sqrt(3.0) + 0.5 * barWidth;
+  h.barWidth = barWidth;
+  addRegularPolygonalCellsOnTriangularGrid(nx, ny, CellExternWidth, verticalDistance, h, p);
 }
 
 /**
@@ -1411,16 +1411,16 @@ void Lhyphen::findDisplayArea(double factor) {
  *
  * @see https://bestofcpp.com/repo/tomkwok-svgasm
  */
-void Lhyphen::saveSVG(int num, const char *nameBase, int Canvaswidth) {
+void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
   char name[256];
   snprintf(name, 256, nameBase, num);
   std::cout << "save file: " << name << '\n';
   std::ofstream ofs(name);
   SVGfile svg(ofs);
 
-  int CanvasHeight = Canvaswidth * (int)floor((ymax - ymin) / (xmax - xmin));
-  svg.begin(Canvaswidth, CanvasHeight);
-  viewZone vz(0, 0, Canvaswidth, CanvasHeight);
+  int CanvasHeight = CanvasWidth * (int)floor((ymax - ymin) / (xmax - xmin));
+  svg.begin(CanvasWidth, CanvasHeight);
+  viewZone vz(0, 0, CanvasWidth, CanvasHeight);
   double delta = (xmax - xmin) * 0.05; // c'est une bordure
   vz.adjustRange(xmin - delta, xmax + delta, ymin - delta, ymax + delta);
 
@@ -1449,12 +1449,10 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int Canvaswidth) {
     double NRJmax = 0.0;
     for (size_t c = 0; c < cells.size(); c++) {
       double NRJ = cells[c].getElasticNRJ(compressFactor);
-      // std::cout << "NRJ(" << c << ") = " << NRJ << '\n';
       if (NRJ > NRJmax)
         NRJmax = NRJ;
     }
     ctPos.setMinMax(0.0, (float)NRJmax);
-    // std::cout << "NRJmax = " << NRJmax << '\n';
   } break;
   }
 
