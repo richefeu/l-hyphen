@@ -89,10 +89,15 @@ public:
   std::vector<Control> controls;
 
   std::vector<CapturedNodes> capturedNodes;
+  
+  std::vector<size_t> followedCells;
 
   // pour les sorties SVG
   double xmin, xmax;
   double ymin, ymax;
+
+  double t;
+  double cyclicVelPeriod;
 
   double dt;
   double dt_2;
