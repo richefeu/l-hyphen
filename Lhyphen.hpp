@@ -18,6 +18,7 @@
 #include "svgtools.hpp"
 #include "vec2.hpp"
 #include "ColorTable.hpp"
+#include "AABB_2D.hpp"
 
 #include "Bar.hpp"
 #include "Cell.hpp"
@@ -119,6 +120,7 @@ public:
   double kt;   // raideur tangentielle de contact
   double mu;   // coefficient de frottement (entre les cellules)
   double fadh; // force normale d'adhésion au contact
+	int adaptativeStiffness{0};
 
   int nstep;
   int nstepPeriodVerlet;

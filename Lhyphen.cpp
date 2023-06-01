@@ -453,24 +453,60 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
  *
  */
 void Lhyphen::updateNeighbors() {
-  // TODO : regarder d'abort la proximité des cellules (?)
+
+  struct cellPair {
+    size_t i;
+    size_t j;
+		size_t jn;
+  };
+
+  std::vector<AABB_2D> aabbs(cells.size());
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    aabbs[ci].set_single(cells[ci].nodes[0].pos);
+    for (size_t in = 1; in < cells[ci].nodes.size(); in++) {
+      aabbs[ci].add(cells[ci].nodes[in].pos);
+    }
+    aabbs[ci].enlarge(cells[ci].radius + distVerlet);
+  }
+
+  std::vector<cellPair> cellPairs;
 
   for (size_t ci = 0; ci < cells.size(); ci++) {
-    // TODO: cas même cellule ici (?)
     for (size_t cj = ci + 1; cj < cells.size(); cj++) {
 
-      for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
-        for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
-          addNodeToBarNeighbor(ci, cj, in, jn);
-        }
-      }
-
-      for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
-        for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
-          addNodeToBarNeighbor(cj, ci, jn, in, cells[cj].radius);
-        }
+      if (aabbs[ci].intersect(aabbs[cj])) {
+        cellPair P;
+				
+				for (size_t jn = 0 ; jn < cells[cj].nodes.size(); jn++) {
+					if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
+		        P.i = ci;
+		        P.j = cj;
+						P.jn = jn;
+		        cellPairs.push_back(P);
+					}
+	        
+				}
+      
       }
     }
+  }
+
+  for (size_t ip = 0; ip < cellPairs.size(); ip++) {
+    size_t ci = cellPairs[ip].i;
+    size_t cj = cellPairs[ip].j;
+    size_t jn = cellPairs[ip].jn;
+
+    for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
+      //for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
+        addNodeToBarNeighbor(ci, cj, in, jn, cells[ci].radius);
+				//}
+    }
+
+    //for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
+      for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
+        addNodeToBarNeighbor(cj, ci, jn, in, cells[cj].radius);
+      }
+		//}
   }
 }
 
@@ -581,7 +617,11 @@ void Lhyphen::computeInteractionForces() {
           double b_length = sqrt(sqrDist);
           double dn = b_length - sumR;
           Inter->n = branch / b_length;
-          Inter->fn = -kn * dn - fadh;
+          Inter->fn = -kn * dn;
+          if (adaptativeStiffness == 1)
+            Inter->fn *= sumR / (sumR + dn);
+          if (Inter->glueState == 0)
+            Inter->fn -= fadh;
         } else {
           if (Inter->glueState == 1) {
             double b_length = sqrt(sqrDist);
@@ -633,6 +673,8 @@ void Lhyphen::computeInteractionForces() {
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
             Inter->fn = -kn * dn;
+            if (adaptativeStiffness == 1)
+              Inter->fn *= sumR / (sumR + dn);
 
             // ...vrel T ft (TODO)
 
@@ -666,6 +708,8 @@ void Lhyphen::computeInteractionForces() {
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
             Inter->fn = -kn * dn;
+            if (adaptativeStiffness == 1)
+              Inter->fn *= sumR / (sumR + dn);
 
             vrel = cells[ci].nodes[in].vel - cells[cj].nodes[jnext].vel;
             T.set(-Inter->n.y, Inter->n.x);
@@ -720,7 +764,7 @@ void Lhyphen::computeInteractionForces() {
             }
           }
 
-        } else {                 // ====================== sur la barre
+        } else { // ====================== sur la barre
 
           vec2r urot(-u.y, u.x); // on tourne u de 90°
           double wend = 0.0;
@@ -738,6 +782,8 @@ void Lhyphen::computeInteractionForces() {
             // ici le vecteur normal est orienté de la barre vers le disque
 
             Inter->fn = -kn * dn;
+            if (adaptativeStiffness == 1)
+              Inter->fn *= sumR / (sumR + dn);
 
             // vitesse relative noeud par rapport à barre
             wend = proj / u_length;
@@ -969,7 +1015,8 @@ void Lhyphen::SingleStep() {
           if (cyclicVelPeriod > 0.0) {
             double d = t / cyclicVelPeriod;
             double r = d - floor(d);
-            if (r >= 0.5) cycle = -1.0;
+            if (r >= 0.5)
+              cycle = -1.0;
           }
           cells[c].nodes[n].vel.y = cycle * ctrl->yvalue;
           cells[c].nodes[n].pos.y += cells[c].nodes[n].vel.y * dt;
@@ -1081,6 +1128,7 @@ void Lhyphen::saveCONF(const char *fname) {
 
   file << "kn " << kn << '\n';
   file << "kt " << kt << '\n';
+  file << "adaptativeStiffness " << adaptativeStiffness << '\n';
   file << "mu " << mu << '\n';
   file << "gravity " << gravity << '\n';
   file << "numericalDissipation " << numericalDissipation << '\n';
@@ -1193,6 +1241,8 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> kn;
     } else if (token == "kt") {
       file >> kt;
+    } else if (token == "adaptativeStiffness") {
+      file >> adaptativeStiffness;
     } else if (token == "compressFactor") {
       file >> compressFactor;
     } else if (token == "setGlueSameProperties") {
@@ -1450,7 +1500,7 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
   std::ofstream ofs(name);
   SVGfile svg(ofs);
 
-  int CanvasHeight = CanvasWidth * (int)floor((ymax - ymin) / (xmax - xmin));
+  int CanvasHeight = (int)(CanvasWidth * (ymax - ymin) / (xmax - xmin));
   svg.begin(CanvasWidth, CanvasHeight);
   viewZone vz(0, 0, CanvasWidth, CanvasHeight);
   double delta = (xmax - xmin) * 0.05; // c'est une bordure
