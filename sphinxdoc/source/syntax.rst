@@ -10,9 +10,6 @@ Timing
 - ``t`` (*double*) **value**  
   Current time
 
-- ``tmax`` (*double*) **value**  
-  Maximum time (the simulation will end when time is ``tmax``)
-
 - ``dt`` (*double*) **value**
   Time step increments
 
@@ -60,26 +57,26 @@ Outputs
 - ``nstepPeriodConf`` (*integer*) **value**
   
 
-Adhesive Contact Rubbing Between the Cells
-------------------------------------------
+Parameters for cell interactions
+--------------------------------
 
 - ``kn`` (*double*) **value**
-  raideur normale de contact  
+  Normal contact-stiffness
 
 - ``kt`` (*double*) **value**
-  raideur tangentielle de contact
+  Tangential contact-stiffness 
 
 - ``mu`` (*double*) **value**
-  coefficient de frottement (entre les cellules)
+  Friction coefficient (between cells)
 
 - ``fadh`` (*double*) **value**
-  force normale d'adhésion au contact
+  Normal contact-adhesion force
 
-Sample
-------
+Pre-processing (commands not saved in further conf-files)
+---------------------------------------------------------
 
-- ``readNodeFile`` (*const char*) **file.txt** (*double*) **barWidth** (*double*) **Kn** (*double*) **Kr** (*double*) **Mz_max**
-  Cette fonction permet de lire un fichier contenant une liste de positions x,y avec numéro de cellule. Peu importe les numéros tant qu'ils sont différents pour chaque cellule. **barWidth** est l'épaisseur de toutes les barres. **Kn** et **Kr** sont les coefficients respectivement associés à la raideur axiale des barres et la raideur angulaire entre les barres adjacentes. **Mz_max** est le moment seuil plastique.
+- ``readNodeFile`` (*const char*) **file.txt** (*double*) **barWidth** (*double*) **Kn** (*double*) **Kr** (*double*) **M_Y**
+  Cette fonction permet de lire un fichier contenant une liste de positions x,y avec numéro de cellule. Peu importe les numéros tant qu'ils sont différents pour chaque cellule. **barWidth** is the thickness given to all bars. **Kn** and **Kr** sont les coefficients respectivement associés à la raideur axiale des barres et la raideur angulaire entre les barres adjacentes. **M_Y** est le moment seuil plastique.
 
 Imposed Controls
 ----------------
@@ -107,4 +104,4 @@ Display
 -------
 
 - ``findDisplayArea`` (*double*) **value**
-  trouver les limites de la zone dessinée dans les fichiers svg. **value** est un facteur multiplicateur
+  Find the limits of the display area in svg files. **value** is a scale factor.

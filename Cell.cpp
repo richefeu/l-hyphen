@@ -148,6 +148,13 @@ void Cell::CellCenter() {
   center /= double(nodes.size());
 }
 
+void Cell::CellForce(vec2r & force) {
+	force.reset();
+  for (size_t i = 0; i < nodes.size(); i++) {
+    force += nodes[i].force;
+  }
+}
+
 double Cell::getElasticNRJ(double compressFactor_) {
 	if (close == false) return 0.0;
   double NRJ = 0.0;

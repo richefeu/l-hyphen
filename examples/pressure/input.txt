@@ -52,5 +52,11 @@ compressFactor 1e10
 setNodeControlInBox -0.0001  2.49e-1  -0.0001   0.0001   0    0   0   0
 setNodeControlInBox -00001   2.49e-01  2.60e-01   2.62e-1 0      0     0  -1e-2
 
+nstepPeriodRecord 1000
+followCell 3
+followCell 6
+
+t 0.0
+cyclicVelPeriod 5.0 
 
 findDisplayArea 1.1 

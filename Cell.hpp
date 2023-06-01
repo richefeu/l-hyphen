@@ -33,6 +33,7 @@ public:
   void connectOrderedNodes(double width, double kn_, double kr_, double mz_max_, double pint, bool closed = true);
   void CellSurface(); // mesure la surface exposée à la pression
   void CellCenter();  //
+  void CellForce(vec2r & force);
 	double getElasticNRJ(double compressFactor_);
 };
 

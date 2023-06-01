@@ -6,10 +6,10 @@
  *
  */
 Lhyphen::Lhyphen()
-    : xmin(0.0), xmax(0.0), ymin(0.0), ymax(0.0), dt(0.0), globalViscosity(0.0), numericalDissipation(0.0), gravity(),
-      distVerlet(0.0), cellContent(CELL_CONTAIN_NOTHING), compressFactor(0.0), kn(1000.0), kt(1000.0), mu(0.0),
-      fadh(0.0), nstep(1000), nstepPeriodVerlet(1), nstepPeriodSVG(10), nstepPeriodRecord(1), nstepPeriodConf(10),
-      isvg(0), iconf(0) {
+    : xmin(0.0), xmax(0.0), ymin(0.0), ymax(0.0), t(0.0), cyclicVelPeriod(0.0), dt(0.0), globalViscosity(0.0),
+      numericalDissipation(0.0), gravity(), distVerlet(0.0), cellContent(CELL_CONTAIN_NOTHING), compressFactor(0.0),
+      kn(1000.0), kt(1000.0), mu(0.0), fadh(0.0), nstep(1000), nstepPeriodVerlet(1), nstepPeriodSVG(10),
+      nstepPeriodRecord(1), nstepPeriodConf(10), isvg(0), iconf(0) {
 
   SVG_colorCells = 2;
   SVG_colorTableRescale = 0;
@@ -384,8 +384,8 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
 
     } else { // sur la barre
 
-      vec2r t(-u.y, u.x);
-      double dist = fabs(b * t) - (cells[ci].radius + cells[cj].radius);
+      vec2r T(-u.y, u.x);
+      double dist = fabs(b * T) - (cells[ci].radius + cells[cj].radius);
       bool isNear = dist < distVerlet;
       cells[ci].insertOrRemove(ci, cj, in, jn, isNear);
     }
@@ -533,9 +533,9 @@ void Lhyphen::glue(double epsilonDist) {
 
         } else {
 
-          vec2r t(-u.y, u.x);
+          vec2r T(-u.y, u.x);
           double sumR = cells[ci].radius + cells[cj].radius;
-          double dist = b * t; // dot product
+          double dist = b * T; // dot product
           double dn = fabs(dist) - sumR;
           if (dn < epsilonDist) {
             Inter->glueState = 1;
@@ -720,7 +720,7 @@ void Lhyphen::computeInteractionForces() {
             }
           }
 
-        } else { // ====================== sur la barre
+        } else {                 // ====================== sur la barre
 
           vec2r urot(-u.y, u.x); // on tourne u de 90°
           double wend = 0.0;
@@ -863,7 +863,7 @@ void Lhyphen::computeNodeForces() {
                                                 cells[c].nodes[prev].vel);
       cells[c].nodes[n].mz += -cells[c].nodes[n].kr * (omegaNext - omegaPrev) * dt;
 
-      // TODO: ajouter la possibilité de désactiver la plasticité
+      // TODO: ajouter la possibilité de désactiver la plasticité (?)
       if (cells[c].nodes[n].mz > cells[c].nodes[n].mz_max) {
         cells[c].nodes[n].mz = cells[c].nodes[n].mz_max;
       } else if (cells[c].nodes[n].mz < -cells[c].nodes[n].mz_max) {
@@ -958,7 +958,6 @@ void Lhyphen::SingleStep() {
           cells[c].nodes[n].vel.x += cells[c].nodes[n].acc.x * dt_2;
         } else if (ctrl->xmode == VELOCITY_CONTROL) {
           cells[c].nodes[n].vel.x = ctrl->xvalue;
-          // cells[c].nodes[n].force.x = 0.0;
           cells[c].nodes[n].pos.x += cells[c].nodes[n].vel.x * dt;
         }
 
@@ -966,8 +965,13 @@ void Lhyphen::SingleStep() {
           cells[c].nodes[n].pos.y += cells[c].nodes[n].vel.y * dt + cells[c].nodes[n].acc.y * dt2_2;
           cells[c].nodes[n].vel.y += cells[c].nodes[n].acc.y * dt_2;
         } else if (ctrl->ymode == VELOCITY_CONTROL) {
-          cells[c].nodes[n].vel.y = ctrl->yvalue;
-          // cells[c].nodes[n].force.y = 0.0;
+          double cycle = 1.0;
+          if (cyclicVelPeriod > 0.0) {
+            double d = t / cyclicVelPeriod;
+            double r = d - floor(d);
+            if (r >= 0.5) cycle = -1.0;
+          }
+          cells[c].nodes[n].vel.y = cycle * ctrl->yvalue;
           cells[c].nodes[n].pos.y += cells[c].nodes[n].vel.y * dt;
         }
       }
@@ -1007,15 +1011,33 @@ void Lhyphen::SingleStep() {
  *
  */
 void Lhyphen::integrate() {
-  // std::ofstream of[capturedNodes.size()];
+  std::vector<std::ofstream> cellFiles(followedCells.size());
+  for (size_t c = 0; c < followedCells.size(); c++) {
+    char name[256];
+    snprintf(name, 256, "cell%ld.txt", followedCells[c]);
+    cellFiles[c].open(name);
+  }
+
   std::vector<std::ofstream> of(capturedNodes.size());
   for (size_t c = 0; c < capturedNodes.size(); c++) {
     of[c].open(capturedNodes[c].filename.c_str());
   }
 
+  // START THE LOOP ==========
   for (int step = 0; step < nstep; step++) {
+
     if (step % nstepPeriodVerlet == 0) {
       updateNeighbors();
+    }
+
+    if (step % nstepPeriodRecord == 0) {
+      for (size_t c = 0; c < followedCells.size(); c++) {
+        size_t cid = followedCells[c];
+        cells[cid].CellCenter();
+        vec2r force;
+        cells[cid].CellForce(force);
+        cellFiles[c] << cells[cid].center << " " << force << '\n';
+      }
     }
 
     if (nstepPeriodSVG > 0 && step % nstepPeriodSVG == 0) {
@@ -1045,6 +1067,7 @@ void Lhyphen::integrate() {
     }
 
     SingleStep();
+    t += dt;
   }
 }
 
@@ -1063,6 +1086,7 @@ void Lhyphen::saveCONF(const char *fname) {
   file << "numericalDissipation " << numericalDissipation << '\n';
   file << "globalViscosity " << globalViscosity << '\n';
   file << "distVerlet " << distVerlet << '\n';
+  file << "t " << t << '\n';
   file << "dt " << dt << '\n';
 
   file << "nstep " << nstep << '\n';
@@ -1143,6 +1167,10 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> globalViscosity;
     } else if (token == "distVerlet") {
       file >> distVerlet;
+    } else if (token == "t") {
+      file >> t;
+    } else if (token == "cyclicVelPeriod") {
+      file >> cyclicVelPeriod;
     } else if (token == "dt") {
       double timestep;
       file >> timestep;
@@ -1294,6 +1322,10 @@ void Lhyphen::loadCONF(const char *fname) {
         }
       }
       capturedNodes.push_back(CN);
+    } else if (token == "followCell") {
+      size_t cid;
+      file >> cid;
+      followedCells.push_back(cid);
     } else if (token == "setCellControl") {
       size_t icell;
       int xmode, ymode;
@@ -1555,8 +1587,8 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
 double Lhyphen::getRotationVelocityBar(vec2r &a, vec2r &b, vec2r &va, vec2r &vb) {
   vec2r u = b - a;
   double l = u.normalize();
-  vec2r t(-u.y, u.x);
-  return ((vb - va) * t / l);
+  vec2r T(-u.y, u.x);
+  return ((vb - va) * T / l);
 }
 
 // loi des gaz parfaits à température constante
