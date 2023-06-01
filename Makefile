@@ -1,5 +1,5 @@
 # The compiler to be used
-CXX = g++-12
+CXX = g++-13
 LINK = $(CXX)
 
 # Paths

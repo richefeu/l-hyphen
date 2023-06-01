@@ -54,7 +54,7 @@ void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_
     double theta = a0 + h.rot + a;
     C.nodes.emplace_back(h.x + Rcell * cos(theta), h.y + Rcell * sin(theta));
   }
-  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, true);
+  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, p.p_int, true);
   // C.print();
   cells.push_back(C);
 }
@@ -74,7 +74,7 @@ void Lhyphen::addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties 
   C.nodes.emplace_back(h.xe - r, h.yo + r);
   C.nodes.emplace_back(h.xe - r, h.ye - r);
   C.nodes.emplace_back(h.xo + r, h.ye - r);
-  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, true);
+  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, p.p_int, true);
   cells.push_back(C);
 }
 
@@ -88,7 +88,7 @@ void Lhyphen::addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p) 
   Cell C;
   C.nodes.emplace_back(h.xo, h.yo);
   C.nodes.emplace_back(h.xe, h.ye);
-  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, false);
+  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, 0.0, false);
   cells.push_back(C);
 }
 
@@ -109,7 +109,7 @@ void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellPropertie
   for (int i = 1; i <= n; i++) {
     C.nodes.emplace_back(h.xo + i * dx, h.yo + i * dy);
   }
-  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, false);
+  C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, 0.0, false);
 
   cells.push_back(C);
 }
@@ -1593,7 +1593,7 @@ void Lhyphen::InternalLiquidPressureForce() {
     if (cells[c].close == true) {
 
       cells[c].CellSurface();
-      cells[c].p_int = -compressFactor * (cells[c].surface - cells[c].surface0);
+      cells[c].p_int = -compressFactor * (cells[c].surface - cells[c].surface0) / cells[c].surface0;
 
       for (size_t b = 0; b < cells[c].bars.size(); b++) {
         // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
