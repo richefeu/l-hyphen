@@ -10,14 +10,14 @@
 #include <vector>
 
 /**
- * @brief une cellule contenant une boucle (fermée ou non) de barres extensibles
+ * Une cellule contenant une boucle (fermée ou non) de barres extensibles
  *
  */
 class Cell {
 public:
-  std::vector<Node> nodes;
-  std::vector<Bar> bars;
-  std::set<Neighbor> neighbors;
+  std::vector<Node> nodes;      // les noeuds
+  std::vector<Bar> bars;        // les barres
+  std::set<Neighbor> neighbors; // les voisins
 
   double radius;   // un seul rayon pour toute la cellule
   double surface;  // surface (volume) intérieure
@@ -28,13 +28,15 @@ public:
 
   Cell();
 
-  void reorderNodes();
-  void insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEAR);
-  void connectOrderedNodes(double width, double kn_, double kr_, double mz_max_, double pint, bool closed = true);
-  void CellSurface(); // mesure la surface exposée à la pression
-  void CellCenter();  //
-  void CellForce(vec2r & force);
-	double getElasticNRJ(double compressFactor_);
+  void reorderNodes(); // réordonne la position des noeuds de la cellule en fonction de leur angle
+  void insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEAR); // ajoute ou supprime un voisin
+  void
+  connectOrderedNodes(double width, double kn_, double kr_, double mz_max_, double pint,
+                      bool closed = true); // ajoute des barres entre les noeuds et défini leurs longueurs initiales
+  void CellSurface();                      // mesure la surface exposée à la pression
+  void CellCenter();                       // mesure le centre de la cellule
+  void CellForce(vec2r &force);            // mesure la force axiale
+  double getElasticNRJ(double compressFactor_); // mesure la force NRJ
 };
 
 #endif /* end of include guard: CELL_HPP */

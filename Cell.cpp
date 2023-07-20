@@ -3,8 +3,7 @@
 Cell::Cell() : radius(0.0), surface(0.0), surface0(0.0), close(false) {}
 
 /**
- * @brief ré-ordonne la position des noeuds de la cellule en fonction de leur angle
- *
+ * Reorders the position of the nodes in the cell based on their angle.
  */
 void Cell::reorderNodes() {
   if (nodes.empty()) {
@@ -12,37 +11,37 @@ void Cell::reorderNodes() {
     return;
   }
 
-  // cette structure permet de trier les noeuds dans le sens trigo
+  // Structure to sort nodes in clockwise order
   struct sortedNode {
     double x0, y0;
     double x, y;
     sortedNode(double X0, double Y0, double X, double Y) : x0(X0), y0(Y0), x(X), y(Y) {}
     bool operator<(const sortedNode &rhs) const {
-      double Angle = atan2(y - y0, x - x0);
+      double angle = atan2(y - y0, x - x0);
       double rhsAngle = atan2(rhs.y - rhs.y0, rhs.x - rhs.x0);
-      if (Angle < rhsAngle)
-        return true;
-      return false;
+      return angle < rhsAngle;
     }
   };
 
+  // Calculate the centroid of the node positions
   double xc = 0.0;
   double yc = 0.0;
   for (size_t i = 0; i < nodes.size(); i++) {
     xc += nodes[i].pos.x;
     yc += nodes[i].pos.y;
   }
-  xc /= (double)(nodes.size());
-  yc /= (double)(nodes.size());
+  xc /= static_cast<double>(nodes.size());
+  yc /= static_cast<double>(nodes.size());
 
+  // Create a multiset of sorted nodes
   std::multiset<sortedNode> sortedNodes;
-
   for (size_t i = 0; i < nodes.size(); i++) {
     sortedNodes.insert(sortedNode(xc, yc, nodes[i].pos.x, nodes[i].pos.y));
   }
 
+  // Update the nodes with the sorted positions
   size_t currentId = 0;
-  for (auto s : sortedNodes) {
+  for (const auto &s : sortedNodes) {
     nodes[currentId].pos.x = s.x;
     nodes[currentId].pos.y = s.y;
     currentId++;
@@ -50,7 +49,7 @@ void Cell::reorderNodes() {
 }
 
 /**
- * @brief ajoute ou supprime un voisin. isNear doit être fourni et la methode déterminera si il faut ajouter ou
+ * Ajoute ou supprime un voisin. isNear doit être fourni et la methode déterminera si il faut ajouter ou
  *        bien supprimer (c'est basé sur le fait que la 'liste' de voisin est un std::set, et donc ordonnée et le
  *        'find' est rapide)
  *

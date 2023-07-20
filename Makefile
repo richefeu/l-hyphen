@@ -6,7 +6,7 @@ LINK = $(CXX)
 TOOFUSPATH = ~/toofus
 
 # The list of flags passed to the compiler
-CXXFLAGS = -Wall -Wextra -Wshadow -pedantic -Wconversion -O3 -std=c++11 -I $(TOOFUSPATH)
+CXXFLAGS = -Wall -Wextra -Wshadow -pedantic -Wconversion -O3 -std=c++11 -I $(TOOFUSPATH) -DENABLE_PROFILING
 
 
 GLUTFLAGS = `pkg-config --cflags glut`

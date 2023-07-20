@@ -12,7 +12,7 @@ void printHelp() {
 }
 
 void printInfo() {
-  using namespace std;
+  // using namespace std;
 
   // cout << "Reference Conf = " << refConfNum << "\n";
   // cout << "Current Conf = " << confNum << "\n";

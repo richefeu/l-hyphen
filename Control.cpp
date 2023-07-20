@@ -6,3 +6,6 @@ Control::Control(int xmode_, double xvalue_, int ymode_, double yvalue_) {
   ymode = ymode_;
   yvalue = yvalue_;
 }
+
+
+

@@ -55,7 +55,6 @@ void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_
     C.nodes.emplace_back(h.x + Rcell * cos(theta), h.y + Rcell * sin(theta));
   }
   C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, p.p_int, true);
-  // C.print();
   cells.push_back(C);
 }
 
@@ -338,6 +337,7 @@ void Lhyphen::setNodeControlInBox(double xmin_, double xmax_, double ymin_, doub
   }
 }
 
+
 /**
  * @brief vérifie si un noeud (cell ci, node in) et une barre (cell cj, barre commancant par le noeud jn) sont
  *        proches. Selon le cas, la paire dans la liste de voisins est soit ajoutée soit retirée
@@ -441,10 +441,9 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
 
   for (size_t i = 0; i < cells.size(); i++) {
     cells[i].reorderNodes();
-    // il faudrait un flag pour que cette fonction ne soit pas appelée si l'utilisateur le souhaite
-    // Dans ce cas, il faudra que les noeuds du fichier soient positionnés dans le sens trigo (à vérifier)
-
-    cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
+    if (reorder == 1) {
+      cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
+    }
   }
 }
 
@@ -453,6 +452,8 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
  *
  */
 void Lhyphen::updateNeighbors() {
+
+  START_TIMER("updateNeighbors");
 
   struct cellPair {
     size_t i;
@@ -498,7 +499,7 @@ void Lhyphen::updateNeighbors() {
 
     for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
       //for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
-        addNodeToBarNeighbor(ci, cj, in, jn, cells[ci].radius);
+        addNodeToBarNeighbor(ci, cj, in, jn /*, cells[ci].radius*/ );
 				//}
     }
 
@@ -589,6 +590,7 @@ void Lhyphen::glue(double epsilonDist) {
  *
  */
 void Lhyphen::computeInteractionForces() {
+  START_TIMER("computeInteractionForces");
 
   vec2r vrel, T;
 
@@ -868,81 +870,89 @@ void Lhyphen::computeInteractionForces() {
  *
  */
 void Lhyphen::computeNodeForces() {
+  START_TIMER("computeNodeForces");
 
   // Forces normales dans les barres
-  for (size_t c = 0; c < cells.size(); c++) {
-    for (size_t b = 0; b < cells[c].bars.size(); b++) {
-      size_t i = cells[c].bars[b].i;
-      size_t j = cells[c].bars[b].j;
-      vec2r posi = cells[c].nodes[i].pos;
-      vec2r posj = cells[c].nodes[j].pos;
+  {
+    START_TIMER("Bar_forces");
+    for (size_t c = 0; c < cells.size(); ++c) {
+      for (size_t b = 0; b < cells[c].bars.size(); ++b) {
+        size_t i = cells[c].bars[b].i;
+        size_t j = cells[c].bars[b].j;
+        vec2r posi = cells[c].nodes[i].pos;
+        vec2r posj = cells[c].nodes[j].pos;
 
-      vec2r branch = posj - posi;
-      vec2r n = branch;
-      double l = n.normalize();            // n est orienté de i vers j
-      double dn = l - cells[c].bars[b].l0; // dn positif = allongement
-      cells[c].bars[b].fn = -cells[c].bars[b].kn * dn;
+        vec2r branch = posj - posi;
+        vec2r n = branch;
+        double l = n.normalize();            // n est orienté de i vers j
+        double dn = l - cells[c].bars[b].l0; // dn positif = allongement
+        cells[c].bars[b].fn = -cells[c].bars[b].kn * dn;
 
-      // TODO: ajouter plasticité dans les barres (?)
+        // TODO: ajouter plasticité dans les barres (?)
 
-      vec2r finc = cells[c].bars[b].fn * n; // en cas d'allongement finc est orienté de j vers i
-      cells[c].nodes[i].force -= finc;
-      cells[c].nodes[j].force += finc;
+        vec2r finc = cells[c].bars[b].fn * n; // en cas d'allongement finc est orienté de j vers i
+        cells[c].nodes[i].force -= finc;
+        cells[c].nodes[j].force += finc;
+      }
     }
   }
 
   // Moment au niveau des noeuds (entre les barres d'une même cellule).
   // Puisque les noeuds n'ont pas de ddl en rotation, imposer un moment est fait ici
   // en imposant une force à chaque extrémité de barre
-  for (size_t c = 0; c < cells.size(); c++) {
-    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
-      size_t prev = cells[c].nodes[n].prevNode;
-      size_t next = cells[c].nodes[n].nextNode;
+  {
+    START_TIMER("Node_moments");
+    for (size_t c = 0; c < cells.size(); ++c) {
+      for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
+        size_t prev = cells[c].nodes[n].prevNode;
+        size_t next = cells[c].nodes[n].nextNode;
 
-      if (prev == null_size_t || next == null_size_t) { // si c'est une extrémité...
-        continue;
+        if (prev == null_size_t || next == null_size_t) { // si c'est une extrémité...
+          continue;
+        }
+
+        double omegaNext = getRotationVelocityBar(cells[c].nodes[n].pos, cells[c].nodes[next].pos,
+                                                  cells[c].nodes[n].vel, cells[c].nodes[next].vel);
+        double omegaPrev = getRotationVelocityBar(cells[c].nodes[n].pos, cells[c].nodes[prev].pos,
+                                                  cells[c].nodes[n].vel, cells[c].nodes[prev].vel);
+        cells[c].nodes[n].mz += -cells[c].nodes[n].kr * (omegaNext - omegaPrev) * dt;
+
+        // TODO: ajouter la possibilité de désactiver la plasticité (?)
+        if (cells[c].nodes[n].mz > cells[c].nodes[n].mz_max) {
+          cells[c].nodes[n].mz = cells[c].nodes[n].mz_max;
+        } else if (cells[c].nodes[n].mz < -cells[c].nodes[n].mz_max) {
+          cells[c].nodes[n].mz = -cells[c].nodes[n].mz_max;
+        }
+
+        //vec2r nextVector = cells[c].nodes[next].pos - cells[c].nodes[n].pos;
+        //vec2r prevVector = cells[c].nodes[n].pos - cells[c].nodes[prev].pos;
+
+        // TODO: ici c'est optimisable...
+        vec2r nextDir = cells[c].nodes[next].pos - cells[c].nodes[n].pos;
+        vec2r prevDir = cells[c].nodes[n].pos - cells[c].nodes[prev].pos;
+        double nextL = nextDir.normalize();
+        double prevL = prevDir.normalize();
+
+        // mz sur next
+        vec2r nextDirRot(-nextDir.y, nextDir.x);
+        double F = cells[c].nodes[n].mz / nextL;
+        vec2r finc = F * nextDirRot;
+        cells[c].nodes[next].force += finc;
+        cells[c].nodes[n].force -= finc;
+
+        // -mz sur prev
+        vec2r prevDirRot(-prevDir.y, prevDir.x);
+        F = cells[c].nodes[n].mz / prevL;
+        finc = F * prevDirRot;
+        cells[c].nodes[prev].force += finc;
+        cells[c].nodes[n].force -= finc;
       }
-
-      double omegaNext = getRotationVelocityBar(cells[c].nodes[n].pos, cells[c].nodes[next].pos, cells[c].nodes[n].vel,
-                                                cells[c].nodes[next].vel);
-      double omegaPrev = getRotationVelocityBar(cells[c].nodes[n].pos, cells[c].nodes[prev].pos, cells[c].nodes[n].vel,
-                                                cells[c].nodes[prev].vel);
-      cells[c].nodes[n].mz += -cells[c].nodes[n].kr * (omegaNext - omegaPrev) * dt;
-
-      // TODO: ajouter la possibilité de désactiver la plasticité (?)
-      if (cells[c].nodes[n].mz > cells[c].nodes[n].mz_max) {
-        cells[c].nodes[n].mz = cells[c].nodes[n].mz_max;
-      } else if (cells[c].nodes[n].mz < -cells[c].nodes[n].mz_max) {
-        cells[c].nodes[n].mz = -cells[c].nodes[n].mz_max;
-      }
-
-      vec2r nextVector = cells[c].nodes[next].pos - cells[c].nodes[n].pos;
-      vec2r prevVector = cells[c].nodes[n].pos - cells[c].nodes[prev].pos;
-
-      // TODO: ici c'est optimisable...
-      vec2r nextDir = nextVector;
-      vec2r prevDir = prevVector;
-      double nextL = nextDir.normalize();
-      double prevL = prevDir.normalize();
-
-      // mz sur next
-      vec2r nextDirRot(-nextDir.y, nextDir.x);
-      double F = cells[c].nodes[n].mz / nextL;
-      vec2r finc = F * nextDirRot;
-      cells[c].nodes[next].force += finc;
-      cells[c].nodes[n].force -= finc;
-
-      // -mz sur prev
-      vec2r prevDirRot(-prevDir.y, prevDir.x);
-      F = cells[c].nodes[n].mz / prevL;
-      finc = F * prevDirRot;
-      cells[c].nodes[prev].force += finc;
-      cells[c].nodes[n].force -= finc;
     }
   }
 
   // viscosité globale
   if (globalViscosity > 0.0) {
+    START_TIMER("globalViscosity");
     for (size_t c = 0; c < cells.size(); c++) {
       for (size_t n = 0; n < cells[c].nodes.size(); n++) {
         cells[c].nodes[n].force -= globalViscosity * cells[c].nodes[n].vel;
@@ -956,9 +966,10 @@ void Lhyphen::computeNodeForces() {
  *
  */
 void Lhyphen::NodeAccelerations() {
+  START_TIMER("NodeAccelerations");
 
-  for (size_t c = 0; c < cells.size(); c++) {
-    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+  for (size_t c = 0; c < cells.size(); ++c) {
+    for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
       cells[c].nodes[n].acc = gravity;
       cells[c].nodes[n].force.reset();
       if (cells[c].nodes[n].ictrl != null_size_t) {
@@ -979,8 +990,8 @@ void Lhyphen::NodeAccelerations() {
   else if (cellContent == CELL_CONTAIN_LIQUID)
     InternalLiquidPressureForce();
 
-  for (size_t c = 0; c < cells.size(); c++) {
-    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+  for (size_t c = 0; c < cells.size(); ++c) {
+    for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
       cells[c].nodes[n].acc += cells[c].nodes[n].force / cells[c].nodes[n].mass;
     }
   }
@@ -991,9 +1002,10 @@ void Lhyphen::NodeAccelerations() {
  *
  */
 void Lhyphen::SingleStep() {
+  START_TIMER("SingleStep");
 
-  for (size_t c = 0; c < cells.size(); c++) {
-    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+  for (size_t c = 0; c < cells.size(); ++c) {
+    for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
       if (cells[c].nodes[n].ictrl == null_size_t) {
         cells[c].nodes[n].pos += cells[c].nodes[n].vel * dt + cells[c].nodes[n].acc * dt2_2;
         cells[c].nodes[n].vel += cells[c].nodes[n].acc * dt_2;
@@ -1027,8 +1039,8 @@ void Lhyphen::SingleStep() {
 
   NodeAccelerations();
 
-  for (size_t c = 0; c < cells.size(); c++) {
-    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+  for (size_t c = 0; c < cells.size(); ++c) {
+    for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
       if (cells[c].nodes[n].ictrl == null_size_t) {
         cells[c].nodes[n].vel += cells[c].nodes[n].acc * dt_2;
       } else {
@@ -1045,8 +1057,8 @@ void Lhyphen::SingleStep() {
 
   // une dissipation purement numérique
   if (numericalDissipation > 0.0) {
-    for (size_t c = 0; c < cells.size(); c++) {
-      for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+    for (size_t c = 0; c < cells.size(); ++c) {
+      for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
         cells[c].nodes[n].vel *= (1.0 - numericalDissipation);
       }
     }
@@ -1058,6 +1070,8 @@ void Lhyphen::SingleStep() {
  *
  */
 void Lhyphen::integrate() {
+  START_TIMER("integrate"); 
+
   std::vector<std::ofstream> cellFiles(followedCells.size());
   for (size_t c = 0; c < followedCells.size(); c++) {
     char name[256];
@@ -1070,7 +1084,7 @@ void Lhyphen::integrate() {
     of[c].open(capturedNodes[c].filename.c_str());
   }
 
-  // START THE LOOP ==========
+  // === START THE LOOP ===
   for (int step = 0; step < nstep; step++) {
 
     if (step % nstepPeriodVerlet == 0) {
@@ -1124,6 +1138,8 @@ void Lhyphen::integrate() {
  * @param fname Name of the file
  */
 void Lhyphen::saveCONF(const char *fname) {
+  START_TIMER("saveCONF");
+
   std::ofstream file(fname);
 
   file << "kn " << kn << '\n';
@@ -1185,6 +1201,11 @@ void Lhyphen::saveCONF(const char *fname) {
   }
 }
 
+/**
+ * Saves the CONF file.
+ *
+ * @param ifile the file number to save
+ */
 void Lhyphen::saveCONF(int ifile) {
   char fname[256];
   snprintf(fname, 256, "conf%d", ifile);
@@ -1382,6 +1403,8 @@ void Lhyphen::loadCONF(const char *fname) {
       double xvalue, yvalue;
       file >> icell >> xmode >> xvalue >> ymode >> yvalue;
       setCellControl(icell, xmode, xvalue, ymode, yvalue);
+    } else if (token == "reorder") {
+      file >> reorder;
     } else if (token == "readNodeFile") {
       std::string fileName;
       double barWidth, Kn, Kr, Mz_max, p_int;
@@ -1635,8 +1658,10 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
  * @return double vitesse de rotation de solide rigide
  */
 double Lhyphen::getRotationVelocityBar(vec2r &a, vec2r &b, vec2r &va, vec2r &vb) {
+  START_TIMER("getRotationVelocityBar");
   vec2r u = b - a;
-  double l = u.normalize();
+  //double l = u.normalize();
+  double l = u * u;
   vec2r T(-u.y, u.x);
   return ((vb - va) * T / l);
 }

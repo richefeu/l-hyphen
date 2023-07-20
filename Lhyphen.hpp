@@ -19,6 +19,7 @@
 #include "vec2.hpp"
 #include "ColorTable.hpp"
 #include "AABB_2D.hpp"
+#include "profiler.hpp"
 
 #include "Bar.hpp"
 #include "Cell.hpp"
@@ -137,6 +138,8 @@ public:
 	int SVG_cellForces; // 0=rien, 1=rouge/bleu
 	
 	ColorTable ctNeg, ctPos;
+
+  int reorder{1};
 
   Lhyphen();
 
