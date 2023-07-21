@@ -13,3 +13,6 @@ cellPrepro/cellPrepro
 cellPrepro/cutcut.cpp
 cellPrepro/delaunator-cpp-master
 sphinxdoc/build
+examples/*/*.svg
+.DS_Store
+*/.DS_Store

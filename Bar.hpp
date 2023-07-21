@@ -4,15 +4,15 @@
 #include "vec2.hpp"
 
 /**
- * @brief une barre extensible entre deux noeuds
+ *  Une barre extensible entre deux noeuds
  *
  */
 class Bar {
 public:
-  size_t i, j; // le numéro des noeuds dans Cell::nodes
-  double l0;   // longueur initiale de la barre [m]
-  double kn;   // raideur suivant l'axe [N/m]
-  double fn;   // force axiale [N]
+  size_t i, j; ///< le numéro des noeuds dans Cell::nodes
+  double l0;   ///< longueur initiale de la barre [m]
+  double kn;   ///< raideur suivant l'axe [N/m]
+  double fn;   ///< force axiale [N]
 
   Bar(size_t i_, size_t j_);
 

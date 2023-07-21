@@ -2,7 +2,7 @@
 #include "null_size_t.hpp"
 
 /**
- * @brief Construct a new Lhyphen object
+ *  Construct a new Lhyphen object
  *
  */
 Lhyphen::Lhyphen()
@@ -25,7 +25,7 @@ Lhyphen::Lhyphen()
 }
 
 /**
- * @brief affiche un petit entete sympatique
+ *   Affiche un petit entete sympatique
  *
  */
 void Lhyphen::head() {
@@ -39,10 +39,10 @@ void Lhyphen::head() {
 }
 
 /**
- * @brief ajoute une cellule de forme polygonale régulière
+ *  Ajoute une cellule de forme polygonale régulière
  *
- * @param h les données pour définir un polyèdre régulier
- * @param p les propriétés mécaniques
+ *  @param h les données pour définir un polyèdre régulier
+ *  @param p les propriétés mécaniques
  */
 void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_CellProperties p) {
   Cell C;
@@ -59,10 +59,10 @@ void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_
 }
 
 /**
- * @brief ajoute une boite à partir de deux points
+ *  Ajoute une boite à partir de deux points
  *
- * @param h les deux points qui definissent les dimensions extérieures de la boite
- * @param p les propriétés mécaniques
+ *  @param h  les deux points qui definissent les dimensions extérieures de la boite
+ *  @param p  les propriétés mécaniques
  */
 void Lhyphen::addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties p) {
   Cell C;
@@ -78,10 +78,10 @@ void Lhyphen::addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties 
 }
 
 /**
- * @brief ajoute une ligne (cellule non fermée) entre deux points
+ *   Ajoute une ligne (cellule non fermée) entre deux points
  *
- * @param h les deux points
- * @param p les propriétés mécaniques
+ *   @param h  les deux points
+ *   @param p  les propriétés mécaniques
  */
 void Lhyphen::addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p) {
   Cell C;
@@ -92,11 +92,11 @@ void Lhyphen::addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p) 
 }
 
 /**
- * @brief ajoute une ligne formée de plusieurs barres (cellule non fermée) entre deux points
+ *  Ajoute une ligne formée de plusieurs barres (cellule non fermée) entre deux points
  *
- * @param h les deux points
- * @param p les propriétés mécaniques
- * @param n nombre de barres
+ *  @param h  les deux points
+ *  @param p  les propriétés mécaniques
+ *  @param n  nombre de barres
  */
 void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p, int n) {
   double dx = (h.xe - h.xo) / (double)n;
@@ -113,16 +113,7 @@ void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellPropertie
   cells.push_back(C);
 }
 
-/**
- * @brief
- *
- * @param nx
- * @param ny
- * @param horizontalDistance
- * @param verticalDistance
- * @param h
- * @param p
- */
+
 void Lhyphen::addRegularPolygonalCellsOnTriangularGrid(int nx, int ny, double horizontalDistance,
                                                        double verticalDistance, named_arg_RegularCellDataset h,
                                                        named_arg_CellProperties p) {
@@ -148,17 +139,7 @@ void Lhyphen::addRegularPolygonalCellsOnTriangularGrid(int nx, int ny, double ho
   }
 }
 
-/**
- * @brief
- *
- * @param nx
- * @param ny
- * @param horizontalDistance
- * @param xleft
- * @param ybottom
- * @param barWidth
- * @param p
- */
+
 void Lhyphen::addSquareBrickWallCells(int nx, int ny, double horizontalDistance, double xleft, double ybottom,
                                       double barWidth, named_arg_CellProperties p) {
   named_arg_RegularCellDataset h;
@@ -172,15 +153,15 @@ void Lhyphen::addSquareBrickWallCells(int nx, int ny, double horizontalDistance,
 }
 
 /**
- * @brief crée une structure en nid d'abeille
+ *   Crée une structure en nid d'abeille
  *
- * @param nx nombre de cellule suivant x
- * @param ny nombre de lignes
- * @param CellExternWidth largeur externe d'une cellule hexagonale
- * @param xleft  position x la plus à gauche
- * @param ybottom position y la plus en bas
- * @param barWidth épaisseur des barres
- * @param p paramètres mécaniques de toutes les cellules
+ *   @param nx               nombre de cellule suivant x
+ *   @param ny               nombre de lignes
+ *   @param CellExternWidth  largeur externe d'une cellule hexagonale
+ *   @param xleft            position x la plus à gauche
+ *   @param ybottom          position y la plus en bas
+ *   @param barWidth         épaisseur des barres
+ *   @param p                paramètres mécaniques de toutes les cellules
  */
 void Lhyphen::addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                                 named_arg_CellProperties p) {
@@ -196,9 +177,9 @@ void Lhyphen::addHoneycombCells(int nx, int ny, double CellExternWidth, double x
 }
 
 /**
- * @brief Utiliser cette méthode pour definir le pas de temps (comme ça dt/2 et dt^2/2 seront pré-calculées)
+ *   Utiliser cette méthode pour definir le pas de temps (comme ça dt/2 et dt^2/2 seront pré-calculées)
  *
- * @param dt_ pas de temps
+ *   @param dt_  pas de temps
  */
 void Lhyphen::setTimeStep(double dt_) {
   dt = dt_;
@@ -275,14 +256,14 @@ void Lhyphen::setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_
 }
 
 /**
- * @brief ajoute un control au noeud n de la cellule c
+ *   Ajoute un control au noeud n de la cellule c
  *
- * @param c numéro de la cellule
- * @param n numéro du noeud au sein de la cellule c
- * @param xmode VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
- * @param xvalue valeur suivant x (une force ou une vitesse selon xmode)
- * @param ymode VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
- * @param yvalue valeur suivant y (une force ou une vitesse selon ymode)
+ *   @param c       numéro de la cellule
+ *   @param n       numéro du noeud au sein de la cellule c
+ *   @param xmode   VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
+ *   @param xvalue  valeur suivant x (une force ou une vitesse selon xmode)
+ *   @param ymode   VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
+ *   @param yvalue  valeur suivant y (une force ou une vitesse selon ymode)
  */
 void Lhyphen::setNodeControl(size_t c, size_t n, int xmode, double xvalue, int ymode, double yvalue) {
   Control C(xmode, xvalue, ymode, yvalue);
@@ -291,13 +272,13 @@ void Lhyphen::setNodeControl(size_t c, size_t n, int xmode, double xvalue, int y
 }
 
 /**
- * @brief ajoute un control à tous les noeuds de la cellule c
+ *   Ajoute un control à tous les noeuds de la cellule c
  *
- * @param c numéro de la cellule
- * @param xmode VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
- * @param xvalue valeur suivant x (une force ou une vitesse selon xmode)
- * @param ymode VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
- * @param yvalue valeur suivant y (une force ou une vitesse selon ymode)
+ *   @param c       numéro de la cellule
+ *   @param xmode   VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
+ *   @param xvalue  valeur suivant x (une force ou une vitesse selon xmode)
+ *   @param ymode   VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
+ *   @param yvalue  valeur suivant y (une force ou une vitesse selon ymode)
  */
 void Lhyphen::setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue) {
   Control C(xmode, xvalue, ymode, yvalue);
@@ -309,16 +290,16 @@ void Lhyphen::setCellControl(size_t c, int xmode, double xvalue, int ymode, doub
 }
 
 /**
- * @brief définir un même control à tous les noeuds qui se trouvent dans une zone rectangulaire
+ *   Définir un même control à tous les noeuds qui se trouvent dans une zone rectangulaire
  *
- * @param xmin left limit of the box
- * @param xmax right limit of the box
- * @param ymin bottom limit of the box
- * @param ymax top limit of the box
- * @param xmode imposed mode in the x-direction (VELOCITY_CONTROL or FORCE_CONTROL)
- * @param xvalue imposed value in the x-direction
- * @param ymode imposed mode in the y-direction (VELOCITY_CONTROL or FORCE_CONTROL)
- * @param yvalue imposed value in the y-direction
+ *   @param xmin    left limit of the box
+ *   @param xmax    right limit of the box
+ *   @param ymin    bottom limit of the box
+ *   @param ymax    top limit of the box
+ *   @param xmode   imposed mode in the x-direction (VELOCITY_CONTROL or FORCE_CONTROL)
+ *   @param xvalue  imposed value in the x-direction
+ *   @param ymode   imposed mode in the y-direction (VELOCITY_CONTROL or FORCE_CONTROL)
+ *   @param yvalue  imposed value in the y-direction
  */
 void Lhyphen::setNodeControlInBox(double xmin_, double xmax_, double ymin_, double ymax_, int xmode, double xvalue,
                                   int ymode, double yvalue) {
@@ -337,16 +318,15 @@ void Lhyphen::setNodeControlInBox(double xmin_, double xmax_, double ymin_, doub
   }
 }
 
-
 /**
- * @brief vérifie si un noeud (cell ci, node in) et une barre (cell cj, barre commancant par le noeud jn) sont
- *        proches. Selon le cas, la paire dans la liste de voisins est soit ajoutée soit retirée
+ *   Vérifie si un noeud (cell ci, node in) et une barre (cell cj, barre commancant par le noeud jn) sont
+ *   proches. Selon le cas, la paire dans la liste de voisins est soit ajoutée soit retirée
  *
- * @param ci cellule i
- * @param cj cellule j
- * @param in numero du noeud dans la cellule ci
- * @param jn numero du noeud du début d'une barre dans la cellule cj
- * @param epsilonEnds longueur à ignorer aux extremités de la barre
+ *   @param ci          cellule i
+ *   @param cj          cellule j
+ *   @param in          numero du noeud dans la cellule ci
+ *   @param jn          numero du noeud du début d'une barre dans la cellule cj
+ *   @param epsilonEnds longueur à ignorer aux extremités de la barre
  */
 void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds) {
   // jn est vu ici comme l'indice d'une barre (noeud du debut en fait)
@@ -393,13 +373,13 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
 }
 
 /**
- * @brief cette fonction permet de lire un fichier contenant une liste de positions x,y avec numéro
- *        de cellule. Peut importe les numéros du moment qu'ils sont différents pour chaque cellule.
- *        Il faut faire un pré-nettoyage pour qu'il y ait au moins 3 noeuds par cellule.
- *        Toutes les cellules sont fermées.
+ *   Cette fonction permet de lire un fichier contenant une liste de positions x,y avec numéro
+ *   de cellule. Peut importe les numéros du moment qu'ils sont différents pour chaque cellule.
+ *   Il faut faire un pré-nettoyage pour qu'il y ait au moins 3 noeuds par cellule.
+ *   Toutes les cellules sont fermées.
  *
- * @param name nom du fichier
- * @param barWidth épaisseur de toutes les barres
+ *   @param name      nom du fichier
+ *   @param barWidth  épaisseur de toutes les barres
  */
 void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int) {
   std::ifstream file(name);
@@ -448,17 +428,16 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
 }
 
 /**
- * @brief met à jour la liste des voisins
+ *  Met à jour la liste des voisins
  *
  */
 void Lhyphen::updateNeighbors() {
-
   START_TIMER("updateNeighbors");
 
   struct cellPair {
     size_t i;
     size_t j;
-		size_t jn;
+    size_t jn;
   };
 
   std::vector<AABB_2D> aabbs(cells.size());
@@ -477,44 +456,39 @@ void Lhyphen::updateNeighbors() {
 
       if (aabbs[ci].intersect(aabbs[cj])) {
         cellPair P;
-				
-				for (size_t jn = 0 ; jn < cells[cj].nodes.size(); jn++) {
-					if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
-		        P.i = ci;
-		        P.j = cj;
-						P.jn = jn;
-		        cellPairs.push_back(P);
-					}
-	        
-				}
-      
+
+        for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
+          if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
+            P.i = ci;
+            P.j = cj;
+            P.jn = jn;
+            cellPairs.push_back(P);
+          }
+        }
       }
     }
   }
 
-  for (size_t ip = 0; ip < cellPairs.size(); ip++) {
+  for (size_t ip = 0; ip < cellPairs.size(); ++ip) {
+		
     size_t ci = cellPairs[ip].i;
     size_t cj = cellPairs[ip].j;
     size_t jn = cellPairs[ip].jn;
 
-    for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
-      //for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
-        addNodeToBarNeighbor(ci, cj, in, jn /*, cells[ci].radius*/ );
-				//}
+    for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
+      addNodeToBarNeighbor(ci, cj, in, jn /*, cells[ci].radius */);
     }
 
-    //for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
-      for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
-        addNodeToBarNeighbor(cj, ci, jn, in, cells[cj].radius);
-      }
-		//}
+    for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
+      addNodeToBarNeighbor(cj, ci, jn, in, cells[cj].radius);
+    }
   }
 }
 
 /**
- * @brief met un point de colle aux endroits où la distance est suffisement proche.
+ *   Met un point de colle aux endroits où la distance est suffisement proche.
  *
- * @param epsilonDist distance maximale
+ *   @param epsilonDist  distance maximale
  */
 void Lhyphen::glue(double epsilonDist) {
   updateNeighbors();
@@ -586,7 +560,7 @@ void Lhyphen::glue(double epsilonDist) {
 }
 
 /**
- * @brief calcul des forces d'interaction (entre cellules)
+ *  Calcul des forces d'interaction (entre cellules)
  *
  */
 void Lhyphen::computeInteractionForces() {
@@ -866,8 +840,7 @@ void Lhyphen::computeInteractionForces() {
 }
 
 /**
- * @brief Calcul des forces internes aux cellules
- *
+ *   Calcul des forces internes aux cellules
  */
 void Lhyphen::computeNodeForces() {
   START_TIMER("computeNodeForces");
@@ -902,19 +875,29 @@ void Lhyphen::computeNodeForces() {
   // en imposant une force à chaque extrémité de barre
   {
     START_TIMER("Node_moments");
+		
     for (size_t c = 0; c < cells.size(); ++c) {
       for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
+
         size_t prev = cells[c].nodes[n].prevNode;
         size_t next = cells[c].nodes[n].nextNode;
 
-        if (prev == null_size_t || next == null_size_t) { // si c'est une extrémité...
+        // si c'est une extrémité on ne calcul pas de moment
+        if (prev == null_size_t || next == null_size_t) { 
           continue;
         }
 
-        double omegaNext = getRotationVelocityBar(cells[c].nodes[n].pos, cells[c].nodes[next].pos,
-                                                  cells[c].nodes[n].vel, cells[c].nodes[next].vel);
-        double omegaPrev = getRotationVelocityBar(cells[c].nodes[n].pos, cells[c].nodes[prev].pos,
-                                                  cells[c].nodes[n].vel, cells[c].nodes[prev].vel);
+        vec2r nextDir = cells[c].nodes[next].pos - cells[c].nodes[n].pos;
+        vec2r prevDir = cells[c].nodes[prev].pos - cells[c].nodes[n].pos;
+
+        double lNextSqrInv = 1.0 / (nextDir * nextDir);
+        vec2r TNext(-nextDir.y, nextDir.x);
+        double omegaNext = ((cells[c].nodes[next].vel - cells[c].nodes[n].vel) * TNext * lNextSqrInv);
+
+        double lPrevSqrInv = 1.0 / (prevDir * prevDir);
+        vec2r TPrev(-prevDir.y, prevDir.x);
+        double omegaPrev = ((cells[c].nodes[prev].vel - cells[c].nodes[n].vel) * TPrev * lPrevSqrInv);
+
         cells[c].nodes[n].mz += -cells[c].nodes[n].kr * (omegaNext - omegaPrev) * dt;
 
         // TODO: ajouter la possibilité de désactiver la plasticité (?)
@@ -924,26 +907,15 @@ void Lhyphen::computeNodeForces() {
           cells[c].nodes[n].mz = -cells[c].nodes[n].mz_max;
         }
 
-        //vec2r nextVector = cells[c].nodes[next].pos - cells[c].nodes[n].pos;
-        //vec2r prevVector = cells[c].nodes[n].pos - cells[c].nodes[prev].pos;
-
-        // TODO: ici c'est optimisable...
-        vec2r nextDir = cells[c].nodes[next].pos - cells[c].nodes[n].pos;
-        vec2r prevDir = cells[c].nodes[n].pos - cells[c].nodes[prev].pos;
-        double nextL = nextDir.normalize();
-        double prevL = prevDir.normalize();
-
         // mz sur next
-        vec2r nextDirRot(-nextDir.y, nextDir.x);
-        double F = cells[c].nodes[n].mz / nextL;
-        vec2r finc = F * nextDirRot;
+        double F = cells[c].nodes[n].mz * lNextSqrInv;
+        vec2r finc = F * TNext;
         cells[c].nodes[next].force += finc;
         cells[c].nodes[n].force -= finc;
 
         // -mz sur prev
-        vec2r prevDirRot(-prevDir.y, prevDir.x);
-        F = cells[c].nodes[n].mz / prevL;
-        finc = F * prevDirRot;
+        F = cells[c].nodes[n].mz * lPrevSqrInv;
+        finc = -F * TPrev;
         cells[c].nodes[prev].force += finc;
         cells[c].nodes[n].force -= finc;
       }
@@ -952,7 +924,6 @@ void Lhyphen::computeNodeForces() {
 
   // viscosité globale
   if (globalViscosity > 0.0) {
-    START_TIMER("globalViscosity");
     for (size_t c = 0; c < cells.size(); c++) {
       for (size_t n = 0; n < cells[c].nodes.size(); n++) {
         cells[c].nodes[n].force -= globalViscosity * cells[c].nodes[n].vel;
@@ -962,7 +933,7 @@ void Lhyphen::computeNodeForces() {
 }
 
 /**
- * @brief compute the node accelerations
+ *  Compute the node accelerations
  *
  */
 void Lhyphen::NodeAccelerations() {
@@ -998,7 +969,7 @@ void Lhyphen::NodeAccelerations() {
 }
 
 /**
- * @brief un pas en velocity verlet
+ *  Un pas en velocity verlet
  *
  */
 void Lhyphen::SingleStep() {
@@ -1066,11 +1037,11 @@ void Lhyphen::SingleStep() {
 }
 
 /**
- * @brief run the simulation!
+ *   Run the simulation!
  *
  */
 void Lhyphen::integrate() {
-  START_TIMER("integrate"); 
+  START_TIMER("integrate");
 
   std::vector<std::ofstream> cellFiles(followedCells.size());
   for (size_t c = 0; c < followedCells.size(); c++) {
@@ -1133,9 +1104,9 @@ void Lhyphen::integrate() {
 }
 
 /**
- * @brief Save the current configuration in a file
+ *   Save the current configuration in a file
  *
- * @param fname Name of the file
+ *   @param fname Name of the file
  */
 void Lhyphen::saveCONF(const char *fname) {
   START_TIMER("saveCONF");
@@ -1202,9 +1173,9 @@ void Lhyphen::saveCONF(const char *fname) {
 }
 
 /**
- * Saves the CONF file.
+ *   Saves the CONF file.
  *
- * @param ifile the file number to save
+ *   @param ifile the file number to save
  */
 void Lhyphen::saveCONF(int ifile) {
   char fname[256];
@@ -1214,9 +1185,9 @@ void Lhyphen::saveCONF(int ifile) {
 }
 
 /**
- * @brief Load a configuration that has been saved in a file
+ *   Load a configuration that has been saved in a file
  *
- * @param fname The name of the file
+ *   @param fname The name of the file
  */
 void Lhyphen::loadCONF(const char *fname) {
   std::ifstream file(fname);
@@ -1464,9 +1435,9 @@ void Lhyphen::initCellInitialSurfaces() {
 }
 
 /**
- * @brief trouver les limites de la zone dessinée dans les fichiers svg
+ *  Trouver les limites de la zone dessinée dans les fichiers svg
  *
- * @param factor facteur multiplicateur
+ *  @param factor facteur multiplicateur
  */
 void Lhyphen::findDisplayArea(double factor) {
   if (cells.empty()) {
@@ -1507,12 +1478,12 @@ void Lhyphen::findDisplayArea(double factor) {
 }
 
 /**
- * @brief fonction très basique pour dessiner les cellules avec des lignes bleues,
- *        TODO: pour d'autre sorties graphiques, on verra après :)
+ *   Fonction très basique pour dessiner les cellules avec des lignes bleues,
+ *   TODO: pour d'autre sorties graphiques, on verra après :)
  *
- * @param num numero du fichier
- * @param nameBase nom de base (dans lequel sera inséré le numéro)
- * @param Canvaswidth largeur de canvas (par affichae rapide)
+ *   @param num         numero du fichier
+ *   @param nameBase    nom de base (dans lequel sera inséré le numéro)
+ *   @param Canvaswidth largeur de canvas (par affichae rapide)
  *
  * @see https://bestofcpp.com/repo/tomkwok-svgasm
  */
@@ -1657,14 +1628,16 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
  * @param vb Vitesse point B
  * @return double vitesse de rotation de solide rigide
  */
+/*
 double Lhyphen::getRotationVelocityBar(vec2r &a, vec2r &b, vec2r &va, vec2r &vb) {
   START_TIMER("getRotationVelocityBar");
   vec2r u = b - a;
-  //double l = u.normalize();
+  // double l = u.normalize();
   double l = u * u;
   vec2r T(-u.y, u.x);
   return ((vb - va) * T / l);
 }
+*/
 
 // loi des gaz parfaits à température constante
 void Lhyphen::InternalGasPressureForce() {

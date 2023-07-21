@@ -10,16 +10,16 @@
 #include <fstream>
 #include <iostream>
 
-#include <set>
-#include <vector>
 #include <map>
+#include <set>
 #include <utility>
+#include <vector>
 
+#include "AABB_2D.hpp"
+#include "ColorTable.hpp"
+#include "profiler.hpp"
 #include "svgtools.hpp"
 #include "vec2.hpp"
-#include "ColorTable.hpp"
-#include "AABB_2D.hpp"
-#include "profiler.hpp"
 
 #include "Bar.hpp"
 #include "Cell.hpp"
@@ -28,8 +28,8 @@
 #include "Node.hpp"
 
 /**
- * @brief cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
- *        lors de la définition de certaine cellules
+ *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
+ *  lors de la définition de certaine cellules
  *
  */
 struct named_arg_RegularCellDataset {
@@ -42,8 +42,8 @@ struct named_arg_RegularCellDataset {
 };
 
 /**
- * @brief cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
- *        lors de la définition de certaine cellules
+ *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
+ *  lors de la définition de certaine cellules
  *
  */
 struct named_arg_TwoPointsDataset {
@@ -55,8 +55,8 @@ struct named_arg_TwoPointsDataset {
 };
 
 /**
- * @brief cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
- *        lors de la définition de certaine cellules
+ *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
+ *  lors de la définition de certaine cellules
  *
  */
 struct named_arg_CellProperties {
@@ -82,68 +82,70 @@ struct CapturedNodes {
 #define CELL_CONTAIN_LIQUID 2
 
 /**
- * @brief Le système entier
+ *  Le système entier
  *
  */
 class Lhyphen {
 public:
-  std::vector<Cell> cells;
-  std::vector<Control> controls;
+  std::vector<Cell> cells;       ///< cellules
+  std::vector<Control> controls; ///< contrôles
 
-  std::vector<CapturedNodes> capturedNodes;
-  
-  std::vector<size_t> followedCells;
+  std::vector<CapturedNodes> capturedNodes; ///< noeuds capturés
 
-  // pour les sorties SVG
-  double xmin, xmax;
-  double ymin, ymax;
+  std::vector<size_t> followedCells; ///< cellules suivies
 
-  double t;
-  double cyclicVelPeriod;
+  // Limites de dessin pour les sorties SVG
+  double xmin;
+  double xmax;
+  double ymin;
+  double ymax;
 
-  double dt;
-  double dt_2;
-  double dt2_2;
+  double t;               ///< temps courant
+  double cyclicVelPeriod; ///< durée d'un cycle (inversion de la vitesse de chargement)
 
-  double globalViscosity;
-  double numericalDissipation;
+  double dt;    ///< pas de temps
+  double dt_2;  ///< pas de temps divisé par deux
+  double dt2_2; ///< pas de temps au carré divisé par deux
 
-  vec2r gravity;
+  double globalViscosity;      ///< viscosité globale
+  double numericalDissipation; ///< coefficizent de dissipation numérique
 
-  double distVerlet; // entre noeuds et barres
-  
-  //int enablePressures;
-	int cellContent;
-	double compressFactor;
+  vec2r gravity; ///< gravité
+
+  double distVerlet; ///< distance de Verlet entre noeuds et barres
+
+  // int enablePressures;
+  int cellContent;
+  double compressFactor;
 
   // parametres mécaniques d'interactions (contact frottant avec ou sans adhésion) entre les cellules
-  double kn;   // raideur normale de contact
-  double kt;   // raideur tangentielle de contact
-  double mu;   // coefficient de frottement (entre les cellules)
-  double fadh; // force normale d'adhésion au contact
-	int adaptativeStiffness{0};
+  double kn;                  ///< raideur normale de contact
+  double kt;                  ///< raideur tangentielle de contact
+  double mu;                  ///< coefficient de frottement (entre les cellules)
+  double fadh;                ///< force normale d'adhésion au contact
+  int adaptativeStiffness{0}; ///< adaptativeStiffness
 
-  int nstep;
-  int nstepPeriodVerlet;
-  int nstepPeriodSVG;
-  int nstepPeriodRecord;
-  int nstepPeriodConf;
-  int isvg;
-  int iconf;
-	
-	int SVG_colorCells; // 0=rien, 1=pressure, 2=NRJ elast
-	int SVG_colorTableRescale;
-	double SVG_colorTableMin;
-	double SVG_colorTableMax;
-	int SVG_cellForces; // 0=rien, 1=rouge/bleu
-	
-	ColorTable ctNeg, ctPos;
+  int nstep;             ///< nombre de pas
+  int nstepPeriodVerlet; ///< nombre de pas entre mise à jour des voisins
+  int nstepPeriodSVG;    ///< nombre de pas entre sauvegardes SVG
+  int nstepPeriodRecord; ///< nombre de pas entre chaque ligne d'enregistrement de données
+  int nstepPeriodConf;   ///< nombre de pas entre sauvegardes de configuration
+  int isvg;              ///< numéro actuel de sauvegarde SVG
+  int iconf;             ///< numéro actuel de sauvegarde de configuration
 
-  int reorder{1};
+  int SVG_colorCells; // 0=rien, 1=pressure, 2=NRJ elast
+  int SVG_colorTableRescale;
+  double SVG_colorTableMin;
+  double SVG_colorTableMax;
+  int SVG_cellForces; // 0=rien, 1=rouge/bleu
+
+  ColorTable ctNeg, ctPos;
+
+  int reorder{1}; ///< flag pour ré-ordonner les noeud dans la fonction ReadNodeFile
 
   Lhyphen();
 
-  void head();
+  void head(); ///< affiche un petit entete sympatique
 
   void addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_CellProperties p);
   void addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties p);
@@ -157,9 +159,9 @@ public:
                          named_arg_CellProperties p);
   void setTimeStep(double dt_);
   void setCellWallDensities(double rho, double thickness = 1.0);
-	void setCellDensities(double rho, double thickness = 1.0);
+  void setCellDensities(double rho, double thickness = 1.0);
   void setCellMasses(double m);
-	void setNodeMasses(double m);
+  void setNodeMasses(double m);
   void setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_max, double ft_coh_max, double yieldPower);
   void setNodeControl(size_t c, size_t n, int xmode, double xvalue, int ymode, double yvalue);
   void setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue);
@@ -180,16 +182,13 @@ public:
   void saveCONF(int ifile);
   void loadCONF(const char *fname);
   void loadCONF(int ifile);
-	void initCellInitialSurfaces();
+  void initCellInitialSurfaces();
 
   void findDisplayArea(double factor = 1.0);
   void saveSVG(int num, const char *nameBase = "sample%04d.svg", int Canvaswidth = 400);
   void InternalGasPressureForce();
-	void InternalLiquidPressureForce();
+  void InternalLiquidPressureForce();
   void setCellInternalPressure(size_t c, double p);
-
-private:
-  double getRotationVelocityBar(vec2r &a, vec2r &b, vec2r &va, vec2r &vb);
 };
 
 #endif /* L_HYPHEN_HPP */
