@@ -18,6 +18,11 @@ Lhyphen::Lhyphen()
 
   SVG_cellForces = 1;
 
+  updateNeighbors = [this]() { this->updateNeighbors_brute_force(); };
+
+  linkCells_lx = 1.0;
+  linkCells_ly = 1.0;
+
   ctNeg.setSize(128);
   ctPos.setSize(128);
   ctNeg.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {0, 0, 255, 255}});
@@ -113,7 +118,6 @@ void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellPropertie
   cells.push_back(C);
 }
 
-
 /**
  *   Adds regular polygonal cells on a triangular grid.
  *
@@ -148,7 +152,6 @@ void Lhyphen::addRegularPolygonalCellsOnTriangularGrid(int nx, int ny, double ho
       xshift = 0.0;
   }
 }
-
 
 /**
  *  Adds square brick wall cells to the given grid.
@@ -481,8 +484,8 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
  *  Met à jour la liste des voisins
  *
  */
-void Lhyphen::updateNeighbors() {
-  START_TIMER("updateNeighbors");
+void Lhyphen::updateNeighbors_brute_force() {
+  START_TIMER("updateNeighbors_brute_force");
 
   struct cellPair {
     size_t i;
@@ -496,7 +499,7 @@ void Lhyphen::updateNeighbors() {
     for (size_t in = 1; in < cells[ci].nodes.size(); in++) {
       aabbs[ci].add(cells[ci].nodes[in].pos);
     }
-    aabbs[ci].enlarge(cells[ci].radius + distVerlet);
+    aabbs[ci].enlarge(cells[ci].radius + 0.5 * distVerlet);
   }
 
   std::vector<cellPair> cellPairs;
@@ -520,7 +523,156 @@ void Lhyphen::updateNeighbors() {
   }
 
   for (size_t ip = 0; ip < cellPairs.size(); ++ip) {
-		
+
+    size_t ci = cellPairs[ip].i;
+    size_t cj = cellPairs[ip].j;
+    size_t jn = cellPairs[ip].jn;
+
+    for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
+      addNodeToBarNeighbor(ci, cj, in, jn /*, cells[ci].radius */);
+    }
+
+    for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
+      addNodeToBarNeighbor(cj, ci, jn, in, cells[cj].radius);
+    }
+  }
+}
+
+void Lhyphen::updateNeighbors_linkCells() {
+  START_TIMER("updateNeighbors_linkCells");
+
+  struct cellPair {
+    size_t i;
+    size_t j;
+    size_t jn;
+  };
+
+  std::vector<AABB_2D> aabbs(cells.size());
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    aabbs[ci].set_single(cells[ci].nodes[0].pos);
+    for (size_t in = 1; in < cells[ci].nodes.size(); in++) {
+      aabbs[ci].add(cells[ci].nodes[in].pos);
+    }
+    aabbs[ci].enlarge(cells[ci].radius + 0.5 * distVerlet);
+  }
+
+  AABB_2D bigBox = aabbs[0];
+  for (size_t ci = 1; ci < cells.size(); ci++) {
+    bigBox.enlarge(aabbs[ci]);
+  }
+
+  AABB box3D;
+  box3D.min.set(bigBox.min.x, bigBox.min.y, 1.0);
+  box3D.max.set(bigBox.max.x, bigBox.max.y, 1.0);
+
+  vec3r cellMinSizes(linkCells_lx, linkCells_ly, 1.0);
+  linkCells lc(box3D, cellMinSizes);
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    cells[ci].CellCenter();
+    vec3r pos(cells[ci].center.x, cells[ci].center.y, 0.5);
+
+    AABB aabb;
+    aabb.min.set(aabbs[ci].min.x, aabbs[ci].min.y, 1.0);
+    aabb.max.set(aabbs[ci].max.x, aabbs[ci].max.y, 1.0);
+    lc.add_body(ci, pos, aabb);
+  }
+
+  std::vector<cellPair> cellPairs;
+
+  AABB_Cell *cc, *cv;
+  for (size_t xc = 0; xc < lc.N.x; xc++) {
+    for (size_t yc = 0; yc < lc.N.y; yc++) {
+
+      cc = &(lc.cells[xc][yc][0]);
+
+      for (size_t v = 0; v < lc.cells[xc][yc][0].pcells.size(); v++) {
+        cv = cc->pcells[v];
+
+        for (size_t bi = 0; bi < cc->bodies.size(); bi++) {
+          size_t ci = cc->bodies[bi];
+          for (size_t bj = 0; bj < cv->bodies.size(); bj++) {
+            size_t cj = cv->bodies[bj];
+
+            if (cj <= ci)
+              continue;
+
+            if (aabbs[ci].intersect(aabbs[cj])) {
+              cellPair P;
+
+              for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
+                if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
+                  P.i = ci;
+                  P.j = cj;
+                  P.jn = jn;
+                  cellPairs.push_back(P);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Now we test if a too large bodies can collide another body in the
+  cc = &(lc.oversized_bodies);
+  for (size_t ix = 0; ix < lc.N.x; ++ix) {
+    for (size_t iy = 0; iy < lc.N.y; ++iy) {
+      cv = &(lc.cells[ix][iy][0]);
+
+      for (size_t icc = 0; icc < cc->bodies.size(); ++icc) {
+        size_t ci = cc->bodies[icc];
+        for (size_t jcv = 0; jcv < cv->bodies.size(); ++jcv) {
+          size_t cj = cv->bodies[jcv];
+
+          if (cj <= ci)
+            continue;
+
+          if (aabbs[ci].intersect(aabbs[cj])) {
+            cellPair P;
+
+            for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
+              if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
+                P.i = ci;
+                P.j = cj;
+                P.jn = jn;
+                cellPairs.push_back(P);
+              }
+            }
+          }
+        } // jcv
+      }   // icc
+    }     // iy
+  }       // ix
+
+  // Now we test oversized vs oversized
+  cc = &(lc.oversized_bodies);
+  cv = cc;
+  for (size_t icc = 0; icc < cc->bodies.size(); ++icc) {
+    size_t ci = cc->bodies[icc];
+    for (size_t jcv = 0; jcv < cv->bodies.size(); ++jcv) {
+      size_t cj = cv->bodies[jcv];
+
+      if (cj <= ci)
+        continue;
+
+      if (aabbs[ci].intersect(aabbs[cj])) {
+        cellPair P;
+
+        for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
+          if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
+            P.i = ci;
+            P.j = cj;
+            P.jn = jn;
+            cellPairs.push_back(P);
+          }
+        }
+      }
+    } // jcv
+  }   // icc
+
+  for (size_t ip = 0; ip < cellPairs.size(); ++ip) {
+
     size_t ci = cellPairs[ip].i;
     size_t cj = cellPairs[ip].j;
     size_t jn = cellPairs[ip].jn;
@@ -925,7 +1077,6 @@ void Lhyphen::computeNodeForces() {
   // en imposant une force à chaque extrémité de barre
   {
     START_TIMER("Node_moments");
-		
     for (size_t c = 0; c < cells.size(); ++c) {
       for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
 
@@ -933,7 +1084,7 @@ void Lhyphen::computeNodeForces() {
         size_t next = cells[c].nodes[n].nextNode;
 
         // si c'est une extrémité on ne calcul pas de moment
-        if (prev == null_size_t || next == null_size_t) { 
+        if (prev == null_size_t || next == null_size_t) {
           continue;
         }
 
@@ -1255,6 +1406,9 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> numericalDissipation;
     } else if (token == "globalViscosity") {
       file >> globalViscosity;
+    } else if (token == "linkCells") {
+      file >> linkCells_lx >> linkCells_ly;
+      updateNeighbors = [this]() { this->updateNeighbors_linkCells(); };
     } else if (token == "distVerlet") {
       file >> distVerlet;
     } else if (token == "t") {
@@ -1722,6 +1876,7 @@ void Lhyphen::InternalGasPressureForce() {
 // remarque : COMPRESSIBLE plutot que liquide
 void Lhyphen::InternalLiquidPressureForce() {
   START_TIMER("InternalLiquidPressureForce");
+
   for (size_t c = 0; c < cells.size(); c++) {
     if (cells[c].close == true) {
 
@@ -1746,6 +1901,4 @@ void Lhyphen::InternalLiquidPressureForce() {
   }
 }
 
-void Lhyphen::setCellInternalPressure(size_t c, double p) {
-  cells[c].p_int = p;
-}
+void Lhyphen::setCellInternalPressure(size_t c, double p) { cells[c].p_int = p; }

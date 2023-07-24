@@ -17,11 +17,11 @@
 Lhyphen Conf;
 int confNum = 1;
 
-struct AABB {
+struct AABB_see {
   double xmin, xmax, ymin, ymax;
 };
 
-AABB worldBox;
+AABB_see worldBox;
 
 ColorTable BarRedTable;
 ColorTable BarBlueTable;

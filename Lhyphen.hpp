@@ -14,18 +14,23 @@
 #include <set>
 #include <utility>
 #include <vector>
+#include <functional>
 
 #include "AABB_2D.hpp"
+#include "AABB.hpp"
 #include "ColorTable.hpp"
 #include "profiler.hpp"
 #include "svgtools.hpp"
 #include "vec2.hpp"
+#include "vec3.hpp"
+#include "linkCells.hpp"
 
 #include "Bar.hpp"
 #include "Cell.hpp"
 #include "Control.hpp"
 #include "Neighbor.hpp"
 #include "Node.hpp"
+
 
 /**
  *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
@@ -113,6 +118,9 @@ public:
   vec2r gravity; ///< gravité
 
   double distVerlet; ///< distance de Verlet entre noeuds et barres
+	
+	double linkCells_lx;
+	double linkCells_ly;
 
   int cellContent;
   double compressFactor;
@@ -171,7 +179,11 @@ public:
   void addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds = 0.0);
   void readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int);
 
-  void updateNeighbors();
+  
+	std::function<void()> updateNeighbors;
+	void updateNeighbors_brute_force();
+	void updateNeighbors_linkCells();
+	
   void glue(double epsilonDist);
   void computeInteractionForces();
   void computeNodeForces();
