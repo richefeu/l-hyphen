@@ -5,8 +5,8 @@
 #define FORCE_CONTROL 1
 
 /**
- * @brief Un control contient des flags pour dire si une force ou une vitesse est
- *        imposée selon les direction x et y. Il concerne uniquement les noeuds
+ *  Un control contient des flags pour dire si une force ou une vitesse est
+ *  imposée selon les direction x et y. Il concerne uniquement les noeuds
  *
  */
 class Control {
@@ -17,7 +17,7 @@ public:
   double yvalue;
 
   // Ctor
-  Control(int xmode_, double xvalue_, int ymode_, double yvalue_);
+  Control(int t_xmode, double t_xvalue, int t_ymode, double t_yvalue);
 };
 
 #endif /* end of include guard: CONTROL_HPP */

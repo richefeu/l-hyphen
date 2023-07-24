@@ -22,7 +22,7 @@ int main(int argc, char const *argv[]) {
     return 1;
   }
 
-  PRINT_TIMERS("mpmbox");
+  PRINT_TIMERS("l-hyphen");
 
   return 0;
 }

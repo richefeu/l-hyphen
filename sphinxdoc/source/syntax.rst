@@ -2,7 +2,8 @@
 Format of input files 
 =====================
 
-The input files are the files that hold the whole configuration. They are used for defining the initial configuration and parameters of a simulation : 
+The input files are the files that hold the whole configuration. 
+They are used for defining the initial configuration and parameters of a simulation. 
 
 Timing
 ------

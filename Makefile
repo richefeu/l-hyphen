@@ -8,15 +8,12 @@ TOOFUSPATH = ~/toofus
 # The list of flags passed to the compiler
 CXXFLAGS = -Wall -Wextra -pedantic -Wconversion -O3 -std=c++11 -I $(TOOFUSPATH) -DENABLE_PROFILING
 
-
 GLUTFLAGS = `pkg-config --cflags glut`
 GLUTLINK = `pkg-config --libs glut` -framework OpenGL
-
 
 SOURCES = Neighbor.cpp Control.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
 HEADERS = $(SOURCES:%.cpp=%.hpp)
 OBJECTS = $(SOURCES:%.cpp=%.o)
-
 
 %.o:%.cpp
 	$(CXX) $(CXXFLAGS) -c $<

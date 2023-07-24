@@ -68,7 +68,7 @@ struct named_arg_CellProperties {
 
 struct CellNodeID {
   size_t c, n;
-  CellNodeID(size_t c_, size_t n_) : c(c_), n(n_) {}
+  CellNodeID(size_t t_c, size_t t_n) : c(t_c), n(t_n) {}
 };
 
 struct CapturedNodes {
@@ -114,7 +114,6 @@ public:
 
   double distVerlet; ///< distance de Verlet entre noeuds et barres
 
-  // int enablePressures;
   int cellContent;
   double compressFactor;
 
@@ -147,6 +146,7 @@ public:
 
   void head(); ///< affiche un petit entete sympatique
 
+  // pre-processing functions
   void addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_CellProperties p);
   void addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties p);
   void addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p);
@@ -157,15 +157,16 @@ public:
                                named_arg_CellProperties p);
   void addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                          named_arg_CellProperties p);
-  void setTimeStep(double dt_);
+                         
+  void setTimeStep(double t_dt);
   void setCellWallDensities(double rho, double thickness = 1.0);
   void setCellDensities(double rho, double thickness = 1.0);
-  void setCellMasses(double m);
-  void setNodeMasses(double m);
+  void setCellMasses(double cellMass);
+  void setNodeMasses(double nodeMass);
   void setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_max, double ft_coh_max, double yieldPower);
   void setNodeControl(size_t c, size_t n, int xmode, double xvalue, int ymode, double yvalue);
   void setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue);
-  void setNodeControlInBox(double xmin, double xmax, double ymin, double ymax, int xmode, double xvalue, int ymode,
+  void setNodeControlInBox(double t_xmin, double t_xmax, double t_ymin, double t_ymax, int xmode, double xvalue, int ymode,
                            double yvalue);
   void addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds = 0.0);
   void readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int);

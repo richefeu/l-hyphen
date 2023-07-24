@@ -48,7 +48,9 @@ int height = 600;
 float wh_ratio = (float)width / (float)height;
 
 // Miscellaneous global variables
-enum MouseMode { NOTHING, ROTATION, ZOOM, PAN } mouse_mode = NOTHING;
+enum class MouseMode { NOTHING, ROTATION, ZOOM, PAN };
+MouseMode mouse_mode = MouseMode::NOTHING;
+
 int display_mode = 0; // sample or slice rotation
 int mouse_start[2];
 

@@ -85,7 +85,7 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
 void mouse(int button, int state, int x, int y) {
 
   if (state == GLUT_UP) {
-    mouse_mode = NOTHING;
+    mouse_mode = MouseMode::NOTHING;
     display();
   } else if (state == GLUT_DOWN) {
     mouse_start[0] = x;
@@ -93,12 +93,12 @@ void mouse(int button, int state, int x, int y) {
     switch (button) {
     case GLUT_LEFT_BUTTON:
       if (glutGetModifiers() == GLUT_ACTIVE_SHIFT)
-        mouse_mode = PAN;
+        mouse_mode = MouseMode::PAN;
       else
-        mouse_mode = ROTATION;
+        mouse_mode = MouseMode::ROTATION;
       break;
     case GLUT_MIDDLE_BUTTON:
-      mouse_mode = ZOOM;
+      mouse_mode = MouseMode::ZOOM;
       break;
     }
   }
@@ -106,7 +106,7 @@ void mouse(int button, int state, int x, int y) {
 
 void motion(int x, int y) {
 
-  if (mouse_mode == NOTHING)
+  if (mouse_mode == MouseMode::NOTHING)
     return;
 
   double dx = (double)(x - mouse_start[0]) / (double)width;
@@ -114,7 +114,7 @@ void motion(int x, int y) {
 
   switch (mouse_mode) {
 
-  case ZOOM: {
+  case MouseMode::ZOOM: {
     double ddy = (worldBox.ymax - worldBox.ymin) * dy;
     double ddx = (worldBox.xmax - worldBox.xmin) * dy;
     worldBox.xmin -= ddx;
@@ -123,7 +123,7 @@ void motion(int x, int y) {
     worldBox.ymax += ddy;
   } break;
 
-  case PAN: {
+  case MouseMode::PAN: {
     double ddx = (worldBox.xmax - worldBox.xmin) * dx;
     double ddy = (worldBox.ymax - worldBox.ymin) * dy;
     worldBox.xmin -= ddx;
@@ -579,7 +579,7 @@ int main(int argc, char *argv[]) {
   glutMouseFunc(mouse);
   glutMotionFunc(motion);
 
-  mouse_mode = NOTHING;
+  mouse_mode = MouseMode::NOTHING;
 
   glCullFace(GL_FRONT_AND_BACK);
   glEnable(GL_BLEND);

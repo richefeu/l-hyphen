@@ -3,7 +3,7 @@
 Cell::Cell() : radius(0.0), surface(0.0), surface0(0.0), close(false) {}
 
 /**
- * Reorders the position of the nodes in the cell based on their angle.
+ *  Reorders the position of the nodes in the cell based on their angle.
  */
 void Cell::reorderNodes() {
   if (nodes.empty()) {
@@ -78,19 +78,19 @@ void Cell::insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEA
  *  on suppose que les noeuds sont numérotés suivant un sens de rotation quelconque
  *  mais qu'ils se suivent.
  *
- *  @param width    épaisseur des barres
- *  @param kn_      raideur axiale des barres
- *  @param kr_      raideur angulaire entre les barres adjacentes
- *  @param mz_max_  moment seuil plastique
- *  @param closed   spécifie si les barres forment une boucle (true par defaut)
+ *  @param width     épaisseur des barres
+ *  @param t_kn      raideur axiale des barres
+ *  @param t_kr      raideur angulaire entre les barres adjacentes
+ *  @param t_mz_max  moment seuil plastique
+ *  @param t_closed  spécifie si les barres forment une boucle (true par defaut)
  */
-void Cell::connectOrderedNodes(double width, double kn_, double kr_, double mz_max_, double pint, bool closed) {
+void Cell::connectOrderedNodes(double width, double t_kn, double t_kr, double t_mz_max, double t_p_int, bool t_closed) {
   if (nodes.empty()) {
     std::cout << "@Cell::connectOrderedNodes, Cannot connect the nodes because there's no node!\n";
     return;
   }
 
-  close = closed;
+  close = t_closed;
   radius = 0.5 * width;
   bars.clear();
 
@@ -98,37 +98,39 @@ void Cell::connectOrderedNodes(double width, double kn_, double kr_, double mz_m
     bars.push_back(Bar(i - 1, i));
   }
 
-  if (closed == true) {
+  if (t_closed == true) {
     bars.push_back(Bar(nodes.size() - 1, 0));
-    p_int = pint;
+    p_int = t_p_int;
   }
 
   // init bars
   for (size_t b = 0; b < bars.size(); ++b) {
-    bars[b].init(kn_, nodes[bars[b].i].pos, nodes[bars[b].j].pos);
+    bars[b].init(t_kn, nodes[bars[b].i].pos, nodes[bars[b].j].pos);
   }
 
   // init nodes
   if (nodes.size() > 2) {
-    if (closed == true) {
-      nodes[0].init(kr_, mz_max_, nodes.size() - 1, 1);
+    if (t_closed == true) {
+      nodes[0].init(t_kr, t_mz_max, nodes.size() - 1, 1);
     } else {
-      nodes[0].init(kr_, mz_max_, null_size_t, 1);
+      nodes[0].init(t_kr, t_mz_max, null_size_t, 1);
     }
 
     for (size_t n = 1; n < nodes.size() - 1; n++) {
-      nodes[n].init(kr_, mz_max_, n - 1, n + 1);
+      nodes[n].init(t_kr, t_mz_max, n - 1, n + 1);
     }
-    if (closed == true) {
-      nodes.back().init(kr_, mz_max_, nodes.size() - 2, 0);
+    if (t_closed == true) {
+      nodes.back().init(t_kr, t_mz_max, nodes.size() - 2, 0);
     } else {
-      nodes.back().init(kr_, mz_max_, nodes.size() - 2, null_size_t);
+      nodes.back().init(t_kr, t_mz_max, nodes.size() - 2, null_size_t);
     }
   }
 }
 
-// Cette fonction calcul la surface d'une cellule fermée
-// par la méthode des produits vectoriels
+/**
+ *  Calcul la surface exposée à la pression par la méthode des produits vectoriels
+ * 
+ */
 void Cell::CellSurface() {
   surface = 0.0;
   if (close == false) {
@@ -170,11 +172,11 @@ void Cell::CellForce(vec2r & force) {
 /**
  *  Calculates the elastic energy of the cell.
  *
- *  @param compressFactor_ the compression factor
+ *  @param compressFactor  the compression factor
  *
  *  @return the elastic energy of the cell
  */
-double Cell::getElasticNRJ(double compressFactor_) {
+double Cell::getElasticNRJ(double compressFactor) {
 	if (close == false) return 0.0;
   double NRJ = 0.0;
   for (size_t b = 0; b < bars.size(); b++) {
@@ -183,6 +185,6 @@ double Cell::getElasticNRJ(double compressFactor_) {
   for (size_t n = 0; n < nodes.size(); n++) {
     NRJ += 0.5 * nodes[n].mz * nodes[n].mz / nodes[n].kr;
   }
-	NRJ += 0.5 * p_int * p_int / compressFactor_;
+	NRJ += 0.5 * p_int * p_int / compressFactor;
   return NRJ;
 }

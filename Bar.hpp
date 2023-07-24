@@ -14,9 +14,9 @@ public:
   double kn;   ///< raideur suivant l'axe [N/m]
   double fn;   ///< force axiale [N]
 
-  Bar(size_t i_, size_t j_);
+  Bar(size_t t_i, size_t t_j);
 
-  void init(double kn_, vec2r &posi, vec2r &posj);
+  void init(double t_kn, vec2r &posi, vec2r &posj);
 };
 
 #endif /* end of include guard: BAR_HPP */

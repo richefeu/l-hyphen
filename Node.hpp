@@ -29,7 +29,7 @@ public:
   // Ctor
   Node(double x, double y);
 
-  void init(double kr_, double mz_max_, size_t prev, size_t next);
+  void init(double t_kr, double t_mz_max, size_t prev, size_t next);
 };
 
 #endif /* end of include guard: NODE_HPP */

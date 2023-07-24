@@ -5,7 +5,12 @@ Model
 Generalities about DEM methods
 ------------------------------
 
-The model we have built is substantially similar to a form of DEM. The basic concept is to model a material as a collection of rigid elements that interact. The materials we are particularly interested in are cells of the plant tissue. So we agreed to create polygons to best represent our cells (:numref:`Cells`). The nodes/summits of the polygons would be our discrete elements and we connect them by bars. When the bars close the polygon, we call it a cell (:numref:`Cells`). 
+The model we have built is substantially similar to a form of DEM. 
+The basic concept is to model a material as a collection of rigid elements that interact. 
+The materials we are particularly interested in are cells of the plant tissue. 
+So, we agreed to create polygons to best represent our cells (:numref:`Cells`). 
+The nodes/summits of the polygons would be our discrete elements and we connect them by bars. 
+When the bars close the polygon, we call it a cell (:numref:`Cells`). 
 
 
 .. _Cells:
@@ -15,7 +20,11 @@ The model we have built is substantially similar to a form of DEM. The basic con
    Representation of a cell. Each node is numbered from 0 to 5 in this case.
    
    
-Let :math:`m` be the mass of the nodes, :math:`I` the inertia along the normal axis, :math:`\vec{\overset{\cdot \cdot}{x}}_i` the acceleration of the node, :math:`\vec{\overset{\cdot \cdot}{\theta}}_i` the angular acceleration, :math:`\vec{f^{j \rightarrow i}}` the force due to the action of the particle :math:`j` on the particle :math:`i`, :math:`\vec{b}` the lever-branch vector from particle center to the contact point and :math:`\vec{g}` the volume acceleration (like gravity in most cases). We then have :
+Let :math:`m` be the mass of the nodes, :math:`I` the inertia along the normal axis, :math:`\vec{\overset{\cdot \cdot}{x}}_i` 
+the acceleration of the node, :math:`\vec{\overset{\cdot \cdot}{\theta}}_i` the angular acceleration, :math:`\vec{f^{j \rightarrow i}}` 
+the force due to the action of the particle :math:`j` on the particle :math:`i`, :math:`\vec{b}` 
+the lever-branch vector from particle center to the contact point and :math:`\vec{g}` 
+the volume acceleration (like gravity in most cases). We then have:
 
 .. math::
    \begin{split}
@@ -25,7 +34,8 @@ Let :math:`m` be the mass of the nodes, :math:`I` the inertia along the normal a
    \end{split}
 
 
-The DEM method essentially consists in integrating its equations to find a weak solution. The quadrature we use is the velocity-Verlet scheme: 
+The DEM method essentially consists in integrating its equations to find a weak solution. 
+The quadrature we use is the velocity-Verlet scheme: 
 
 .. math::
    \begin{split}
@@ -34,12 +44,12 @@ The DEM method essentially consists in integrating its equations to find a weak 
    \end{split}
    
    
-   
-
 Details of the model for our case
 ---------------------------------
 
-We wish to study the rupture of a very heterogeneous structure such as that of a plant (:numref:`PlantStruc`). Naturally, the geometry of the object we wish to fragment allows us not to take into account its depth and thus to propose a 2D model. Indeed, a stem is essentially a tube whose section has a complex structure but a tube all the same. 
+We wish to study the rupture of a very heterogeneous structure such as that of a plant (:numref:`PlantStruc`). 
+Naturally, the geometry of the object we wish to fragment allows us not to take into account its depth and thus to propose a 2D model.
+Indeed, a stem is essentially a tube whose section has a complex structure but a tube all the same. 
 
 .. _PlantStruc:
 .. figure:: images/maize.png
@@ -49,7 +59,11 @@ We wish to study the rupture of a very heterogeneous structure such as that of a
 
 
 
-Plant tissue can be seen as an aggregation of cells. A cell consists of an outer membrane that is more difficult to break. This observation leads us to construct cells from bars and nodes that are connected to create cells (:numref:`WhatACell`). The space between the cells is designated as the fragile zone. The bars that are parts of the membranes will be designated as the fragile areas of the model. We apply a glue bond. The rupture will therefore be created when the force that pulls two cells apart reaches a certain threshold.
+Plant tissue can be seen as an aggregation of cells. A cell consists of an outer membrane that is more difficult to break. 
+This observation leads us to construct cells from bars and nodes that are connected to create cells (:numref:`WhatACell`). 
+The space between the cells is designated as the fragile zone. 
+The bars that are parts of the membranes will be designated as the fragile areas of the model.
+We apply a glue bond. The rupture will therefore be created when the force that pulls two cells apart reaches a certain threshold.
 
 .. _WhatACell:
 .. figure:: images/cells.png
@@ -63,7 +77,10 @@ This model gives us a clear advantage over a classic DEM because it allows us to
 Details of Forces used in the Model
 -----------------------------------
 
-Our model is close to a material point model for the nodes. The description of a node is reduced to the position of its center of gravity, its mass and its link (like the angle with the next bar) (:numref:`NodesBarsOr`) with the second elements of our model: the bars (Fig . The bars work like springs which have a plasticity, a stiffness and a length. 
+Our model is close to a material point model for the nodes. 
+The description of a node is reduced to the position of its center of gravity, 
+its mass and its link (like the angle with the next bar) (:numref:`NodesBarsOr`) with the second elements of our model: 
+the bars (Fig . The bars work like springs which have a plasticity, a stiffness and a length. 
 
 .. _NodesBarsOr:
 .. figure:: images/histo_orientation.png
@@ -71,7 +88,9 @@ Our model is close to a material point model for the nodes. The description of a
   
    Set of characteristics of the bar class taken into account by node
 
-In an implementation way, we do a test to know if there is contact or not (:numref:`NodesBarsCon`). Our bars have a kind of contactbox that we use to determine if we should distribute a possible interaction to the nodes. The forces (interactions) linked to the bars are transferred to the concerned nodes 
+In an implementation way, we do a test to know if there is contact or not (:numref:`NodesBarsCon`). 
+Our bars have a kind of contactbox that we use to determine if we should distribute a possible interaction to the nodes. 
+The forces (interactions) linked to the bars are transferred to the concerned nodes 
 
 .. _NodesBarsCon:
 .. figure:: images/histo_con.png
@@ -79,20 +98,25 @@ In an implementation way, we do a test to know if there is contact or not (:numr
 
    Nodes and Bars interacting as contact. In this case, it is a node that "sees" a bar. :math:`\vec{f}` is the contact force and we decompose it into :math:`\vec{n}` and :math:`\vec{t}` the normal and the tangential component.
 
-In order to determine the forces and moments required for computing the accelerations, we need local computations able to calculate the forces or moments as a function of local parameters. 
+In order to determine the forces and moments required for computing the accelerations, we need local computations 
+able to calculate the forces or moments as a function of local parameters. 
 
 
 Interactions Forces
 -------------------
 
-These forces are those that are exerted between several physical objects defined in our model. The first to describe is : The elastic repulsion (normal force) between object :math:`i` and :math:`j`, :math:`f^{e, i \rightarrow j}_n` is calculated when the contactbox/control is activated. :math:`f^{e, i \rightarrow j}_n` is defined by : 
+These forces are those that are exerted between several physical objects defined in our model. 
+The first to describe is the elastic repulsion (normal force) between object :math:`i` and :math:`j`, :math:`f^{e, i \rightarrow j}_n` 
+is calculated when the contactbox/control is activated. :math:`f^{e, i \rightarrow j}_n` is defined by: 
 
 .. math::
     f^{e, i \rightarrow j} = \mathcal{E}(v_i,v_j)
 
-where :math:`\mathcal{E}` is a function depending of the velocity and position of the objects :math:`i` and :math:`j`. :math:`v_i` and :math:`v_j` are respectively the velocity of object :math:`i` and :math:`j`.
+where :math:`\mathcal{E}` is a function depending of the velocity and position of the objects :math:`i` and :math:`j`. 
+The velocities :math:`v_i` and :math:`v_j` are those of object :math:`i` and :math:`j`, respectively.
 
-In this model we also have a glue force between the cells (like in :numref:`WhatACell`). Keeping the same notations, we will describe the glue force as :math:`f^{g, i \rightarrow j}` :
+In this model we also have a glue force between the cells (like in :numref:`WhatACell`). Keeping the same notations, 
+we will describe the glue force as :math:`f^{g, i \rightarrow j}`:
 
 .. math::
     f^{g, i \rightarrow j} = \mathcal{G}(v_i,v_j,k_n,k_t)
@@ -104,19 +128,24 @@ Node Force and Moment
 
 These are the forces that are exerted on the nodes directly without the need for redistribution to the nodes to obtain the accelerations. 
 
-We use a global viscosity to dissipate energy physically. Let :math:`N` be a node, the viscosity on the node :math:`N` is described by :math:`f^{v}_N` :
+We use a global viscosity to dissipate energy physically. Let :math:`N` be a node, the viscosity 
+on the node :math:`N` is described by :math:`f^{v}_N`:
 
 .. math::
     f^{v}_N = -\nu \times Vel(N)     
 
-where :math:`Vel` is the application that gives us the speed of a node. :math:`\nu` is a dissipation parameter that we fix at the beginning of the simulation.
+where :math:`Vel` is the application that gives us the speed of a node. :math:`\nu` is a dissipation parameter 
+that we fix at the beginning of the simulation.
 
-The last step is to simulate the plasticity of the bars we transmit. The moments are directly managed in the Node class as shown in the :numref:`NodesBarsOr`. Let :math:`\Theta` be a function depending of the velocity of the node :math:`N` :
+The last step is to simulate the plasticity of the bars we transmit. 
+The moments are directly managed in the Node class as shown in the :numref:`NodesBarsOr`. Let :math:`\Theta` 
+be a function depending of the velocity of the node :math:`N`:
 
 .. math::
     Mom_{t+1}(N) = Mom_t(N) -k_r \times \Theta(Vel(N))
 
-where :math:`Mom_t(N)` is the function that determine the moment at the node :math:`N` by the incremental way. And for the plasticity, we apply a threshold like on :numref:`Plasticity` : 
+where :math:`Mom_t(N)` is the function that determine the moment at the node :math:`N` by the incremental way. 
+And for the plasticity, we apply a threshold like on :numref:`Plasticity`: 
 
 .. _Plasticity:
 .. figure:: images/Plasticity.png
@@ -137,11 +166,11 @@ It is possible to impose a speed or a force on each node independently or by cel
 More Details of the model
 -------------------------
 
-This section is dedicated to the slight description of the methods present in the sample (:numref:`UML`): computeInteractionForces() and computeNodeForces().
+This section is dedicated to the slight description of the methods present in the sample (:numref:`UML`): computeInteractionForces() 
+and computeNodeForces().
 
-So let's explain how we compute the contact :
-
-We set :math:`u` et :math:`b` comme suit : 
+So let's explain how we compute the contact.
+We set :math:`u` and :math:`b` as follows: 
 
 .. math::
 	\begin{split}

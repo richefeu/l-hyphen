@@ -4,7 +4,7 @@
 #include "vec2.hpp"
 
 /**
- * @brief contact potentiel (voisin ou interaction)
+ * Contact potentiel (voisin ou interaction)
  *
  */
 class Neighbor {
@@ -33,7 +33,7 @@ public:
   double ft_coh_max;
   double yieldPower;
 
-  Neighbor(size_t ic_, size_t jc_, size_t in_, size_t jn_);
+  Neighbor(size_t t_ic, size_t t_jc, size_t t_in, size_t t_jn);
 };
 
 namespace std {

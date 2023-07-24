@@ -1,10 +1,10 @@
 #include "Control.hpp"
 
-Control::Control(int xmode_, double xvalue_, int ymode_, double yvalue_) {
-  xmode = xmode_;
-  xvalue = xvalue_;
-  ymode = ymode_;
-  yvalue = yvalue_;
+Control::Control(int t_xmode, double t_xvalue, int t_ymode, double t_yvalue) {
+  xmode = t_xmode;
+  xvalue = t_xvalue;
+  ymode = t_ymode;
+  yvalue = t_yvalue;
 }
 
 
