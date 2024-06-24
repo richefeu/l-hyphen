@@ -3,6 +3,19 @@
 
 #include "vec2.hpp"
 
+class Neighbor;
+
+struct Connect {
+  size_t ic; // indice de la première cellule dans Sample::cells
+  size_t jc; // indice de la seconde cellule dans Sample::cells (ic <= jc)
+  size_t in; // indice du noeud de la première cellule dans Sample::cells[ic]
+  size_t jn; // indice du noeud de la seconde cellule dans Sample::cells[jc]
+  Neighbor *woami{nullptr};
+  Connect(size_t t_ic, size_t t_jc, size_t t_in, size_t t_jn, Neighbor *t_woami) : ic(t_ic), jc(t_jc), in(t_in), jn(t_jn) {
+    woami = t_woami;
+  }
+};
+
 /**
  * Contact potentiel (voisin ou interaction)
  *
@@ -17,6 +30,8 @@ public:
   // jn code pour la barre qui commence par jn
 
   vec2r n; // vecteur normal (de j vers i)
+
+  Neighbor *brother{nullptr};
 
   // contact
   int contactState;
@@ -50,8 +65,5 @@ template <> struct less<Neighbor> {
   }
 };
 } // namespace std
-
-
-
 
 #endif /* end of include guard: NEIGHBOR_HPP */

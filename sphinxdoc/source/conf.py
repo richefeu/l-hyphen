@@ -62,4 +62,3 @@ pygments_style = 'sphinx'
 html_sidebars = {
    '**': ['globaltoc.html', 'searchbox.html']
 }
-

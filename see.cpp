@@ -2,27 +2,23 @@
 
 void printHelp() {
   using namespace std;
+
   cout << endl;
+  cout << "Commandes:" << endl;
+  cout << "b         colorize the cell bars" << endl;
+  cout << "c         show the cells" << endl;
+  cout << "f         show the forces" << endl;
+  cout << "g         show the glue points" << endl;
+  cout << "h         show this help" << endl;
+  cout << "p         show pressure" << endl;
+  cout << "q         quit" << endl;
+  cout << "s/S       scale the force length" << endl;
   cout << "+         load next configuration file" << endl;
   cout << "-         load previous configuration file" << endl;
   cout << "=         fit the view" << endl;
-  cout << "q         quit" << endl;
-  // cout << "" << endl;
   cout << endl;
 }
 
-void printInfo() {
-  // using namespace std;
-
-  // cout << "Reference Conf = " << refConfNum << "\n";
-  // cout << "Current Conf = " << confNum << "\n";
-  //
-  // cout << "Box:\n";
-  // cout << "top left = (" << Conf.Box.x[0] << ", " << Conf.Box.y[0] << ")\n";
-  // cout << "top right = (" << Conf.Box.x[1] << ", " << Conf.Box.y[1] << ")\n";
-  // cout << "bottom right = (" << Conf.Box.x[2] << ", " << Conf.Box.y[2] << ")\n";
-  // cout << "bottom left = (" << Conf.Box.x[3] << ", " << Conf.Box.y[3] << ")\n";
-}
 
 void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   switch (Key) {
@@ -43,8 +39,8 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
     show_glue_points = 1 - show_glue_points;
   } break;
 
-  case 'i': {
-    printInfo();
+  case 'h': {
+    printHelp();
   } break;
 
   case 'p': {
@@ -63,13 +59,11 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   } break;
 
   case '-': {
-    std::cout << "Current Configuration: ";
     if (confNum > 0)
       try_to_readConf(confNum - 1, Conf, confNum);
   } break;
 
   case '+': {
-    std::cout << "Current Configuration: ";
     try_to_readConf(confNum + 1, Conf, confNum);
   } break;
 
@@ -208,6 +202,16 @@ void reshape(int w, int h) {
   glutPostRedisplay();
 }
 
+/**
+ * Draws a bar between two nodes in a given cell.
+ *
+ * @param ci        The index of the cell
+ * @param i         The index of the first node
+ * @param j         The index of the second node
+ * @param radius    The radius of the bar
+ * @param BarColor  The color of the bar
+ * @param NodeColor The color of the nodes
+ */
 void drawBar(size_t ci, size_t i, size_t j, double radius, color4f &BarColor, color4f &NodeColor) {
   if (i == null_size_t || j == null_size_t)
     return;
@@ -251,6 +255,9 @@ void drawBar(size_t ci, size_t i, size_t j, double radius, color4f &BarColor, co
   }
 }
 
+/**
+ * Draws the pressure of the cells in the Conf object.
+ */
 void drawPressure() {
   double pmax = -1.0e20;
   double pmin = 1.0e20;
@@ -275,29 +282,6 @@ void drawPressure() {
 
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
-
-  // This version is ok only for convexe shapes
-  /*
-  for (size_t i = 0; i < Conf.cells.size(); ++i) {
-    if (Conf.cells[i].close == false)
-      continue;
-
-    pTable.getColor4f((float)Conf.cells[i].p_int, &col);
-    glColor3f(col.r, col.g, col.b);
-
-    glBegin(GL_TRIANGLES);
-    for (size_t s = 2; s < Conf.cells[i].nodes.size(); s += 1) {
-      vec2r p0 = Conf.cells[i].nodes[0].pos;
-      vec2r p1 = Conf.cells[i].nodes[s - 1].pos;
-      vec2r p2 = Conf.cells[i].nodes[s].pos;
-
-      glVertex2d(p0.x, p0.y);
-      glVertex2d(p1.x, p1.y);
-      glVertex2d(p2.x, p2.y);
-    }
-    glEnd();
-  }
-  */
 
   for (size_t i = 1; i < Conf.cells.size(); ++i) {
     if (Conf.cells[i].close == false)
@@ -327,13 +311,17 @@ void drawPressure() {
 
 }
 
+/**
+ * Draws the cells on the screen.
+ */
 void drawCells() {
-  glLineWidth(1.0f);
+  glLineWidth(2.0f);
+  glShadeModel(GL_SMOOTH);
 
   color4f BarColor, NodeColor;
-  BarColor.r = NodeColor.r = 0.8f;
-  BarColor.g = NodeColor.g = 0.8f;
-  BarColor.b = NodeColor.b = 0.9f;
+  BarColor.r = NodeColor.r = 0.0f;
+  BarColor.g = NodeColor.g = 0.0f;
+  BarColor.b = NodeColor.b = 0.0f;
   BarColor.a = NodeColor.a = 1.0f;
 
   if (show_bar_colors) {
@@ -361,9 +349,9 @@ void drawCells() {
         } else if (Conf.cells[i].bars[b].fn < 0.0) {
           BarBlueTable.getColor4f((float)(-Conf.cells[i].bars[b].fn), &BarColor);
         } else {
-          BarColor.r = 0.8f;
-          BarColor.g = 0.8f;
-          BarColor.b = 0.9f;
+          BarColor.r = 0.0f;
+          BarColor.g = 1.0f;
+          BarColor.b = 0.0f;
           BarColor.a = 1.0f;
         }
       }
@@ -375,6 +363,9 @@ void drawCells() {
   }
 }
 
+/**
+ * Draws the glue points in the OpenGL context.
+ */
 void drawGluePoints() {
   glPointSize(4.0f);
   glEnable(GL_POINT_SMOOTH);
@@ -426,6 +417,14 @@ void drawGluePoints() {
   glEnd();
 }
 
+/**
+ * Draws an arrow from point (x0, y0) to point (x1, y1) using OpenGL.
+ *
+ * @param x0  x-coordinate of the starting point
+ * @param y0  y-coordinate of the starting point
+ * @param x1  x-coordinate of the ending point
+ * @param y1  y-coordinate of the ending point
+ */
 void arrow(double x0, double y0, double x1, double y1) {
 
   double nx = x1 - x0;
@@ -453,6 +452,12 @@ void arrow(double x0, double y0, double x1, double y1) {
   glVertex2d(x1 - arrowSize * ex, y1 - arrowSize * ey);
 }
 
+/**
+ * Draws the force, action, and reaction on a given position.
+ *
+ * @param InterIt  Neighbor object representing the interaction
+ * @param pos      position where the force, action, and reaction will be drawn
+ */
 void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos) {
   vec2r T(-InterIt.n.y, InterIt.n.x);
   vec2r vf = InterIt.n * InterIt.fn + T * InterIt.ft;
@@ -466,8 +471,13 @@ void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos) {
   }
 }
 
+/**
+ * Draws the forces between cells.
+ */
 void drawForces() {
-  glLineWidth(1.0f);
+  glLineWidth(2.0f);
+  glShadeModel(GL_SMOOTH);
+  
   glBegin(GL_LINES);
   glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
 
@@ -513,22 +523,10 @@ void drawForces() {
   glEnd();
 }
 
-/// Robust and portable function to test if a file exists
-bool fileExists(const char *fileName) {
-  std::fstream fin;
-  fin.open(fileName, std::ios::in);
-  if (fin.is_open()) {
-    fin.close();
-    return true;
-  }
-  fin.close();
-  return false;
-}
-
 void try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
   char file_name[256];
   snprintf(file_name, 256, "conf%d", num);
-  if (fileExists(file_name)) {
+  if (fileTool::fileExists(file_name)) {
     std::cout << "Read " << file_name << std::endl;
     OKNum = num;
     CF.loadCONF(file_name);
@@ -548,22 +546,21 @@ int main(int argc, char *argv[]) {
     confNum = atoi(argv[1]);
   }
 
-  std::cout << "Current Configuration: ";
   try_to_readConf(confNum, Conf, confNum);
   Conf.findDisplayArea(1.15);
 
   // init color tables
   BarRedTable.setSize(128);
-  BarRedTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {255, 0, 0, 255}});
-  // BarRedTable.savePpm("BarRedTable.ppm");
+  BarRedTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {255, 0, 0, 255}});
+  //BarRedTable.savePpm("BarRedTable.ppm");
   BarBlueTable.setSize(128);
-  BarBlueTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {0, 0, 255, 255}});
-  // BarBlueTable.savePpm("BarBlueTable.ppm");
+  BarBlueTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {0, 0, 255, 255}});
+  //BarBlueTable.savePpm("BarBlueTable.ppm");
 
   NodeRedTable.setSize(128);
-  NodeRedTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {255, 0, 0, 255}});
+  NodeRedTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {255, 0, 0, 255}});
   NodeBlueTable.setSize(128);
-  NodeBlueTable.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {0, 0, 255, 255}});
+  NodeBlueTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {0, 0, 255, 255}});
 
   // ==== Init GLUT and create window
   glutInit(&argc, argv);

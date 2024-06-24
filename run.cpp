@@ -1,5 +1,5 @@
-#include <iostream>
 #include "Lhyphen.hpp"
+#include <iostream>
 
 // This is the command line interface (CLI) for using l-hyphen
 int main(int argc, char const *argv[]) {
@@ -17,7 +17,8 @@ int main(int argc, char const *argv[]) {
     S.loadCONF(argv[1]);
     S.head();
     S.integrate();
-  } catch (const std::exception& e) {
+		
+  } catch (const std::exception &e) {
     std::cerr << "An error occurred: " << e.what() << std::endl;
     return 1;
   }
@@ -26,7 +27,3 @@ int main(int argc, char const *argv[]) {
 
   return 0;
 }
-
-
-
-

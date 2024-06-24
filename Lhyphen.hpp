@@ -17,13 +17,11 @@
 #include <functional>
 
 #include "AABB_2D.hpp"
-#include "AABB.hpp"
 #include "ColorTable.hpp"
 #include "profiler.hpp"
 #include "svgtools.hpp"
 #include "vec2.hpp"
-#include "vec3.hpp"
-#include "linkCells.hpp"
+#include "linkCells2D.hpp"
 
 #include "Bar.hpp"
 #include "Cell.hpp"
@@ -31,6 +29,9 @@
 #include "Neighbor.hpp"
 #include "Node.hpp"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 /**
  *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
@@ -98,6 +99,8 @@ public:
   std::vector<CapturedNodes> capturedNodes; ///< noeuds capturés
 
   std::vector<size_t> followedCells; ///< cellules suivies
+
+  int nbThreads{1};
 
   // Limites de dessin pour les sorties SVG
   double xmin;

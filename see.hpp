@@ -12,6 +12,7 @@
 #include "null_size_t.hpp"
 
 #include "ColorTable.hpp"
+#include "fileTool.hpp"
 #include "triangulatePolygon.hpp"
 
 Lhyphen Conf;

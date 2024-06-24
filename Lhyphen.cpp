@@ -368,19 +368,19 @@ void Lhyphen::setNodeControlInBox(double t_xmin, double t_xmax, double t_ymin, d
 }
 
 /**
- *   Vérifie si un noeud (cell ci, node in) et une barre (cell cj, barre commancant par le noeud jn) sont
- *   proches. Selon le cas, la paire dans la liste de voisins est soit ajoutée soit retirée
+ *   Checks whether a node (cell ci, node in) and a bar (cell cj, bar starting with node jn) are close.
+ *   Depending on the case, the pair in the list of neighbours is either added or removed.
  *
- *   @param ci           cellule i
- *   @param cj           cellule j
- *   @param in           numero du noeud dans la cellule ci
- *   @param jn           numero du noeud du début d'une barre dans la cellule cj
- *   @param epsilonEnds  longueur à ignorer aux extremités de la barre
+ *   @param ci           cell i
+ *   @param cj           cell j
+ *   @param in           node number in cell ci
+ *   @param jn           node number at the start of a bar in cell cj
+ *   @param epsilonEnds  length to be ignored at the ends of the bar
  */
 void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds) {
-  // jn est vu ici comme l'indice d'une barre (noeud du debut en fait)
+  // jn is seen here as the index of a bar (start node in fact)
 
-  if (cells[cj].nodes[jn].nextNode == null_size_t) { // cas sans barre (une extrémité)
+  if (cells[cj].nodes[jn].nextNode == null_size_t) { // case without bar (bar-end)
 
     vec2r branch = cells[cj].nodes[jn].pos - cells[ci].nodes[in].pos;
     double sqrDist = norm2(branch);
@@ -388,7 +388,7 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
     bool isNear = sqrDist < sumR * sumR;
     cells[ci].insertOrRemove(ci, cj, in, jn, isNear);
 
-  } else { // la barre reliant jn à jnext existe
+  } else { // the bar linking jn to jnext exists
 
     size_t jnext = cells[cj].nodes[jn].nextNode;
     vec2r b = cells[ci].nodes[in].pos - cells[cj].nodes[jn].pos;
@@ -396,14 +396,14 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
     double u_length = u.normalize();
     double proj = b * u;
 
-    if (proj <= epsilonEnds) { // début de la barre
+    if (proj <= epsilonEnds) { // start of bar
 
       double sqrDist = norm2(b);
       double sumR = cells[ci].radius + cells[cj].radius + distVerlet;
       bool isNear = sqrDist < sumR * sumR;
       cells[ci].insertOrRemove(ci, cj, in, jn, isNear);
 
-    } else if (proj >= u_length - epsilonEnds) { // fin de la barre
+    } else if (proj >= u_length - epsilonEnds) { // end of bar
 
       b = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
       double sqrDist = norm2(b);
@@ -411,7 +411,7 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
       bool isNear = sqrDist < sumR * sumR;
       cells[ci].insertOrRemove(ci, cj, in, jn, isNear);
 
-    } else { // sur la barre
+    } else { // on the bar
 
       vec2r T(-u.y, u.x);
       double dist = fabs(b * T) - (cells[ci].radius + cells[cj].radius);
@@ -422,10 +422,9 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
 }
 
 /**
- *   Cette fonction permet de lire un fichier contenant une liste de positions x,y avec numéro
- *   de cellule. Peut importe les numéros du moment qu'ils sont différents pour chaque cellule.
- *   Il faut faire un pré-nettoyage pour qu'il y ait au moins 3 noeuds par cellule.
- *   Toutes les cellules sont fermées.
+ *   This function reads a file containing a list of x,y positions with cell numbers.
+ *   The numbers don't matter as long as they are different for each cell.
+ *   Pre-cleaning must be done so that there are at least 3 nodes per cell. All cells are closed.
  *
  *   @param name      name of the node file to read
  *   @param barWidth  width of the bar
@@ -441,8 +440,9 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
     double x, y;
     size_t id;
     bool operator<(const data &rhs) const {
-      if (id < rhs.id)
+      if (id < rhs.id) {
         return true;
+      }
       return false;
     }
   };
@@ -452,8 +452,9 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
   data D;
   while (file.good()) {
     file >> D.x >> D.y >> D.id;
-    if (file.eof())
+    if (file.eof()) {
       break;
+    }
     dataset.insert(D);
   }
 
@@ -469,8 +470,9 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
     }
     C.nodes.emplace_back(i.x, i.y);
   }
-  if (!C.nodes.empty())
+  if (!C.nodes.empty()) {
     cells.push_back(C);
+  }
 
   for (size_t i = 0; i < cells.size(); i++) {
     cells[i].reorderNodes();
@@ -481,7 +483,7 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
 }
 
 /**
- *  Met à jour la liste des voisins
+ *  Updates the list of neighbours
  *
  */
 void Lhyphen::updateNeighbors_brute_force() {
@@ -493,6 +495,7 @@ void Lhyphen::updateNeighbors_brute_force() {
     size_t jn;
   };
 
+  // Compute the expanded-AABB of each cell
   std::vector<AABB_2D> aabbs(cells.size());
   for (size_t ci = 0; ci < cells.size(); ci++) {
     aabbs[ci].set_single(cells[ci].nodes[0].pos);
@@ -502,8 +505,8 @@ void Lhyphen::updateNeighbors_brute_force() {
     aabbs[ci].enlarge(cells[ci].radius + 0.5 * distVerlet);
   }
 
+  // Find intersecting expanded-AABB
   std::vector<cellPair> cellPairs;
-
   for (size_t ci = 0; ci < cells.size(); ci++) {
     for (size_t cj = ci + 1; cj < cells.size(); cj++) {
 
@@ -522,6 +525,7 @@ void Lhyphen::updateNeighbors_brute_force() {
     }
   }
 
+  // Effectively builds the list of neighbours
   for (size_t ip = 0; ip < cellPairs.size(); ++ip) {
 
     size_t ci = cellPairs[ip].i;
@@ -538,6 +542,7 @@ void Lhyphen::updateNeighbors_brute_force() {
   }
 }
 
+// En cours de devel.
 void Lhyphen::updateNeighbors_linkCells() {
   START_TIMER("updateNeighbors_linkCells");
 
@@ -558,34 +563,25 @@ void Lhyphen::updateNeighbors_linkCells() {
 
   AABB_2D bigBox = aabbs[0];
   for (size_t ci = 1; ci < cells.size(); ci++) {
-    bigBox.enlarge(aabbs[ci]);
+    bigBox.merge(aabbs[ci]);
   }
 
-  AABB box3D;
-  box3D.min.set(bigBox.min.x, bigBox.min.y, 1.0);
-  box3D.max.set(bigBox.max.x, bigBox.max.y, 1.0);
-
-  vec3r cellMinSizes(linkCells_lx, linkCells_ly, 1.0);
-  linkCells lc(box3D, cellMinSizes);
+  vec2r subBoxSizes(linkCells_lx, linkCells_ly);
+  linkCells2D lc(bigBox, subBoxSizes);
   for (size_t ci = 0; ci < cells.size(); ci++) {
-    cells[ci].CellCenter();
-    vec3r pos(cells[ci].center.x, cells[ci].center.y, 0.5);
-
-    AABB aabb;
-    aabb.min.set(aabbs[ci].min.x, aabbs[ci].min.y, 1.0);
-    aabb.max.set(aabbs[ci].max.x, aabbs[ci].max.y, 1.0);
-    lc.add_body(ci, pos, aabb);
+    vec2r pos = aabbs[ci].getCenter();
+    lc.add_body(ci, pos, aabbs[ci]);
   }
 
   std::vector<cellPair> cellPairs;
 
-  AABB_Cell *cc, *cv;
+  AABB_2D_Cell *cc, *cv;
   for (size_t xc = 0; xc < lc.N.x; xc++) {
     for (size_t yc = 0; yc < lc.N.y; yc++) {
 
-      cc = &(lc.cells[xc][yc][0]);
+      cc = &(lc.cells[xc][yc]);
 
-      for (size_t v = 0; v < lc.cells[xc][yc][0].pcells.size(); v++) {
+      for (size_t v = 0; v < lc.cells[xc][yc].pcells.size(); v++) {
         cv = cc->pcells[v];
 
         for (size_t bi = 0; bi < cc->bodies.size(); bi++) {
@@ -593,8 +589,9 @@ void Lhyphen::updateNeighbors_linkCells() {
           for (size_t bj = 0; bj < cv->bodies.size(); bj++) {
             size_t cj = cv->bodies[bj];
 
-            if (cj <= ci)
+            if (cj <= ci) {
               continue;
+            }
 
             if (aabbs[ci].intersect(aabbs[cj])) {
               cellPair P;
@@ -618,7 +615,7 @@ void Lhyphen::updateNeighbors_linkCells() {
   cc = &(lc.oversized_bodies);
   for (size_t ix = 0; ix < lc.N.x; ++ix) {
     for (size_t iy = 0; iy < lc.N.y; ++iy) {
-      cv = &(lc.cells[ix][iy][0]);
+      cv = &(lc.cells[ix][iy]);
 
       for (size_t icc = 0; icc < cc->bodies.size(); ++icc) {
         size_t ci = cc->bodies[icc];
@@ -688,9 +685,9 @@ void Lhyphen::updateNeighbors_linkCells() {
 }
 
 /**
- *   Met un point de colle aux endroits où la distance est suffisement proche.
+ *   Put a dot of glue where the distance is close enough
  *
- *   @param epsilonDist  distance maximale
+ *   @param epsilonDist  maximum distance
  */
 void Lhyphen::glue(double epsilonDist) {
   updateNeighbors();
@@ -723,8 +720,10 @@ void Lhyphen::glue(double epsilonDist) {
         double u_length = u.normalize();
         double proj = b * u;
 
-        if (proj <= 0.0) {
+        // le collage sphere-sphere est desactivé car sinon ça fait trop de points de colle !!!
 
+        if (proj <= 0.0) {
+          /*
           double sqrDist = norm2(b);
           double sumR = cells[ci].radius + cells[cj].radius + epsilonDist;
           if (sqrDist - sumR * sumR < 0.0) {
@@ -732,9 +731,9 @@ void Lhyphen::glue(double epsilonDist) {
             Inter->fn_coh = 0.0;
             Inter->ft_coh = 0.0;
           }
-
+          */
         } else if (proj >= u_length) {
-
+          /*
           b = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
           double sqrDist = norm2(b);
           double sumR = cells[ci].radius + cells[cj].radius + epsilonDist;
@@ -743,7 +742,7 @@ void Lhyphen::glue(double epsilonDist) {
             Inter->fn_coh = 0.0;
             Inter->ft_coh = 0.0;
           }
-
+          */
         } else {
 
           vec2r T(-u.y, u.x);
@@ -759,10 +758,42 @@ void Lhyphen::glue(double epsilonDist) {
       }
     }
   }
+  
+  // on construit un vector de neighbors avec uniquement les points de colle
+  std::vector<Connect> connects;
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
+         ++InterIt) {
+      Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
+
+      if (Inter->glueState == 1) {
+        connects.push_back(Connect(ci, Inter->jc, Inter->in, Inter->jn, Inter));
+      }
+    }
+  }
+  
+  // on re-parcours les neighbors pour identifier les brothers (liens collés à mêmes cellules)
+  size_t cinfi, csupi;
+  size_t cinfj, csupj;
+  for (size_t i = 0; i < connects.size(); i++) {
+    cinfi = std::min(connects[i].ic, connects[i].jc);
+    csupi = std::max(connects[i].ic, connects[i].jc);
+    for (size_t j = 0; j < connects.size(); j++) {
+      if (i==j) {continue;}
+      cinfj = std::min(connects[j].ic, connects[j].jc);
+      csupj = std::max(connects[j].ic, connects[j].jc);
+      if (cinfi == cinfj && csupi == csupj) {
+        connects[j].woami->brother = connects[i].woami;
+        connects[i].woami->brother = connects[j].woami; 
+        break;
+      }
+    }
+  }
+  
 }
 
 /**
- *  Calcul des forces d'interaction (entre cellules)
+ *  Calculation of interaction forces (between cell-elements)
  *
  */
 void Lhyphen::computeInteractionForces() {
@@ -774,7 +805,7 @@ void Lhyphen::computeInteractionForces() {
     for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
          ++InterIt) {
 
-      // il faut convertir l'iterateur vers un set, car sinon on ne pourra pas modifier les valeurs.
+      // the iterator must be converted to a std::set, otherwise we won't be able to modify the values
       Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
 
       size_t cj = Inter->jc;
@@ -783,9 +814,9 @@ void Lhyphen::computeInteractionForces() {
 
       if (cells[cj].nodes[jn].nextNode == null_size_t) {
         // =============================================================================
-        // On est dans le cas où la barre dans cj n'existe pas.
-        // En d'autre terme, il s'agit d'une interaction entre un disque de ci
-        // et un disque de cj (qui correspond à une extrémité de barre)
+        // This is the case where the bar in cj does not exist.
+        // In other words, it's an interaction between a disk of ci and a disc of cj 
+        // (which corresponds to the end of a bar)
 
         vec2r branch = cells[cj].nodes[jn].pos - cells[ci].nodes[in].pos;
         double sqrDist = norm2(branch);
@@ -826,7 +857,7 @@ void Lhyphen::computeInteractionForces() {
 
       } else {
         // =============================================================================
-        // un disque (ci,in) avec une barre (cj, jn -> jnext)
+        // a disk (ci,in) interacts with a bar (cj, jn -> jnext)
 
         size_t jnext = cells[cj].nodes[jn].nextNode;
         // jnext est le numéro du noeud à la fin de la barre dans la cellule cj (jn c'est le début)
@@ -900,9 +931,9 @@ void Lhyphen::computeInteractionForces() {
             }
 
             if (Inter->glueState == 0)
-              Inter->fn -= fadh; // cette adhesion ne peut agir que si il n'y a pas de cohésion solide
+              Inter->fn -= fadh; // this adhesion can only act if there is no solid cohesion
 
-            // transfert des force vers les noeuds concernés
+            // force transfer to the relevant nodes
             vec2r finc = Inter->fn * Inter->n;
             cells[ci].nodes[in].force += finc;
             cells[cj].nodes[jnext].force -= finc;
@@ -934,6 +965,12 @@ void Lhyphen::computeInteractionForces() {
               Inter->fn_coh = 0.0;
               Inter->ft_coh = 0.0;
               Inter->glueState = 0;
+              if (Inter->brother != nullptr) {
+                //std::cout << "break mon frere!!\n";
+                Inter->brother->fn_coh = 0.0;
+                Inter->brother->ft_coh = 0.0;
+                Inter->brother->glueState = 0;
+              }
             } else {
               // transfert des force vers les noeuds concernés
               vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
@@ -944,7 +981,7 @@ void Lhyphen::computeInteractionForces() {
 
         } else { // ====================== sur la barre
 
-          vec2r urot(-u.y, u.x); // on tourne u de 90°
+          vec2r urot(-u.y, u.x); // turn 90°
           double wend = 0.0;
           double wbeg = 0.0;
           double sumR = cells[ci].radius + cells[cj].radius;
@@ -957,7 +994,7 @@ void Lhyphen::computeInteractionForces() {
             if (dist < 0.0) {
               Inter->n *= -1.0;
             }
-            // ici le vecteur normal est orienté de la barre vers le disque
+            // here the normal vector is oriented from the bar to the disc
 
             Inter->fn = -kn * dn;
             if (adaptativeStiffness == 1)
@@ -999,7 +1036,7 @@ void Lhyphen::computeInteractionForces() {
 
           if (Inter->glueState == 1) {
 
-            // si on se trouve dans un cas sans contact, certaines variables n'ont pas été calculés
+            // if there is no contact, some variables have not been calculated yet
             if (Inter->contactState == 0) {
               Inter->n = urot;
               if (dist < 0.0) {
@@ -1025,6 +1062,11 @@ void Lhyphen::computeInteractionForces() {
               Inter->fn_coh = 0.0;
               Inter->ft_coh = 0.0;
               Inter->glueState = 0;
+              if (Inter->brother != nullptr) {
+                Inter->brother->fn_coh = 0.0;
+                Inter->brother->ft_coh = 0.0;
+                Inter->brother->glueState = 0;
+              }
             } else {
               // transfert des force vers les noeuds concernés
               vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
@@ -1042,14 +1084,20 @@ void Lhyphen::computeInteractionForces() {
 }
 
 /**
- *   Calcul des forces internes aux cellules
+ *   Calculation of internal cell forces
  */
 void Lhyphen::computeNodeForces() {
   START_TIMER("computeNodeForces");
 
+#ifdef _OPENMP
+  int chunk_size = (int)cells.size() / nbThreads;
+#endif
+
   // Forces normales dans les barres
   {
     START_TIMER("Bar_forces");
+
+#pragma omp parallel for schedule(static, chunk_size)
     for (size_t c = 0; c < cells.size(); ++c) {
       for (size_t b = 0; b < cells[c].bars.size(); ++b) {
         size_t i = cells[c].bars[b].i;
@@ -1077,6 +1125,8 @@ void Lhyphen::computeNodeForces() {
   // en imposant une force à chaque extrémité de barre
   {
     START_TIMER("Node_moments");
+
+#pragma omp parallel for schedule(static, chunk_size)
     for (size_t c = 0; c < cells.size(); ++c) {
       for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
 
@@ -1123,11 +1173,15 @@ void Lhyphen::computeNodeForces() {
     }
   }
 
-  // viscosité globale
-  if (globalViscosity > 0.0) {
-    for (size_t c = 0; c < cells.size(); c++) {
-      for (size_t n = 0; n < cells[c].nodes.size(); n++) {
-        cells[c].nodes[n].force -= globalViscosity * cells[c].nodes[n].vel;
+  {
+    START_TIMER("globalViscosity");
+    // viscosité globale
+    if (globalViscosity > 0.0) {
+#pragma omp parallel for schedule(static, chunk_size)
+      for (size_t c = 0; c < cells.size(); c++) {
+        for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+          cells[c].nodes[n].force -= globalViscosity * cells[c].nodes[n].vel;
+        }
       }
     }
   }
@@ -1140,6 +1194,11 @@ void Lhyphen::computeNodeForces() {
 void Lhyphen::NodeAccelerations() {
   START_TIMER("NodeAccelerations");
 
+#ifdef _OPENMP
+  int chunk_size = (int)cells.size() / nbThreads;
+#endif
+
+#pragma omp parallel for schedule(static, chunk_size)
   for (size_t c = 0; c < cells.size(); ++c) {
     for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
       cells[c].nodes[n].acc = gravity;
@@ -1162,6 +1221,7 @@ void Lhyphen::NodeAccelerations() {
   else if (cellContent == CELL_CONTAIN_LIQUID)
     InternalLiquidPressureForce();
 
+#pragma omp parallel for schedule(static, chunk_size)
   for (size_t c = 0; c < cells.size(); ++c) {
     for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
       cells[c].nodes[n].acc += cells[c].nodes[n].force / cells[c].nodes[n].mass;
@@ -1170,12 +1230,17 @@ void Lhyphen::NodeAccelerations() {
 }
 
 /**
- *  Un pas en velocity verlet
+ *  One step (velocity verlet scheme)
  *
  */
 void Lhyphen::SingleStep() {
   START_TIMER("SingleStep");
 
+#ifdef _OPENMP
+  int chunk_size = (int)cells.size() / nbThreads;
+#endif
+
+#pragma omp parallel for schedule(static, chunk_size)
   for (size_t c = 0; c < cells.size(); ++c) {
     for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
       if (cells[c].nodes[n].ictrl == null_size_t) {
@@ -1211,6 +1276,7 @@ void Lhyphen::SingleStep() {
 
   NodeAccelerations();
 
+#pragma omp parallel for schedule(static, chunk_size)
   for (size_t c = 0; c < cells.size(); ++c) {
     for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
       if (cells[c].nodes[n].ictrl == null_size_t) {
@@ -1229,6 +1295,7 @@ void Lhyphen::SingleStep() {
 
   // une dissipation purement numérique
   if (numericalDissipation > 0.0) {
+#pragma omp parallel for schedule(static, chunk_size)
     for (size_t c = 0; c < cells.size(); ++c) {
       for (size_t n = 0; n < cells[c].nodes.size(); ++n) {
         cells[c].nodes[n].vel *= (1.0 - numericalDissipation);
@@ -1400,6 +1467,17 @@ void Lhyphen::loadCONF(const char *fname) {
       getline(file, token); // ignore the rest of the current line
       file >> token;        // next token
       continue;
+    } else if (token == "nbThreads") {
+#ifdef _OPENMP
+      nbThreads = 1;
+      file >> nbThreads;
+      omp_set_num_threads(nbThreads);
+      std::cout << "OpenMP acceleration (Number of threads = " << nbThreads << ")\n";
+#else
+      std::cout << "No multithreading\n";
+      file >> nbThreads;
+      nbThreads = 1;
+#endif
     } else if (token == "gravity") {
       file >> gravity;
     } else if (token == "numericalDissipation") {
@@ -1639,9 +1717,9 @@ void Lhyphen::initCellInitialSurfaces() {
 }
 
 /**
- *  Trouver les limites de la zone dessinée dans les fichiers svg
+ *  Find the boundaries of the area drawn in the svg files
  *
- *  @param factor facteur multiplicateur
+ *  @param factor multiplying size-factor
  */
 void Lhyphen::findDisplayArea(double factor) {
   if (cells.empty()) {
@@ -1682,7 +1760,7 @@ void Lhyphen::findDisplayArea(double factor) {
 }
 
 /**
- *   Fonction très basique pour dessiner les cellules avec des lignes bleues,
+ *   Very basic function for drawing cells with blue lines,
  *   TODO: pour d'autre sorties graphiques, on verra après :)
  *
  *   @param num         numero du fichier

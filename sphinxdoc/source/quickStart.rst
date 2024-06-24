@@ -58,7 +58,7 @@ Running a simulation
 
 To run a simulation, a configuration file has to be written. The format of such a file is described in the section Syntax for conf-files. We show here a simple example simulating a sphere bouncing on a plan.
 
-.. code-block:: text
+.. code-block:: python
    :caption: input.txt
    
    # SIMULATION INPUTS ===================================================
