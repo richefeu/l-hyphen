@@ -72,6 +72,9 @@ void Cell::insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEA
   }
 }
 
+
+
+
 /**
  *  Ajoute des barres entre les noeuds et défini leurs longueurs initiales
  *  ainsi que les angles initaux entre les barres adjacentes.

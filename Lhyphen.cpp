@@ -64,7 +64,7 @@ void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_
 }
 
 /**
- *  Ajoute une boite à partir de deux points
+ *  Ajoute une cellule-boite à partir de deux points
  *
  *  @param h  les deux points qui definissent les dimensions extérieures de la boite
  *  @param p  les propriétés mécaniques
@@ -146,10 +146,11 @@ void Lhyphen::addRegularPolygonalCellsOnTriangularGrid(int nx, int ny, double ho
       addRegularPolygonalCell(h, p);
     }
     odd = 1 - odd;
-    if (odd == 1)
+    if (odd == 1) {
       xshift = 0.5 * horizontalDistance;
-    else
+    } else {
       xshift = 0.0;
+    }
   }
 }
 
@@ -211,6 +212,14 @@ void Lhyphen::setTimeStep(double t_dt) {
   dt2_2 = dt_2 * dt;
 }
 
+/**
+ * Sets the cell wall densities for all cells in the Lhyphen.
+ *
+ * @param rho The density of the cell walls.
+ * @param thickness The thickness of the cell walls.
+ *
+ * @throws None.
+ */
 void Lhyphen::setCellWallDensities(double rho, double thickness) {
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
@@ -277,7 +286,7 @@ void Lhyphen::setNodeMasses(double nodeMass) {
 }
 
 /**
- *   Set the glue properties for all neighbors in the cells.
+ *   Set the same glue properties for all interactions.
  *
  *   @param kn_coh      cohesion normal stiffness
  *   @param kt_coh      cohesion tangential stiffness
@@ -299,6 +308,28 @@ void Lhyphen::setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_
         Inter->fn_coh_max = fn_coh_max;
         Inter->ft_coh_max = ft_coh_max;
         Inter->yieldPower = yieldPower;
+      }
+    }
+  }
+}
+
+/**
+ *   Set the same Gc glue properties for all interactions.
+ *
+ *   @param kn_coh      cohesion normal stiffness
+ *   @param kt_coh      cohesion tangential stiffness
+ *   @param Gc          fracture energy (by unit length)
+ */
+void Lhyphen::setGcGlueSameProperties(double kn_coh, double kt_coh, double Gc) {
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
+         ++InterIt) {
+
+      Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
+      if (Inter->glueState == 2) {
+        Inter->kn_coh = kn_coh;
+        Inter->kt_coh = kt_coh;
+        Inter->Gc = Gc;
       }
     }
   }
@@ -638,9 +669,9 @@ void Lhyphen::updateNeighbors_linkCells() {
             }
           }
         } // jcv
-      }   // icc
-    }     // iy
-  }       // ix
+      } // icc
+    } // iy
+  } // ix
 
   // Now we test oversized vs oversized
   cc = &(lc.oversized_bodies);
@@ -666,7 +697,7 @@ void Lhyphen::updateNeighbors_linkCells() {
         }
       }
     } // jcv
-  }   // icc
+  } // icc
 
   for (size_t ip = 0; ip < cellPairs.size(); ++ip) {
 
@@ -689,7 +720,7 @@ void Lhyphen::updateNeighbors_linkCells() {
  *
  *   @param epsilonDist  maximum distance
  */
-void Lhyphen::glue(double epsilonDist) {
+void Lhyphen::glue(double epsilonDist, int modelGc) {
   updateNeighbors();
 
   for (size_t ci = 0; ci < cells.size(); ci++) {
@@ -707,7 +738,7 @@ void Lhyphen::glue(double epsilonDist) {
         double sqrDist = norm2(branch);
         double sumR = cells[ci].radius + cells[cj].radius + epsilonDist;
         if (sqrDist - sumR * sumR < 0.0) {
-          Inter->glueState = 1;
+          Inter->glueState = modelGc;
           Inter->fn_coh = 0.0;
           Inter->ft_coh = 0.0;
         }
@@ -722,27 +753,27 @@ void Lhyphen::glue(double epsilonDist) {
 
         // le collage sphere-sphere est desactivé car sinon ça fait trop de points de colle !!!
 
-        if (proj <= 0.0) {
-          /*
+        if (proj < 0.0) {
+
           double sqrDist = norm2(b);
           double sumR = cells[ci].radius + cells[cj].radius + epsilonDist;
           if (sqrDist - sumR * sumR < 0.0) {
-            Inter->glueState = 1;
+            Inter->glueState = modelGc;
             Inter->fn_coh = 0.0;
             Inter->ft_coh = 0.0;
           }
-          */
-        } else if (proj >= u_length) {
-          /*
+
+        } else if (proj > u_length) {
+
           b = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
           double sqrDist = norm2(b);
           double sumR = cells[ci].radius + cells[cj].radius + epsilonDist;
           if (sqrDist - sumR * sumR < 0.0) {
-            Inter->glueState = 1;
+            Inter->glueState = modelGc;
             Inter->fn_coh = 0.0;
             Inter->ft_coh = 0.0;
           }
-          */
+
         } else {
 
           vec2r T(-u.y, u.x);
@@ -750,46 +781,56 @@ void Lhyphen::glue(double epsilonDist) {
           double dist = b * T; // dot product
           double dn = fabs(dist) - sumR;
           if (dn < epsilonDist) {
-            Inter->glueState = 1;
+            Inter->glueState = modelGc;
             Inter->fn_coh = 0.0;
             Inter->ft_coh = 0.0;
           }
-        }
+        } // if proj
       }
     }
   }
-  
-  // on construit un vector de neighbors avec uniquement les points de colle
-  std::vector<Connect> connects;
-  for (size_t ci = 0; ci < cells.size(); ci++) {
-    for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
-         ++InterIt) {
-      Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
 
-      if (Inter->glueState == 1) {
-        connects.push_back(Connect(ci, Inter->jc, Inter->in, Inter->jn, Inter));
-      }
+  associateGlue();
+}
+
+int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos) {
+  if (cells[cj].nodes[jn].nextNode == null_size_t) { // This is the case where the bar in cj does not exist.
+
+    vec2r b = cells[cj].nodes[jn].pos - cells[ci].nodes[in].pos;
+    b *= (cells[ci].radius / cells[ci].radius + cells[cj].radius);
+    pos = cells[cj].nodes[jn].pos + b;
+    return 0;
+
+  } else { // a disk (ci,in) interacts with a bar (cj, jn -> jnext)
+
+    size_t jnext = cells[cj].nodes[jn].nextNode;
+    // jnext est le numéro du noeud à la fin de la barre dans la cellule cj (jn c'est le début)
+    vec2r b = cells[ci].nodes[in].pos - cells[cj].nodes[jn].pos;
+    vec2r u = cells[cj].nodes[jnext].pos - cells[cj].nodes[jn].pos;
+    double u_length = u.normalize();
+    double proj = b * u;
+    double fact = cells[cj].radius / (cells[ci].radius + cells[cj].radius);
+
+    if (proj <= 0.0) { // ====================== disque j du début
+
+      vec2r ut = cells[ci].nodes[in].pos - cells[cj].nodes[jn].pos;
+      pos = cells[cj].nodes[jn].pos + fact * ut;
+      return 1;
+
+    } else if (proj >= u_length) { // ====================== disque jnext (de fin)
+
+      vec2r ut = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
+      pos = cells[cj].nodes[jn].pos + u_length * u + fact * ut;
+      return 2;
+
+    } else { // ====================== sur la barre
+
+      pos = cells[cj].nodes[jn].pos + proj * u;
+      vec2r ut = cells[ci].nodes[in].pos - (cells[cj].nodes[jn].pos + proj * u);
+      pos += fact * ut;
+      return 3;
     }
   }
-  
-  // on re-parcours les neighbors pour identifier les brothers (liens collés à mêmes cellules)
-  size_t cinfi, csupi;
-  size_t cinfj, csupj;
-  for (size_t i = 0; i < connects.size(); i++) {
-    cinfi = std::min(connects[i].ic, connects[i].jc);
-    csupi = std::max(connects[i].ic, connects[i].jc);
-    for (size_t j = 0; j < connects.size(); j++) {
-      if (i==j) {continue;}
-      cinfj = std::min(connects[j].ic, connects[j].jc);
-      csupj = std::max(connects[j].ic, connects[j].jc);
-      if (cinfi == cinfj && csupi == csupj) {
-        connects[j].woami->brother = connects[i].woami;
-        connects[i].woami->brother = connects[j].woami; 
-        break;
-      }
-    }
-  }
-  
 }
 
 /**
@@ -815,7 +856,7 @@ void Lhyphen::computeInteractionForces() {
       if (cells[cj].nodes[jn].nextNode == null_size_t) {
         // =============================================================================
         // This is the case where the bar in cj does not exist.
-        // In other words, it's an interaction between a disk of ci and a disc of cj 
+        // In other words, it's an interaction between a disk of ci and a disc of cj
         // (which corresponds to the end of a bar)
 
         vec2r branch = cells[cj].nodes[jn].pos - cells[ci].nodes[in].pos;
@@ -829,10 +870,11 @@ void Lhyphen::computeInteractionForces() {
           Inter->fn = -kn * dn;
           if (adaptativeStiffness == 1)
             Inter->fn *= sumR / (sumR + dn);
-          if (Inter->glueState == 0)
+          if (Inter->glueState == 0) {
             Inter->fn -= fadh;
+          }
         } else {
-          if (Inter->glueState == 1) {
+          if (Inter->glueState > 0) {
             double b_length = sqrt(sqrDist);
             Inter->n = branch / b_length;
           }
@@ -840,7 +882,7 @@ void Lhyphen::computeInteractionForces() {
           Inter->ft = 0.0;
         }
 
-        if (Inter->glueState == 1) {
+        if (Inter->glueState > 0) {
           // ...
           vrel = cells[cj].nodes[jn].vel - cells[ci].nodes[in].vel;
           // vec2r T(-n.y, n.x);
@@ -900,7 +942,7 @@ void Lhyphen::computeInteractionForces() {
             Inter->ft = 0.0;
           }
 
-          if (Inter->glueState == 1) {
+          if (Inter->glueState > 0) {
             // TODO
           }
 
@@ -966,7 +1008,6 @@ void Lhyphen::computeInteractionForces() {
               Inter->ft_coh = 0.0;
               Inter->glueState = 0;
               if (Inter->brother != nullptr) {
-                //std::cout << "break mon frere!!\n";
                 Inter->brother->fn_coh = 0.0;
                 Inter->brother->ft_coh = 0.0;
                 Inter->brother->glueState = 0;
@@ -977,6 +1018,8 @@ void Lhyphen::computeInteractionForces() {
               cells[ci].nodes[in].force += finc;
               cells[cj].nodes[jnext].force -= finc;
             }
+          } else if (Inter->glueState == 2) {
+            // TODO
           }
 
         } else { // ====================== sur la barre
@@ -1075,12 +1118,78 @@ void Lhyphen::computeInteractionForces() {
               cells[cj].nodes[jn].force -= wbeg * finc;
               cells[cj].nodes[jnext].force -= wend * finc;
             }
-          } // fin glueState
-        }   // fin "sur la barre"
+          } else if (Inter->glueState == 2) { // model rupture Gc
+
+            // if there is no contact, some variables have not been calculated yet
+            if (Inter->contactState == 0) {
+              Inter->n = urot;
+              if (dist < 0.0) {
+                Inter->n *= -1.0;
+              }
+
+              wend = proj / u_length;
+              wbeg = 1.0 - wend;
+              vrel = cells[ci].nodes[in].vel - (wbeg * cells[cj].nodes[jn].vel + wend * cells[cj].nodes[jnext].vel);
+              T.set(-Inter->n.y, Inter->n.x);
+            }
+
+            Inter->fn_coh += -Inter->kn_coh * vrel * Inter->n * dt;
+            Inter->ft_coh += -Inter->kt_coh * vrel * T * dt;
+
+            if (Inter->fn_coh > 0.0)
+              Inter->fn_coh = 0.0;
+
+            // rupture
+            double G = 0.0;
+            // if (Inter->fn < 0.0) { // heaviside(dn)
+            G += Inter->fn * Inter->fn / Inter->kn_coh;
+            //}
+            G += Inter->ft * Inter->ft / Inter->kt_coh;
+
+            if (Inter->brother != nullptr) {
+
+              // if (Inter->brother->fn < 0.0) { // heaviside(dn)
+              G += Inter->brother->fn * Inter->brother->fn / Inter->brother->kn_coh;
+              //}
+              G += Inter->brother->ft * Inter->brother->ft / Inter->brother->kt_coh;
+
+              /*vec2r p1 = cells[ci].nodes[in].pos + Inter->n * cells[ci].radius;
+              vec2r p2 =
+                  cells[Inter->brother->ic].nodes[Inter->brother->in].pos - Inter->n * cells[Inter->brother->ic].radius;
+              double l = (p2 - p1).length();
+              */
+              double l = 1.0;
+              G /= 2.0 * l;
+
+              if (G > Inter->Gc) {
+                // cassage
+                Inter->fn_coh = 0.0;
+                Inter->ft_coh = 0.0;
+                Inter->glueState = 0;
+                Inter->brother->fn_coh = 0.0;
+                Inter->brother->ft_coh = 0.0;
+                Inter->brother->glueState = 0;
+              } else {
+                // transfert des force vers les noeuds concernés
+                vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
+                cells[ci].nodes[in].force += finc;
+
+                cells[cj].nodes[jn].force -= wbeg * finc;
+                cells[cj].nodes[jnext].force -= wend * finc;
+              }
+
+            } else {
+              // cassage
+              Inter->fn_coh = 0.0;
+              Inter->ft_coh = 0.0;
+              Inter->glueState = 0;
+            }
+          }
+        } // fin "sur la barre"
       }
 
     } // boucle sur les voisins dans ci
-  }   // boucle sur les cellules ci
+  } // boucle sur les cellules ci
 }
 
 /**
@@ -1431,9 +1540,12 @@ void Lhyphen::saveCONF(const char *fname) {
 
       file << InterIt->ic << ' ' << InterIt->jc << ' ' << InterIt->in << ' ' << InterIt->jn << ' ' << InterIt->n << ' '
            << InterIt->contactState << ' ' << InterIt->fn << ' ' << InterIt->ft << ' ' << InterIt->glueState << ' ';
-      if (InterIt->glueState > 0) {
+      if (InterIt->glueState == 1) {
         file << InterIt->fn_coh << ' ' << InterIt->ft_coh << ' ' << InterIt->kn_coh << ' ' << InterIt->kt_coh << ' '
              << InterIt->fn_coh_max << ' ' << InterIt->ft_coh_max << ' ' << InterIt->yieldPower;
+      } else if (InterIt->glueState == 2) {
+        file << InterIt->fn_coh << ' ' << InterIt->ft_coh << ' ' << InterIt->kn_coh << ' ' << InterIt->kt_coh << ' '
+             << InterIt->Gc;
       }
       file << '\n';
     }
@@ -1527,6 +1639,12 @@ void Lhyphen::loadCONF(const char *fname) {
       double yieldPower;
       file >> kn_coh >> kt_coh >> fn_coh_max >> ft_coh_max >> yieldPower;
       setGlueSameProperties(kn_coh, kt_coh, fn_coh_max, ft_coh_max, yieldPower);
+    } else if (token == "setGcGlueSameProperties") {
+      double kn_coh;
+      double kt_coh;
+      double Gc;
+      file >> kn_coh >> kt_coh >> Gc;
+      setGcGlueSameProperties(kn_coh, kt_coh, Gc);
     } else if (token == "mu") {
       file >> mu;
     } else if (token == "fadh") {
@@ -1567,8 +1685,10 @@ void Lhyphen::loadCONF(const char *fname) {
         for (size_t k = 0; k < nbNeighbors; k++) {
           Neighbor K(0, 0, 0, 0);
           file >> K.ic >> K.jc >> K.in >> K.jn >> K.n >> K.contactState >> K.fn >> K.ft >> K.glueState;
-          if (K.glueState > 0) {
+          if (K.glueState == 1) {
             file >> K.fn_coh >> K.ft_coh >> K.kn_coh >> K.kt_coh >> K.fn_coh_max >> K.ft_coh_max >> K.yieldPower;
+          } else if (K.glueState == 2) {
+            file >> K.fn_coh >> K.ft_coh >> K.kn_coh >> K.kt_coh >> K.Gc;
           }
           cells[ci].neighbors.insert(K);
         }
@@ -1602,7 +1722,11 @@ void Lhyphen::loadCONF(const char *fname) {
     } else if (token == "glue") {
       double d;
       file >> d;
-      glue(d);
+      glue(d, 1);
+    } else if (token == "GcGlue") {
+      double d;
+      file >> d;
+      glue(d, 2);
     } else if (token == "setCellMasses") {
       double mass;
       file >> mass;
@@ -1698,6 +1822,99 @@ void Lhyphen::loadCONF(const char *fname) {
   }
 
   initCellInitialSurfaces();
+  associateGlue();
+}
+
+void Lhyphen::associateGlue() {
+
+  struct Connect {
+    size_t ic; // indice de la première cellule dans Sample::cells
+    size_t jc; // indice de la seconde cellule dans Sample::cells (ic <= jc)
+    size_t in; // indice du noeud de la première cellule dans Sample::cells[ic]
+    size_t jn; // indice du noeud de la seconde cellule dans Sample::cells[jc]
+    Neighbor *woami{nullptr};
+    Connect(size_t t_ic, size_t t_jc, size_t t_in, size_t t_jn, Neighbor *t_woami)
+        : ic(t_ic), jc(t_jc), in(t_in), jn(t_jn) {
+      woami = t_woami;
+    }
+  };
+
+  // on construit un vector de neighbors avec uniquement les points de colle
+  std::vector<Connect> connects;
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
+         ++InterIt) {
+      Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
+
+      if (Inter->glueState > 0) {
+        connects.push_back(Connect(ci, Inter->jc, Inter->in, Inter->jn, Inter));
+      }
+    }
+  }
+
+  // on réduit les plan collés à 2 points les plus éloignées et on calcul la distance (= surface collée)
+  std::map<std::pair<size_t, size_t>, std::vector<size_t>> planMap;
+  for (size_t i = 0; i < connects.size(); i++) {
+    size_t cinf = std::min(connects[i].ic, connects[i].jc);
+    size_t csup = std::max(connects[i].ic, connects[i].jc);
+    std::pair<size_t, size_t> p = std::make_pair(cinf, csup);
+    planMap[p].push_back(i);
+  }
+
+  for (const auto &elem : planMap) {
+    // std::cout << elem.second.size() << std::endl;
+    double dmax = -1.0;
+    size_t ii = 0, jj = 0;
+    for (size_t ei = 0; ei < elem.second.size(); ei++) {
+      for (size_t ej = ei + 1; ej < elem.second.size(); ej++) {
+
+        vec2r p1;
+        getPosition(connects[elem.second[ei]].ic, connects[elem.second[ei]].jc, connects[elem.second[ei]].in,
+                    connects[elem.second[ei]].jn, p1);
+        vec2r p2;
+        getPosition(connects[elem.second[ej]].ic, connects[elem.second[ej]].jc, connects[elem.second[ej]].in,
+                    connects[elem.second[ej]].jn, p2);
+
+        double dst = (p2 - p1).length();
+        if (dst > dmax) {
+          ii = elem.second[ei];
+          jj = elem.second[ej];
+          dmax = dst;
+          //std::cout << "ii = " << ii << std::endl;
+          //std::cout << "jj = " << jj << std::endl;
+        }
+      }
+    }
+    
+    for (size_t e = 0; e < elem.second.size(); e++) {
+      connects[elem.second[e]].woami->glueState = 0;
+    }
+    connects[ii].woami->glueState = 1;
+    connects[jj].woami->glueState = 1;
+    connects[ii].woami->length = dmax;
+    connects[jj].woami->length = dmax;
+    
+  }
+
+  // on re-parcours les neighbors pour identifier les brothers (liens collés aux mêmes cellules)
+  size_t cinfi, csupi;
+  size_t cinfj, csupj;
+  for (size_t i = 0; i < connects.size(); i++) {
+    cinfi = std::min(connects[i].ic, connects[i].jc);
+    csupi = std::max(connects[i].ic, connects[i].jc);
+    for (size_t j = 0; j < connects.size(); j++) {
+      if (i == j) {
+        continue;
+      }
+      cinfj = std::min(connects[j].ic, connects[j].jc);
+      csupj = std::max(connects[j].ic, connects[j].jc);
+      if (cinfi == cinfj && csupi == csupj) {
+        connects[j].woami->brother = connects[i].woami;
+        connects[i].woami->brother = connects[j].woami;
+        break;
+      }
+    }
+  }
 }
 
 void Lhyphen::loadCONF(int ifile) {

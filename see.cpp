@@ -19,7 +19,6 @@ void printHelp() {
   cout << endl;
 }
 
-
 void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   switch (Key) {
 
@@ -213,8 +212,9 @@ void reshape(int w, int h) {
  * @param NodeColor The color of the nodes
  */
 void drawBar(size_t ci, size_t i, size_t j, double radius, color4f &BarColor, color4f &NodeColor) {
-  if (i == null_size_t || j == null_size_t)
+  if (i == null_size_t || j == null_size_t) {
     return;
+  }
 
   double xi = Conf.cells[ci].nodes[i].pos.x;
   double yi = Conf.cells[ci].nodes[i].pos.y;
@@ -230,6 +230,9 @@ void drawBar(size_t ci, size_t i, size_t j, double radius, color4f &BarColor, co
   double tyij = nxij;
 
   glColor4f(BarColor.r, BarColor.g, BarColor.b, 1.0f);
+  glLineWidth(2.0f);
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
 
   glBegin(GL_POLYGON);
   glVertex2d(xi - radius * txij, yi - radius * tyij);
@@ -276,9 +279,9 @@ void drawPressure() {
   pTable.setSwap(true);
   pTable.setMinMax((float)pmin, (float)pmax);
   // std::cout << "pmax = " << pmax << '\n';
-	std::cout << "pmin = " << pmin << '\n';
-	std::cout << "pmax = " << pmax << '\n';
-  //pTable.Rebuild();
+  std::cout << "pmin = " << pmin << '\n';
+  std::cout << "pmax = " << pmax << '\n';
+  // pTable.Rebuild();
 
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
@@ -289,7 +292,7 @@ void drawPressure() {
 
     pTable.getColor4f((float)Conf.cells[i].p_int, &col);
     glColor3f(col.r, col.g, col.b);
-      
+
     std::vector<vec2r> contour;
     for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
       contour.push_back(Conf.cells[i].nodes[n].pos);
@@ -308,7 +311,6 @@ void drawPressure() {
     }
     glEnd();
   }
-
 }
 
 /**
@@ -316,7 +318,7 @@ void drawPressure() {
  */
 void drawCells() {
   glLineWidth(2.0f);
-  glShadeModel(GL_SMOOTH);
+  //glShadeModel(GL_SMOOTH);
 
   color4f BarColor, NodeColor;
   BarColor.r = NodeColor.r = 0.0f;
@@ -374,6 +376,34 @@ void drawGluePoints() {
   glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
   glBegin(GL_POINTS);
 
+  vec2r pos;
+  for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
+    for (std::set<Neighbor>::iterator InterIt = Conf.cells[ci].neighbors.begin();
+         InterIt != Conf.cells[ci].neighbors.end(); ++InterIt) {
+      if (InterIt->glueState > 0) {
+        size_t cj = InterIt->jc;
+        size_t in = InterIt->in;
+        size_t jn = InterIt->jn;
+        int type = Conf.getPosition(ci, cj, in, jn, pos);
+        if (type == 0) {
+          glColor3f(0.5f,0.5f,0.5f);
+        } else if (type == 1) {
+          glPointSize(10.0f);
+          glColor3f(1.f,0.f,0.f);
+        } else if (type == 2) {
+          glPointSize(10.0f);
+          glColor3f(1.f,0.f,0.f);
+        } else if (type == 3) {
+          glColor3f(0.f,0.f,1.f);
+        }
+        glVertex2d(pos.x, pos.y);
+      }
+    
+    }
+  }
+
+
+  /*
   for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
     for (std::set<Neighbor>::iterator InterIt = Conf.cells[ci].neighbors.begin();
          InterIt != Conf.cells[ci].neighbors.end(); ++InterIt) {
@@ -399,19 +429,53 @@ void drawGluePoints() {
           if (proj <= 0.0) {
             vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
             vec2r pos = Conf.cells[cj].nodes[jn].pos + fact * ut;
+            glColor3f(1.f,0.f,0.f);
             glVertex2d(pos.x, pos.y);
           } else if (proj >= u_length) {
             vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jnext].pos;
             vec2r pos = Conf.cells[cj].nodes[jn].pos + u_length * u + fact * ut;
+            glColor3f(0.f,1.f,0.f);
             glVertex2d(pos.x, pos.y);
           } else {
             vec2r pos = Conf.cells[cj].nodes[jn].pos + proj * u;
             vec2r ut = Conf.cells[ci].nodes[in].pos - (Conf.cells[cj].nodes[jn].pos + proj * u);
             pos += fact * ut;
+           
+            if (InterIt->brother != nullptr) {
+               glColor3f(0.f,0.f,1.f);
+            } else {
+               glColor3f(0.5f,0.5f,0.5f);
+            }
+            
+            
             glVertex2d(pos.x, pos.y);
           }
+          
+          
         }
       }
+    }
+  }
+  */
+  
+  glEnd();
+  
+  
+  glBegin(GL_LINES);
+  glColor3f(0.5f,0.5f,0.5f);
+  vec2r pos1, pos2;
+  for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
+    for (std::set<Neighbor>::iterator InterIt = Conf.cells[ci].neighbors.begin();
+         InterIt != Conf.cells[ci].neighbors.end(); ++InterIt) {
+      if (InterIt->glueState > 0 && InterIt->brother != nullptr) {
+        
+        Conf.getPosition(InterIt->ic, InterIt->jc, InterIt->in, InterIt->jn, pos1);
+        Conf.getPosition(InterIt->brother->ic, InterIt->brother->jc, InterIt->brother->in, InterIt->brother->jn, pos2);
+        
+        glVertex2d(pos1.x, pos1.y);
+        glVertex2d(pos2.x, pos2.y);
+      }
+    
     }
   }
   glEnd();
@@ -477,7 +541,7 @@ void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos) {
 void drawForces() {
   glLineWidth(2.0f);
   glShadeModel(GL_SMOOTH);
-  
+
   glBegin(GL_LINES);
   glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
 
@@ -552,10 +616,10 @@ int main(int argc, char *argv[]) {
   // init color tables
   BarRedTable.setSize(128);
   BarRedTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {255, 0, 0, 255}});
-  //BarRedTable.savePpm("BarRedTable.ppm");
+  // BarRedTable.savePpm("BarRedTable.ppm");
   BarBlueTable.setSize(128);
   BarBlueTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {0, 0, 255, 255}});
-  //BarBlueTable.savePpm("BarBlueTable.ppm");
+  // BarBlueTable.savePpm("BarBlueTable.ppm");
 
   NodeRedTable.setSize(128);
   NodeRedTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {255, 0, 0, 255}});

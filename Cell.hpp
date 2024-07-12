@@ -22,7 +22,7 @@ public:
   double radius;   ///< un seul rayon pour toute la cellule
   double surface;  ///< surface (volume) intérieure
   double surface0; ///< surface (volume) intérieure initial
-  bool close;      ///<  flag pour dire si la cellule est fermée ou pas
+  bool close;      ///< flag pour dire si la cellule est fermée ou pas
   vec2r center;    ///< "centre" de la cellule
   double p_int;    ///< pression interieure (éventuelle) pour cellule fermée
 
@@ -30,6 +30,7 @@ public:
 
   void reorderNodes(); // réordonne la position des noeuds de la cellule en fonction de leur angle
   void insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEAR); // ajoute ou supprime un voisin
+  
   void
   connectOrderedNodes(double width, double t_kn, double t_kr, double t_mz_max, double t_p_int,
                       bool closed = true); // ajoute des barres entre les noeuds et défini leurs longueurs initiales

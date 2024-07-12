@@ -175,6 +175,7 @@ public:
   void setCellMasses(double cellMass);
   void setNodeMasses(double nodeMass);
   void setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_max, double ft_coh_max, double yieldPower);
+  void setGcGlueSameProperties(double kn_coh, double kt_coh, double Gc);
   void setNodeControl(size_t c, size_t n, int xmode, double xvalue, int ymode, double yvalue);
   void setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue);
   void setNodeControlInBox(double t_xmin, double t_xmax, double t_ymin, double t_ymax, int xmode, double xvalue, int ymode,
@@ -186,8 +187,10 @@ public:
 	std::function<void()> updateNeighbors;
 	void updateNeighbors_brute_force();
 	void updateNeighbors_linkCells();
-	
-  void glue(double epsilonDist);
+  
+	int getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r& pos);
+  void glue(double epsilonDist, int modelGc = 1);
+  void associateGlue();
   void computeInteractionForces();
   void computeNodeForces();
   void NodeAccelerations();
