@@ -57,10 +57,14 @@ setNodeControlInBox 0 10 1.95 2.5 0 0.0 0 5e-3
 
 # PREPRO ===================================================
 # activation de la colle si la distance est inférieure à 0.02
-glue 0.005
+
+#glue 0.005
+Gcglue 0.005
 
 #setGlueSameProperties 1e5 1e5 2000 2000 5
 #setGlueSameProperties 1e5 1e5 5000 5000 5
-setGlueSameProperties 36.678  3056.524  0.0432  0.0432  2
+
+#setGlueSameProperties 36.678  3056.524  0.0432  0.0432  2
+setGcGlueSameProperties 4 4 0.2
 
 findDisplayArea 1.5 

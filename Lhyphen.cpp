@@ -523,7 +523,7 @@ void Lhyphen::updateNeighbors_brute_force() {
   struct cellPair {
     size_t i;
     size_t j;
-    size_t jn;
+    // size_t jn;
   };
 
   // Compute the expanded-AABB of each cell
@@ -544,6 +544,11 @@ void Lhyphen::updateNeighbors_brute_force() {
       if (aabbs[ci].intersect(aabbs[cj])) {
         cellPair P;
 
+        P.i = ci;
+        P.j = cj;
+        cellPairs.push_back(P);
+
+        /*
         for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
           if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
             P.i = ci;
@@ -552,6 +557,7 @@ void Lhyphen::updateNeighbors_brute_force() {
             cellPairs.push_back(P);
           }
         }
+        */
       }
     }
   }
@@ -561,19 +567,35 @@ void Lhyphen::updateNeighbors_brute_force() {
 
     size_t ci = cellPairs[ip].i;
     size_t cj = cellPairs[ip].j;
-    size_t jn = cellPairs[ip].jn;
+    // size_t jn = cellPairs[ip].jn;
 
+    // for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
+    //   addNodeToBarNeighbor(ci, cj, in, jn /*, cells[ci].radius */);
+    // }
+
+    // for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
+    //   addNodeToBarNeighbor(cj, ci, jn, in /*, cells[cj].radius*/);
+    // }
+
+    // test chaque sommet de i avec chaque barre de j
     for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
-      addNodeToBarNeighbor(ci, cj, in, jn /*, cells[ci].radius */);
+      for (size_t jn = 0; jn < cells[cj].nodes.size(); ++jn) {
+        addNodeToBarNeighbor(ci, cj, in, jn);
+      }
     }
-
-    for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
-      addNodeToBarNeighbor(cj, ci, jn, in, cells[cj].radius);
+    
+    // test chaque sommet de j avec chaque barre de i
+    for (size_t jn = 0; jn < cells[cj].nodes.size(); ++jn) {
+      for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
+        addNodeToBarNeighbor(cj, ci, jn, in);
+      }
     }
+    
   }
+  
 }
 
-// En cours de devel.
+// En cours de devel. !!!!!!!!!! (ne pas utiliser)
 void Lhyphen::updateNeighbors_linkCells() {
   START_TIMER("updateNeighbors_linkCells");
 
@@ -751,8 +773,6 @@ void Lhyphen::glue(double epsilonDist, int modelGc) {
         double u_length = u.normalize();
         double proj = b * u;
 
-        // le collage sphere-sphere est desactivé car sinon ça fait trop de points de colle !!!
-
         if (proj < 0.0) {
 
           double sqrDist = norm2(b);
@@ -790,7 +810,7 @@ void Lhyphen::glue(double epsilonDist, int modelGc) {
     }
   }
 
-  associateGlue();
+  associateGlue(modelGc);
 }
 
 int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos) {
@@ -820,13 +840,14 @@ int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos)
     } else if (proj >= u_length) { // ====================== disque jnext (de fin)
 
       vec2r ut = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
-      pos = cells[cj].nodes[jn].pos + u_length * u + fact * ut;
+      pos = cells[cj].nodes[jnext].pos + fact * ut;
+      // pos = cells[cj].nodes[jn].pos + u_length * u + fact * ut;
       return 2;
 
     } else { // ====================== sur la barre
 
       pos = cells[cj].nodes[jn].pos + proj * u;
-      vec2r ut = cells[ci].nodes[in].pos - (cells[cj].nodes[jn].pos + proj * u);
+      vec2r ut = cells[ci].nodes[in].pos - pos;
       pos += fact * ut;
       return 3;
     }
@@ -1077,7 +1098,7 @@ void Lhyphen::computeInteractionForces() {
             Inter->ft = 0.0;
           }
 
-          if (Inter->glueState == 1) {
+          if (Inter->glueState == 1 || Inter->glueState == 2) {
 
             // if there is no contact, some variables have not been calculated yet
             if (Inter->contactState == 0) {
@@ -1099,76 +1120,18 @@ void Lhyphen::computeInteractionForces() {
               Inter->fn_coh = 0.0;
 
             // rupture
-            double zeta = -Inter->fn_coh / Inter->fn_coh_max +
-                          pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
-            if (zeta > 0.0) {
-              Inter->fn_coh = 0.0;
-              Inter->ft_coh = 0.0;
-              Inter->glueState = 0;
-              if (Inter->brother != nullptr) {
-                Inter->brother->fn_coh = 0.0;
-                Inter->brother->ft_coh = 0.0;
-                Inter->brother->glueState = 0;
-              }
-            } else {
-              // transfert des force vers les noeuds concernés
-              vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
-              cells[ci].nodes[in].force += finc;
-
-              cells[cj].nodes[jn].force -= wbeg * finc;
-              cells[cj].nodes[jnext].force -= wend * finc;
-            }
-          } else if (Inter->glueState == 2) { // model rupture Gc
-
-            // if there is no contact, some variables have not been calculated yet
-            if (Inter->contactState == 0) {
-              Inter->n = urot;
-              if (dist < 0.0) {
-                Inter->n *= -1.0;
-              }
-
-              wend = proj / u_length;
-              wbeg = 1.0 - wend;
-              vrel = cells[ci].nodes[in].vel - (wbeg * cells[cj].nodes[jn].vel + wend * cells[cj].nodes[jnext].vel);
-              T.set(-Inter->n.y, Inter->n.x);
-            }
-
-            Inter->fn_coh += -Inter->kn_coh * vrel * Inter->n * dt;
-            Inter->ft_coh += -Inter->kt_coh * vrel * T * dt;
-
-            if (Inter->fn_coh > 0.0)
-              Inter->fn_coh = 0.0;
-
-            // rupture
-            double G = 0.0;
-            // if (Inter->fn < 0.0) { // heaviside(dn)
-            G += Inter->fn * Inter->fn / Inter->kn_coh;
-            //}
-            G += Inter->ft * Inter->ft / Inter->kt_coh;
-
-            if (Inter->brother != nullptr) {
-
-              // if (Inter->brother->fn < 0.0) { // heaviside(dn)
-              G += Inter->brother->fn * Inter->brother->fn / Inter->brother->kn_coh;
-              //}
-              G += Inter->brother->ft * Inter->brother->ft / Inter->brother->kt_coh;
-
-              /*vec2r p1 = cells[ci].nodes[in].pos + Inter->n * cells[ci].radius;
-              vec2r p2 =
-                  cells[Inter->brother->ic].nodes[Inter->brother->in].pos - Inter->n * cells[Inter->brother->ic].radius;
-              double l = (p2 - p1).length();
-              */
-              double l = 1.0;
-              G /= 2.0 * l;
-
-              if (G > Inter->Gc) {
-                // cassage
+            if (Inter->glueState == 1) { // RUPTURE par forces
+              double zeta = -Inter->fn_coh / Inter->fn_coh_max +
+                            pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
+              if (zeta > 0.0) {
                 Inter->fn_coh = 0.0;
                 Inter->ft_coh = 0.0;
                 Inter->glueState = 0;
-                Inter->brother->fn_coh = 0.0;
-                Inter->brother->ft_coh = 0.0;
-                Inter->brother->glueState = 0;
+                if (Inter->brother != nullptr) {
+                  Inter->brother->fn_coh = 0.0;
+                  Inter->brother->ft_coh = 0.0;
+                  Inter->brother->glueState = 0;
+                }
               } else {
                 // transfert des force vers les noeuds concernés
                 vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
@@ -1177,12 +1140,46 @@ void Lhyphen::computeInteractionForces() {
                 cells[cj].nodes[jn].force -= wbeg * finc;
                 cells[cj].nodes[jnext].force -= wend * finc;
               }
+            } else if (Inter->glueState == 2) { // model rupture Gc
+              double W = 0.0;
+              if (Inter->fn_coh < 0.0) { // heaviside(dn)
+                W += Inter->fn_coh * Inter->fn_coh / Inter->kn_coh;
+              }
+              W += Inter->ft_coh * Inter->ft_coh / Inter->kt_coh;
 
-            } else {
-              // cassage
-              Inter->fn_coh = 0.0;
-              Inter->ft_coh = 0.0;
-              Inter->glueState = 0;
+              if (Inter->brother != nullptr) {
+
+                if (Inter->brother->fn < 0.0) { // heaviside(dn)
+                  W += Inter->brother->fn_coh * Inter->brother->fn_coh / Inter->brother->kn_coh;
+                }
+                W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
+
+                double G = W / (2.0 * Inter->length);
+                // std::cout << "G = " << G << ", Gc = " << Inter->Gc << std::endl;
+
+                if (G > Inter->Gc) {
+                  // cassage
+                  Inter->fn_coh = 0.0;
+                  Inter->ft_coh = 0.0;
+                  Inter->glueState = 0;
+                  Inter->brother->fn_coh = 0.0;
+                  Inter->brother->ft_coh = 0.0;
+                  Inter->brother->glueState = 0;
+                } else {
+                  // transfert des force vers les noeuds concernés
+                  vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
+                  cells[ci].nodes[in].force += finc;
+
+                  cells[cj].nodes[jn].force -= wbeg * finc;
+                  cells[cj].nodes[jnext].force -= wend * finc;
+                }
+
+              } else {
+                // cassage si il n'y a pas de frère
+                Inter->fn_coh = 0.0;
+                Inter->ft_coh = 0.0;
+                Inter->glueState = 0;
+              }
             }
           }
         } // fin "sur la barre"
@@ -1572,6 +1569,8 @@ void Lhyphen::saveCONF(int ifile) {
 void Lhyphen::loadCONF(const char *fname) {
   std::ifstream file(fname);
 
+  int modelGc = 0;
+
   std::string token;
   file >> token;
   while (file.good()) {
@@ -1686,8 +1685,10 @@ void Lhyphen::loadCONF(const char *fname) {
           Neighbor K(0, 0, 0, 0);
           file >> K.ic >> K.jc >> K.in >> K.jn >> K.n >> K.contactState >> K.fn >> K.ft >> K.glueState;
           if (K.glueState == 1) {
+            modelGc = 1;
             file >> K.fn_coh >> K.ft_coh >> K.kn_coh >> K.kt_coh >> K.fn_coh_max >> K.ft_coh_max >> K.yieldPower;
           } else if (K.glueState == 2) {
+            modelGc = 2;
             file >> K.fn_coh >> K.ft_coh >> K.kn_coh >> K.kt_coh >> K.Gc;
           }
           cells[ci].neighbors.insert(K);
@@ -1722,11 +1723,13 @@ void Lhyphen::loadCONF(const char *fname) {
     } else if (token == "glue") {
       double d;
       file >> d;
-      glue(d, 1);
+      modelGc = 1;
+      glue(d, modelGc);
     } else if (token == "GcGlue") {
       double d;
       file >> d;
-      glue(d, 2);
+      modelGc = 2;
+      glue(d, modelGc);
     } else if (token == "setCellMasses") {
       double mass;
       file >> mass;
@@ -1821,11 +1824,14 @@ void Lhyphen::loadCONF(const char *fname) {
     file >> token;
   }
 
-  initCellInitialSurfaces();
-  associateGlue();
+  initCellInitialSurfaces(); // surface des cellules
+
+  if (modelGc > 0) {
+    associateGlue(modelGc);
+  }
 }
 
-void Lhyphen::associateGlue() {
+void Lhyphen::associateGlue(int modelGc) {
 
   struct Connect {
     size_t ic; // indice de la première cellule dans Sample::cells
@@ -1862,7 +1868,7 @@ void Lhyphen::associateGlue() {
   }
 
   for (const auto &elem : planMap) {
-    // std::cout << elem.second.size() << std::endl;
+
     double dmax = -1.0;
     size_t ii = 0, jj = 0;
     for (size_t ei = 0; ei < elem.second.size(); ei++) {
@@ -1880,20 +1886,18 @@ void Lhyphen::associateGlue() {
           ii = elem.second[ei];
           jj = elem.second[ej];
           dmax = dst;
-          //std::cout << "ii = " << ii << std::endl;
-          //std::cout << "jj = " << jj << std::endl;
         }
       }
     }
-    
+
     for (size_t e = 0; e < elem.second.size(); e++) {
       connects[elem.second[e]].woami->glueState = 0;
     }
-    connects[ii].woami->glueState = 1;
-    connects[jj].woami->glueState = 1;
+    connects[ii].woami->glueState = modelGc;
+    connects[jj].woami->glueState = modelGc;
+    
     connects[ii].woami->length = dmax;
     connects[jj].woami->length = dmax;
-    
   }
 
   // on re-parcours les neighbors pour identifier les brothers (liens collés aux mêmes cellules)

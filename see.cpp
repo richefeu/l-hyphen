@@ -318,12 +318,12 @@ void drawPressure() {
  */
 void drawCells() {
   glLineWidth(2.0f);
-  //glShadeModel(GL_SMOOTH);
+  // glShadeModel(GL_SMOOTH);
 
   color4f BarColor, NodeColor;
-  BarColor.r = NodeColor.r = 0.0f;
-  BarColor.g = NodeColor.g = 0.0f;
-  BarColor.b = NodeColor.b = 0.0f;
+  BarColor.r = NodeColor.r = 0.5f;
+  BarColor.g = NodeColor.g = 0.5f;
+  BarColor.b = NodeColor.b = 0.5f;
   BarColor.a = NodeColor.a = 1.0f;
 
   if (show_bar_colors) {
@@ -369,7 +369,7 @@ void drawCells() {
  * Draws the glue points in the OpenGL context.
  */
 void drawGluePoints() {
-  glPointSize(4.0f);
+  glPointSize(10.0f);
   glEnable(GL_POINT_SMOOTH);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -386,96 +386,38 @@ void drawGluePoints() {
         size_t jn = InterIt->jn;
         int type = Conf.getPosition(ci, cj, in, jn, pos);
         if (type == 0) {
-          glColor3f(0.5f,0.5f,0.5f);
+          glColor3f(0.5f, 0.5f, 0.5f);
         } else if (type == 1) {
           glPointSize(10.0f);
-          glColor3f(1.f,0.f,0.f);
+          glColor3f(1.f, 0.f, 0.f);
         } else if (type == 2) {
           glPointSize(10.0f);
-          glColor3f(1.f,0.f,0.f);
+          glColor3f(1.f, 0.f, 0.f);
         } else if (type == 3) {
-          glColor3f(0.f,0.f,1.f);
+          glColor3f(47.f / 255.f, 192.f / 255.f, 1.f);
         }
         glVertex2d(pos.x, pos.y);
       }
-    
     }
   }
-
-
-  /*
-  for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
-    for (std::set<Neighbor>::iterator InterIt = Conf.cells[ci].neighbors.begin();
-         InterIt != Conf.cells[ci].neighbors.end(); ++InterIt) {
-      if (InterIt->glueState > 0) {
-        size_t cj = InterIt->jc;
-        size_t in = InterIt->in;
-        size_t jn = InterIt->jn;
-
-        if (Conf.cells[cj].nodes[jn].nextNode == null_size_t) {
-          vec2r b = Conf.cells[cj].nodes[jn].pos - Conf.cells[ci].nodes[in].pos;
-          b *= (Conf.cells[ci].radius / Conf.cells[ci].radius + Conf.cells[cj].radius);
-          vec2r pos = Conf.cells[cj].nodes[jn].pos + b;
-          glVertex2d(pos.x, pos.y);
-        } else {
-          size_t jnext = Conf.cells[cj].nodes[jn].nextNode;
-          // jnext est le numéro du noeud à la fin de la barre dans la cellule cj (jn c'est le début)
-          vec2r b = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
-          vec2r u = Conf.cells[cj].nodes[jnext].pos - Conf.cells[cj].nodes[jn].pos;
-          double u_length = u.normalize();
-          double proj = b * u;
-
-          double fact = Conf.cells[cj].radius / (Conf.cells[ci].radius + Conf.cells[cj].radius);
-          if (proj <= 0.0) {
-            vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
-            vec2r pos = Conf.cells[cj].nodes[jn].pos + fact * ut;
-            glColor3f(1.f,0.f,0.f);
-            glVertex2d(pos.x, pos.y);
-          } else if (proj >= u_length) {
-            vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jnext].pos;
-            vec2r pos = Conf.cells[cj].nodes[jn].pos + u_length * u + fact * ut;
-            glColor3f(0.f,1.f,0.f);
-            glVertex2d(pos.x, pos.y);
-          } else {
-            vec2r pos = Conf.cells[cj].nodes[jn].pos + proj * u;
-            vec2r ut = Conf.cells[ci].nodes[in].pos - (Conf.cells[cj].nodes[jn].pos + proj * u);
-            pos += fact * ut;
-           
-            if (InterIt->brother != nullptr) {
-               glColor3f(0.f,0.f,1.f);
-            } else {
-               glColor3f(0.5f,0.5f,0.5f);
-            }
-            
-            
-            glVertex2d(pos.x, pos.y);
-          }
-          
-          
-        }
-      }
-    }
-  }
-  */
-  
   glEnd();
-  
-  
+
+  // trace un trait entre les points frères
   glBegin(GL_LINES);
-  glColor3f(0.5f,0.5f,0.5f);
+  glLineWidth(6.0f);
+  glColor3f(0.f, 0.f, 1.0f);
   vec2r pos1, pos2;
   for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
     for (std::set<Neighbor>::iterator InterIt = Conf.cells[ci].neighbors.begin();
          InterIt != Conf.cells[ci].neighbors.end(); ++InterIt) {
       if (InterIt->glueState > 0 && InterIt->brother != nullptr) {
-        
+
         Conf.getPosition(InterIt->ic, InterIt->jc, InterIt->in, InterIt->jn, pos1);
         Conf.getPosition(InterIt->brother->ic, InterIt->brother->jc, InterIt->brother->in, InterIt->brother->jn, pos2);
-        
+
         glVertex2d(pos1.x, pos1.y);
         glVertex2d(pos2.x, pos2.y);
       }
-    
     }
   }
   glEnd();

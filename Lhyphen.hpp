@@ -190,7 +190,7 @@ public:
   
 	int getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r& pos);
   void glue(double epsilonDist, int modelGc = 1);
-  void associateGlue();
+  void associateGlue(int modelGc = 1);
   void computeInteractionForces();
   void computeNodeForces();
   void NodeAccelerations();
