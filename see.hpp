@@ -56,6 +56,7 @@ int display_mode = 0; // sample or slice rotation
 int mouse_start[2];
 
 // drawing functions
+void drawCircle(double xc, double yc, double radius, int nbDiv = 18);
 void drawBar(size_t ci, size_t in, size_t jn, double radius, color4f &BarColor, color4f &NodeColor);
 void drawCells();
 void drawGluePoints();

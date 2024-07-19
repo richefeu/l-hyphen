@@ -72,9 +72,6 @@ void Cell::insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEA
   }
 }
 
-
-
-
 /**
  *  Ajoute des barres entre les noeuds et défini leurs longueurs initiales
  *  ainsi que les angles initaux entre les barres adjacentes.
@@ -132,7 +129,7 @@ void Cell::connectOrderedNodes(double width, double t_kn, double t_kr, double t_
 
 /**
  *  Calcul la surface exposée à la pression par la méthode des produits vectoriels
- * 
+ *
  */
 void Cell::CellSurface() {
   surface = 0.0;
@@ -151,8 +148,7 @@ void Cell::CellSurface() {
  *
  */
 void Cell::CellCenter() {
-  // Determination of the center of closed cell
-	center.reset();
+  center.reset();
   for (size_t i = 0; i < nodes.size(); i++) {
     center += nodes[i].pos;
   }
@@ -165,8 +161,8 @@ void Cell::CellCenter() {
  *  @param force  reference to the vec2r object to store the calculated force
  *
  */
-void Cell::CellForce(vec2r & force) {
-	force.reset();
+void Cell::CellForce(vec2r &force) {
+  force.reset();
   for (size_t i = 0; i < nodes.size(); i++) {
     force += nodes[i].force;
   }
@@ -180,7 +176,8 @@ void Cell::CellForce(vec2r & force) {
  *  @return the elastic energy of the cell
  */
 double Cell::getElasticNRJ(double compressFactor) {
-	if (close == false) return 0.0;
+  if (close == false)
+    return 0.0;
   double NRJ = 0.0;
   for (size_t b = 0; b < bars.size(); b++) {
     NRJ += 0.5 * bars[b].fn * bars[b].fn / bars[b].kn;
@@ -188,6 +185,6 @@ double Cell::getElasticNRJ(double compressFactor) {
   for (size_t n = 0; n < nodes.size(); n++) {
     NRJ += 0.5 * nodes[n].mz * nodes[n].mz / nodes[n].kr;
   }
-	NRJ += 0.5 * p_int * p_int / compressFactor;
+  NRJ += 0.5 * p_int * p_int / compressFactor;
   return NRJ;
 }

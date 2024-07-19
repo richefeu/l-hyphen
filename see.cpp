@@ -201,6 +201,16 @@ void reshape(int w, int h) {
   glutPostRedisplay();
 }
 
+void drawCircle(double xc, double yc, double radius, int nbDiv) {
+  glBegin(GL_POLYGON);
+  double da = 2.0 * M_PI / (double)nbDiv;
+  for (double a = 0.0; a < 2.0 * M_PI; a += da) {
+    glVertex2d(xc + radius * cos(a), yc + radius * sin(a));
+  }
+  glEnd();
+}
+
+
 /**
  * Draws a bar between two nodes in a given cell.
  *
@@ -321,9 +331,9 @@ void drawCells() {
   // glShadeModel(GL_SMOOTH);
 
   color4f BarColor, NodeColor;
-  BarColor.r = NodeColor.r = 0.5f;
-  BarColor.g = NodeColor.g = 0.5f;
-  BarColor.b = NodeColor.b = 0.5f;
+  BarColor.r = NodeColor.r = 0.4f;
+  BarColor.g = NodeColor.g = 0.8f;
+  BarColor.b = NodeColor.b = 1.0f;
   BarColor.a = NodeColor.a = 1.0f;
 
   if (show_bar_colors) {
@@ -369,12 +379,14 @@ void drawCells() {
  * Draws the glue points in the OpenGL context.
  */
 void drawGluePoints() {
-  glPointSize(10.0f);
+
   glEnable(GL_POINT_SMOOTH);
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
-  glBegin(GL_POINTS);
+  glLineWidth(1.0);
+  double rp = Conf.cells[0].radius * 0.4;
+  int rnb = 4;
 
   vec2r pos;
   for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
@@ -385,22 +397,24 @@ void drawGluePoints() {
         size_t in = InterIt->in;
         size_t jn = InterIt->jn;
         int type = Conf.getPosition(ci, cj, in, jn, pos);
-        if (type == 0) {
+        if (type == 0) { // ne peut pas arriver normalement
           glColor3f(0.5f, 0.5f, 0.5f);
+          rnb = 12;
         } else if (type == 1) {
-          glPointSize(10.0f);
           glColor3f(1.f, 0.f, 0.f);
+          rnb = 12;
         } else if (type == 2) {
-          glPointSize(10.0f);
           glColor3f(1.f, 0.f, 0.f);
+          rnb = 12;
         } else if (type == 3) {
-          glColor3f(47.f / 255.f, 192.f / 255.f, 1.f);
+          glColor3f(1.f, 0.6f, 0.f);
+          rnb = 4;
         }
-        glVertex2d(pos.x, pos.y);
+
+        drawCircle(pos.x, pos.y, rp, rnb);
       }
     }
   }
-  glEnd();
 
   // trace un trait entre les points frères
   glBegin(GL_LINES);

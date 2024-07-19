@@ -152,6 +152,12 @@ public:
   ColorTable ctNeg, ctPos;
 
   int reorder{1}; ///< flag pour ré-ordonner les noeud dans la fonction ReadNodeFile
+  
+  
+  std::ofstream breakHistory;
+  std::ofstream breakEvol;
+  double cumulatedG{0.0};
+  double cumulatedL{0.0};
 
   Lhyphen();
 
