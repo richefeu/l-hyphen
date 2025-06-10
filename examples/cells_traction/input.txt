@@ -36,7 +36,7 @@ mu 0.3
 
 #E = 12GPa
 #             filename       barWidth  kv/kn     kb/kr          mz_max   pressure
-readNodeFile  nodeFile.txt   0.006    3.66782  305.652    4.401e-04        0
+readNodeFile  nodeFile.txt   0.012    3.66782  305.652    4.401e-04        0
 #    Plasticity -------^
 #readNodeFile  nodeFile.txt   0.006     2e8  2e6   100000      1000
 #    Full Elastic -----^

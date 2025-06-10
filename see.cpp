@@ -1,22 +1,21 @@
 #include "see.hpp"
 
 void printHelp() {
-  using namespace std;
-
-  cout << endl;
-  cout << "Commandes:" << endl;
-  cout << "b         colorize the cell bars" << endl;
-  cout << "c         show the cells" << endl;
-  cout << "f         show the forces" << endl;
-  cout << "g         show the glue points" << endl;
-  cout << "h         show this help" << endl;
-  cout << "p         show pressure" << endl;
-  cout << "q         quit" << endl;
-  cout << "s/S       scale the force length" << endl;
-  cout << "+         load next configuration file" << endl;
-  cout << "-         load previous configuration file" << endl;
-  cout << "=         fit the view" << endl;
-  cout << endl;
+  std::cout << std::endl;
+  std::cout << "Commandes:" << std::endl;
+  std::cout << "b         colorize the cell bars" << std::endl;
+  std::cout << "c         show the cells" << std::endl;
+  std::cout << "f         show the forces" << std::endl;
+  std::cout << "g         show the glue points" << std::endl;
+  std::cout << "h         show this help" << std::endl;
+  std::cout << "p         show pressure" << std::endl;
+  std::cout << "q         quit" << std::endl;
+  std::cout << "s/S       scale the force length" << std::endl;
+  std::cout << "z/Z       zoom in or out" << std::endl;
+  std::cout << "+         load next configuration file" << std::endl;
+  std::cout << "-         load previous configuration file" << std::endl;
+  std::cout << "=         fit the view" << std::endl;
+  std::cout << std::endl;
 }
 
 void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
@@ -55,6 +54,27 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   } break;
   case 'S': {
     vScale *= 1.1;
+  } break;
+
+  case 'z': {
+    double dy = worldBox.ymax - worldBox.ymin;
+    double ddy = 0.2 * dy;
+    double ddx = 0.2 * dy;
+    worldBox.xmin -= ddx;
+    worldBox.xmax += ddx;
+    worldBox.ymin -= ddy;
+    worldBox.ymax += ddy;
+    reshape(width, height);
+  } break;
+  case 'Z': {
+    double dy = worldBox.ymax - worldBox.ymin;
+    double ddy = -0.2 * dy;
+    double ddx = -0.2 * dy;
+    worldBox.xmin -= ddx;
+    worldBox.xmax += ddx;
+    worldBox.ymin -= ddy;
+    worldBox.ymax += ddy;
+    reshape(width, height);
   } break;
 
   case '-': {
@@ -132,7 +152,8 @@ void motion(int x, int y) {
   mouse_start[1] = y;
 
   reshape(width, height);
-  display();
+  glutPostRedisplay();
+  //display();
 }
 
 void display() {

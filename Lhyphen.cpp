@@ -1002,7 +1002,7 @@ void Lhyphen::computeInteractionForces() {
                 double G = W / (2.0 * Inter->length);
 
                 if (G > Inter->Gc) {
-                  // cassage
+                  // breakage
                   Inter->fn_coh = 0.0;
                   Inter->ft_coh = 0.0;
                   Inter->glueState = 0;
@@ -1012,7 +1012,7 @@ void Lhyphen::computeInteractionForces() {
                   if (Inter->length > 1.0e-12) {
                     cumulatedG += G;
                     cumulatedL += Inter->length;
-                  }            
+                  }
                 } else {
                   // transfert des force vers les noeuds concernés
                   vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
@@ -1022,7 +1022,7 @@ void Lhyphen::computeInteractionForces() {
                 }
 
               } else {
-                // cassage si il n'y a pas de frère
+                // breakage if a 'brother' exists
                 Inter->fn_coh = 0.0;
                 Inter->ft_coh = 0.0;
                 Inter->glueState = 0;
@@ -1087,7 +1087,7 @@ void Lhyphen::computeInteractionForces() {
             }
 
             if (Inter->glueState == 1) { // RUPTURE par forces
-              // rupture
+
               double zeta = -Inter->fn_coh / Inter->fn_coh_max +
                             pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
               if (zeta > 0.0) {
@@ -1543,7 +1543,7 @@ void Lhyphen::integrate() {
 
   breakHistory.open("breakHistory.txt");
   breakHistory << "#ci cj xdeb ydeb xend yend released_NRJ" << std::endl;
-  
+
   breakEvol.open("breakEvol.txt");
   breakEvol << "#time cumulated_breakage_NRJ cumulated_breaked_length" << std::endl;
 
@@ -1562,7 +1562,7 @@ void Lhyphen::integrate() {
         cells[cid].CellForce(force);
         cellFiles[c] << cells[cid].center << " " << force << '\n';
       }
-      
+
       breakEvol << t << ' ' << cumulatedG << ' ' << cumulatedL << std::endl;
     }
 
@@ -1971,6 +1971,7 @@ void Lhyphen::loadCONF(int ifile) {
   snprintf(fname, 256, "conf%d", ifile);
   loadCONF(fname);
 }
+
 
 void Lhyphen::associateGlue(int modelGc) {
 
