@@ -4,7 +4,8 @@ Quick-start guid
 What is L-hyphen ?
 ------------------
 
-``l-hyphen`` is a DEM code written in C++11. blabla
+``l-hyphen`` is a code written in C++. It uses a approach similar to the discrete element method, 
+but it allows for the deformation of the elements: **core-shells**.
 
 
 Compilation

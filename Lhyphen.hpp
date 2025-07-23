@@ -10,18 +10,18 @@
 #include <fstream>
 #include <iostream>
 
+#include <functional>
 #include <map>
 #include <set>
 #include <utility>
 #include <vector>
-#include <functional>
 
 #include "AABB_2D.hpp"
 #include "ColorTable.hpp"
+#include "linkCells2D.hpp"
 #include "profiler.hpp"
 #include "svgtools.hpp"
 #include "vec2.hpp"
-#include "linkCells2D.hpp"
 
 #include "Bar.hpp"
 #include "Cell.hpp"
@@ -77,10 +77,30 @@ struct CellNodeID {
   CellNodeID(size_t t_c, size_t t_n) : c(t_c), n(t_n) {}
 };
 
+/**
+ *  Une boite qui sert à capturer des sommets pour faire des sorties de post-traitement
+ */
 struct CapturedNodes {
   std::vector<CellNodeID> cellNodeIDs;
   std::string filename;
-  CapturedNodes(const char *name) : filename(name) {}
+  double xmin, xmax, ymin, ymax;
+  CapturedNodes(const char *name, double t_xmin, double t_xmax, double t_ymin, double t_ymax)
+      : filename(name), xmin(t_xmin), xmax(t_xmax), ymin(t_ymin), ymax(t_ymax) {}
+};
+
+/**
+ *  Une boite qui sert à capturer des sommets pour imposer une force ou une vitesse suivant x et y
+ */
+struct ControlBoxArea {
+  double xmin, xmax, ymin, ymax;
+  int xmode;
+  double xvalue;
+  int ymode;
+  double yvalue;
+  ControlBoxArea(double t_xmin, double t_xmax, double t_ymin, double t_ymax, int t_xmode, double t_xvalue, int t_ymode,
+                 double t_yvalue)
+      : xmin(t_xmin), xmax(t_xmax), ymin(t_ymin), ymax(t_ymax), xmode(t_xmode), xvalue(t_xvalue), ymode(t_ymode),
+        yvalue(t_yvalue) {}
 };
 
 #define CELL_CONTAIN_NOTHING 0
@@ -97,6 +117,7 @@ public:
   std::vector<Control> controls; ///< contrôles
 
   std::vector<CapturedNodes> capturedNodes; ///< noeuds capturés
+  std::vector<ControlBoxArea> controlBoxAreas;
 
   std::vector<size_t> followedCells; ///< cellules suivies
 
@@ -121,9 +142,9 @@ public:
   vec2r gravity; ///< gravité
 
   double distVerlet; ///< distance de Verlet entre noeuds et barres
-	
-	double linkCells_lx;
-	double linkCells_ly;
+
+  double linkCells_lx;
+  double linkCells_ly;
 
   int cellContent;
   double compressFactor;
@@ -152,8 +173,7 @@ public:
   ColorTable ctNeg, ctPos;
 
   int reorder{1}; ///< flag pour ré-ordonner les noeud dans la fonction ReadNodeFile
-  
-  
+
   std::ofstream breakHistory;
   std::ofstream breakEvol;
   double cumulatedG{0.0};
@@ -174,7 +194,7 @@ public:
                                named_arg_CellProperties p);
   void addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                          named_arg_CellProperties p);
-                         
+
   void setTimeStep(double t_dt);
   void setCellWallDensities(double rho, double thickness = 1.0);
   void setCellDensities(double rho, double thickness = 1.0);
@@ -184,17 +204,17 @@ public:
   void setGcGlueSameProperties(double kn_coh, double kt_coh, double Gc);
   void setNodeControl(size_t c, size_t n, int xmode, double xvalue, int ymode, double yvalue);
   void setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue);
-  void setNodeControlInBox(double t_xmin, double t_xmax, double t_ymin, double t_ymax, int xmode, double xvalue, int ymode,
-                           double yvalue);
+  void setNodeControlInBox(double t_xmin, double t_xmax, double t_ymin, double t_ymax, int xmode, double xvalue,
+                           int ymode, double yvalue);
   void addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds = 0.0);
+  double getMinimumNodeDistance();
   void readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int);
 
-  
-	std::function<void()> updateNeighbors;
-	void updateNeighbors_brute_force();
-	void updateNeighbors_linkCells();
-  
-	int getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r& pos);
+  std::function<void()> updateNeighbors;
+  void updateNeighbors_brute_force();
+  void updateNeighbors_linkCells();
+
+  int getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos);
   void glue(double epsilonDist, int modelGc = 1);
   void associateGlue(int modelGc = 1);
   void computeInteractionForces();

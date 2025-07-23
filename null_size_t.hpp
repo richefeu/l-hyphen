@@ -12,19 +12,21 @@
 const size_t null_size_t = std::numeric_limits<size_t>::max();
 
 template <char nullChar> void put_Ptr_size_t(std::ostream &os, const size_t value) {
-  if (value == null_size_t)
+  if (value == null_size_t) {
     os << nullChar;
-  else
+  } else {
     os << value;
+  }
 }
 
 template <char nullChar> size_t get_Ptr_size_t(std::istream &is) {
   std::string str;
   is >> str;
-  if (str[0] == nullChar)
+  if (str[0] == nullChar) {
     return null_size_t;
-  else
+  } else {
     return std::stoul(str.c_str());
+  }
 }
 
 #endif /* end of include guard: NULL_SIZE_T_HPP */

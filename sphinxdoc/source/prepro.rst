@@ -130,11 +130,6 @@ build_cells : La procédure va créer des cellules que pourra utiliser l-hyphen
     }
 
 
-.. _tesselation:
-.. figure:: images/tesselation.png
-   :width: 400
-
-   Tesselation 
 
 repair_cell <0 ou 1> : Parfois dans la construction des cellules, nous avons un chevauchement des barres
 

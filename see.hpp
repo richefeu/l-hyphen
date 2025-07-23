@@ -13,6 +13,8 @@
 
 #include "ColorTable.hpp"
 #include "fileTool.hpp"
+#include "glTools.hpp"
+#include "message.hpp"
 #include "triangulatePolygon.hpp"
 
 Lhyphen Conf;
@@ -37,6 +39,8 @@ int show_glue_points = 0;
 int show_bar_colors = 0;
 int show_inter_cells_forces = 0;
 int show_pressure = 0;
+int show_nodes = 1;
+int show_control_boxes = 1;
 
 // arrow sizes
 double arrowSize = 0.15;
@@ -47,6 +51,7 @@ double vScale = 0.05;
 int width = 800;
 int height = 600;
 float wh_ratio = (float)width / (float)height;
+glTextZone textZone(1, &width, &height);
 
 // Miscellaneous global variables
 enum class MouseMode { NOTHING, ROTATION, ZOOM, PAN };
@@ -64,7 +69,10 @@ void arrow(double x0, double y0, double x1, double y1);
 void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos);
 void drawForces();
 void drawPressure();
+void drawControlBoxes();
 //void drawColorTable(ColorTable &CT, const char * title);
+
+void updateTextLine();
 
 // Callback functions
 void keyboard(unsigned char Key, int x, int y);

@@ -3,11 +3,13 @@
 void printHelp() {
   std::cout << std::endl;
   std::cout << "Commandes:" << std::endl;
+  std::cout << "a         show control area boxes" << std::endl;
   std::cout << "b         colorize the cell bars" << std::endl;
   std::cout << "c         show the cells" << std::endl;
   std::cout << "f         show the forces" << std::endl;
   std::cout << "g         show the glue points" << std::endl;
   std::cout << "h         show this help" << std::endl;
+  std::cout << "n         show nodes and cell boundaries" << std::endl;
   std::cout << "p         show pressure" << std::endl;
   std::cout << "q         quit" << std::endl;
   std::cout << "s/S       scale the force length" << std::endl;
@@ -20,6 +22,10 @@ void printHelp() {
 
 void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   switch (Key) {
+
+  case 'a': {
+    show_control_boxes = 1 - show_control_boxes;
+  } break;
 
   case 'b': {
     show_bar_colors = 1 - show_bar_colors;
@@ -39,6 +45,10 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
 
   case 'h': {
     printHelp();
+  } break;
+
+  case 'n': {
+    show_nodes = 1 - show_nodes;
   } break;
 
   case 'p': {
@@ -78,12 +88,15 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   } break;
 
   case '-': {
-    if (confNum > 0)
+    if (confNum > 0) {
       try_to_readConf(confNum - 1, Conf, confNum);
+      updateTextLine();
+    }
   } break;
 
   case '+': {
     try_to_readConf(confNum + 1, Conf, confNum);
+    updateTextLine();
   } break;
 
   case '=': {
@@ -95,11 +108,14 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
   glutPostRedisplay();
 }
 
+void updateTextLine() { textZone.addLine("Conf%d, time = %g", confNum, Conf.t); }
+
 void mouse(int button, int state, int x, int y) {
 
   if (state == GLUT_UP) {
     mouse_mode = MouseMode::NOTHING;
-    display();
+    // display();
+    glutPostRedisplay();
   } else if (state == GLUT_DOWN) {
     mouse_start[0] = x;
     mouse_start[1] = y;
@@ -119,8 +135,9 @@ void mouse(int button, int state, int x, int y) {
 
 void motion(int x, int y) {
 
-  if (mouse_mode == MouseMode::NOTHING)
+  if (mouse_mode == MouseMode::NOTHING) {
     return;
+  }
 
   double dx = (double)(x - mouse_start[0]) / (double)width;
   double dy = (double)(y - mouse_start[1]) / (double)height;
@@ -153,12 +170,13 @@ void motion(int x, int y) {
 
   reshape(width, height);
   glutPostRedisplay();
-  //display();
 }
 
 void display() {
+  sleep(0);
   glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
+  // glTools::clearBackground(___);
 
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
@@ -166,14 +184,24 @@ void display() {
   glShadeModel(GL_SMOOTH);
   glEnable(GL_DEPTH_TEST);
 
-  if (show_pressure)
+  if (show_pressure) {
     drawPressure();
-  if (show_cells)
+  }
+  if (show_cells) {
     drawCells();
-  if (show_glue_points)
+  }
+  if (show_glue_points) {
     drawGluePoints();
-  if (show_inter_cells_forces)
+  }
+  if (show_inter_cells_forces) {
     drawForces();
+  }
+
+  if (show_control_boxes) {
+    drawControlBoxes();
+  }
+
+  textZone.draw();
 
   glFlush();
   glutSwapBuffers();
@@ -231,7 +259,6 @@ void drawCircle(double xc, double yc, double radius, int nbDiv) {
   glEnd();
 }
 
-
 /**
  * Draws a bar between two nodes in a given cell.
  *
@@ -265,6 +292,7 @@ void drawBar(size_t ci, size_t i, size_t j, double radius, color4f &BarColor, co
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
 
+  // draw the bar inclined rectangle
   glBegin(GL_POLYGON);
   glVertex2d(xi - radius * txij, yi - radius * tyij);
   glVertex2d(xj - radius * txij, yj - radius * tyij);
@@ -280,7 +308,7 @@ void drawBar(size_t ci, size_t i, size_t j, double radius, color4f &BarColor, co
   }
   glEnd();
 
-  if (Conf.cells[ci].nodes[j].nextNode == null_size_t) {
+  if (Conf.cells[ci].nodes[j].nextNode == null_size_t || Conf.cells[ci].nodes[j].nextNode == 1) {
     glBegin(GL_POLYGON);
     for (double a = 0.0; a < 2.0 * M_PI; a += M_PI / 18.0) {
       glVertex2d(xj + radius * cos(a), yj + radius * sin(a));
@@ -296,12 +324,15 @@ void drawPressure() {
   double pmax = -1.0e20;
   double pmin = 1.0e20;
   for (size_t i = 0; i < Conf.cells.size(); ++i) {
-    if (Conf.cells[i].close == false)
+    if (Conf.cells[i].close == false) {
       continue;
-    if (Conf.cells[i].p_int < pmin)
+    }
+    if (Conf.cells[i].p_int < pmin) {
       pmin = Conf.cells[i].p_int;
-    if (Conf.cells[i].p_int > pmax)
+    }
+    if (Conf.cells[i].p_int > pmax) {
       pmax = Conf.cells[i].p_int;
+    }
   }
 
   color4f col;
@@ -309,15 +340,13 @@ void drawPressure() {
   pTable.setTableID(16);
   pTable.setSwap(true);
   pTable.setMinMax((float)pmin, (float)pmax);
-  // std::cout << "pmax = " << pmax << '\n';
   std::cout << "pmin = " << pmin << '\n';
   std::cout << "pmax = " << pmax << '\n';
-  // pTable.Rebuild();
 
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_LIGHTING);
 
-  for (size_t i = 1; i < Conf.cells.size(); ++i) {
+  for (size_t i = 0; i < Conf.cells.size(); ++i) {
     if (Conf.cells[i].close == false)
       continue;
 
@@ -349,7 +378,6 @@ void drawPressure() {
  */
 void drawCells() {
   glLineWidth(2.0f);
-  // glShadeModel(GL_SMOOTH);
 
   color4f BarColor, NodeColor;
   BarColor.r = NodeColor.r = 0.4f;
@@ -392,6 +420,41 @@ void drawCells() {
       size_t in = Conf.cells[i].bars[b].i;
       size_t jn = Conf.cells[i].bars[b].j;
       drawBar(i, in, jn, Conf.cells[i].radius, BarColor, NodeColor);
+    }
+
+    if (show_nodes) {
+      glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+      for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
+        // drawCircle(Conf.cells[i].nodes[n].pos.x, Conf.cells[i].nodes[n].pos.y, 0.5*Conf.cells[i].radius,  8);
+
+        glBegin(GL_LINE_LOOP);
+        double da = 2.0 * M_PI / 18.0;
+        for (double a = 0.0; a < 2.0 * M_PI; a += da) {
+          glVertex2d(Conf.cells[i].nodes[n].pos.x + Conf.cells[i].radius * cos(a),
+                     Conf.cells[i].nodes[n].pos.y + Conf.cells[i].radius * sin(a));
+        }
+        glEnd();
+      }
+
+      glBegin(GL_LINES);
+      for (size_t b = 0; b < Conf.cells[i].bars.size(); ++b) {
+        double xi = Conf.cells[i].nodes[Conf.cells[i].bars[b].i].pos.x;
+        double yi = Conf.cells[i].nodes[Conf.cells[i].bars[b].i].pos.y;
+        double xj = Conf.cells[i].nodes[Conf.cells[i].bars[b].j].pos.x;
+        double yj = Conf.cells[i].nodes[Conf.cells[i].bars[b].j].pos.y;
+
+        double nxij = xj - xi;
+        double nyij = yj - yi;
+        double nij = sqrt(nxij * nxij + nyij * nyij);
+        nxij /= nij;
+        nyij /= nij;
+        double txij = -nyij;
+        double tyij = nxij;
+
+        glVertex2d(xj - Conf.cells[i].radius * txij, yj - Conf.cells[i].radius * tyij);
+        glVertex2d(xi - Conf.cells[i].radius * txij, yi - Conf.cells[i].radius * tyij);
+      }
+      glEnd();
     }
   }
 }
@@ -564,6 +627,25 @@ void drawForces() {
   glEnd();
 }
 
+void drawControlBoxes() {
+  glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
+  glLineWidth(2.0f);
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
+
+  for (size_t i = 0; i < Conf.controlBoxAreas.size(); i++) {
+    glText::print((GLfloat)Conf.controlBoxAreas[i].xmin, (GLfloat)Conf.controlBoxAreas[i].ymin, "%sx = %g, %sy = %g",
+                  (Conf.controlBoxAreas[i].xmode == 1) ? "v" : "f", Conf.controlBoxAreas[i].xvalue,
+                  (Conf.controlBoxAreas[i].ymode == 1) ? "v" : "f", Conf.controlBoxAreas[i].yvalue);
+    glBegin(GL_LINE_LOOP);
+    glVertex2d(Conf.controlBoxAreas[i].xmin, Conf.controlBoxAreas[i].ymin);
+    glVertex2d(Conf.controlBoxAreas[i].xmax, Conf.controlBoxAreas[i].ymin);
+    glVertex2d(Conf.controlBoxAreas[i].xmax, Conf.controlBoxAreas[i].ymax);
+    glVertex2d(Conf.controlBoxAreas[i].xmin, Conf.controlBoxAreas[i].ymax);
+    glEnd();
+  }
+}
+
 void try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
   char file_name[256];
   snprintf(file_name, 256, "conf%d", num);
@@ -623,6 +705,10 @@ int main(int argc, char *argv[]) {
   glEnable(GL_BLEND);
   glBlendEquation(GL_FUNC_ADD);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  // ==== Other initialisations
+  glText::init();
+  updateTextLine();
 
   // ==== Enter GLUT event processing cycle
   fit_view();

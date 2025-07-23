@@ -6,10 +6,10 @@ LINK = $(CXX)
 TOOFUSPATH = ~/toofus
 
 # The list of flags passed to the compiler
-CXXFLAGS = -Wall -Wextra -pedantic -Wconversion -Wno-unknown-pragmas -O3 -std=c++11 -I $(TOOFUSPATH) -DENABLE_PROFILING
+CXXFLAGS = -Wall -Wextra -pedantic -Wconversion -Wno-unknown-pragmas -O3 -std=c++20 -I $(TOOFUSPATH) -DENABLE_PROFILING
 # add -fopenmp to enable OpenMP (but for now it is worst, excepted if the number of cells is very high)
 
-GLUTFLAGS = `pkg-config --cflags gl  glu glut`
+GLUTFLAGS = `pkg-config --cflags gl glu glut`
 GLUTLINK = `pkg-config --libs gl glu glut` 
 
 SOURCES = Neighbor.cpp Control.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp

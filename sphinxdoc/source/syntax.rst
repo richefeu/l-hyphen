@@ -9,19 +9,19 @@ Timing
 ------
 
 - ``t`` (*double*) **value**  
-  Current time
+  Current time. For a new simulation, this time is normally *0.0*
 
 - ``dt`` (*double*) **value**
-  Time step increments
+  Time step increments. It needs to be set thanks to similar condition to DEM (remember the masses are lumped to the cell-nodes)
 
 - ``nstep`` (*double*) **value**
-  Number of step increments
+  Number of step increments. Final time is ``t + nstep * dt``
 
 Dissipation
 -----------
 
 - ``numericalDissipation`` (*double*) **value**
-  Value of energy dissipation (for example 1e-4) 
+  Value of energy dissipation (for example *1e-4*) 
 
 - ``globalViscosity`` (*double*) **value**
   Add a viscosity on the sample to dissipate the energy
@@ -33,27 +33,30 @@ Volume Forces
   Apply a force (expressed by a 2D-vector) on nodes 
 
 
-Proximity
----------
+Build and rebuild of neighborhood
+---------------------------------
  
 - ``distVerlet`` (*double*) **value**
-  
+  Distance above which two elements are considered close enough to be part of the neighbor list.
 
 - ``nstepPeriodVerlet`` (*double*) **value**
-  
+  Number of time-step between updates of the neighbor list.
 
 
 Outputs
 -------
 
 - ``isvg`` (*integer*) **value**
-  
+  XXXXXX
 
 - ``nstepPeriodSVG`` (*integer*) **value**
+  XXXXXX
   
+- ``findDisplayArea`` (*double*) **value**
+  Find the limits of the display area in svg files. **value** is a scale factor.
 
 - ``iconf`` (*integer*) **value**
-  
+  Number of configuration file (conf*x*.txt) that will be saved
 
 - ``nstepPeriodConf`` (*integer*) **value**
   
@@ -100,9 +103,3 @@ Imposed Controls
   
 
 
-
-Display
--------
-
-- ``findDisplayArea`` (*double*) **value**
-  Find the limits of the display area in svg files. **value** is a scale factor.

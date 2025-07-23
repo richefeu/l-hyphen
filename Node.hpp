@@ -9,13 +9,13 @@
  */
 class Node {
 public:
-  vec2r pos;
-  vec2r vel;
-  vec2r acc;
+  vec2r pos; // position
+  vec2r vel; // vitesse
+  vec2r acc; // acceleration
 
   vec2r force; // force résultante
 
-  double mass;
+  double mass; // masse
 
   size_t ictrl; // null_size_t si pas de control
 

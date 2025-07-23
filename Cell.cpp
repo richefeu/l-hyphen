@@ -176,8 +176,9 @@ void Cell::CellForce(vec2r &force) {
  *  @return the elastic energy of the cell
  */
 double Cell::getElasticNRJ(double compressFactor) {
-  if (close == false)
+  if (close == false) {
     return 0.0;
+  }
   double NRJ = 0.0;
   for (size_t b = 0; b < bars.size(); b++) {
     NRJ += 0.5 * bars[b].fn * bars[b].fn / bars[b].kn;

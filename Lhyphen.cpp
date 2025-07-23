@@ -43,6 +43,10 @@ void Lhyphen::head() {
   std::cout << "    /_/\n\n";
 }
 
+// ======================================================================================================
+// Adding cells (or packing of cells)
+// ======================================================================================================
+
 /**
  *  Ajoute une cellule de forme polygonale régulière
  *
@@ -200,6 +204,133 @@ void Lhyphen::addHoneycombCells(int nx, int ny, double CellExternWidth, double x
   h.barWidth = barWidth;
   addRegularPolygonalCellsOnTriangularGrid(nx, ny, CellExternWidth, verticalDistance, h, p);
 }
+
+// ======================================================================================================
+// Reading preprocessed file with nodes
+// ======================================================================================================
+
+double Lhyphen::getMinimumNodeDistance() {
+  struct cellPair {
+    size_t i;
+    size_t j;
+  };
+
+  // Compute the expanded-AABB of each cell
+  std::vector<AABB_2D> aabbs(cells.size());
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    aabbs[ci].set_single(cells[ci].nodes[0].pos);
+    for (size_t in = 1; in < cells[ci].nodes.size(); in++) {
+      aabbs[ci].add(cells[ci].nodes[in].pos);
+    }
+    aabbs[ci].enlarge(cells[ci].radius + 0.5 * distVerlet);
+  }
+
+  // Find intersecting expanded-AABB
+  std::vector<cellPair> cellPairs;
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    for (size_t cj = ci + 1; cj < cells.size(); cj++) {
+
+      if (aabbs[ci].intersect(aabbs[cj])) {
+        cellPair P;
+
+        P.i = ci;
+        P.j = cj;
+        cellPairs.push_back(P);
+      }
+    }
+  }
+
+  double d2min = 1e20;
+  for (size_t ip = 0; ip < cellPairs.size(); ++ip) {
+
+    size_t ci = cellPairs[ip].i;
+    size_t cj = cellPairs[ip].j;
+
+    // test chaque sommet de j avec chaque barre de i
+    for (size_t jn = 0; jn < cells[cj].nodes.size(); ++jn) {
+      for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
+        double d2 = norm2(cells[cj].nodes[jn].pos - cells[ci].nodes[in].pos);
+        if (d2 < d2min) {
+          d2min = d2;
+        }
+      }
+    }
+  }
+
+  return sqrt(d2min);
+}
+
+/**
+ *   This function reads a file containing a list of x,y positions with cell numbers.
+ *   The numbers don't matter as long as they are different for each cell.
+ *   Pre-cleaning must be done so that there are at least 3 nodes per cell. All cells are closed.
+ *
+ *   @param name      name of the node file to read
+ *   @param barWidth  width of the bar (negative for auto-evaluated value)
+ *   @param Kn        value of Kn
+ *   @param Kr        value of Kr
+ *   @param Mz_max    maximum value of Mz
+ *   @param p_int     value of p_int
+ */
+void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int) {
+  std::ifstream file(name);
+
+  struct data {
+    double x, y;
+    size_t id;
+    bool operator<(const data &rhs) const {
+      if (id < rhs.id) {
+        return true;
+      }
+      return false;
+    }
+  };
+
+  std::multiset<data> dataset;
+
+  data D;
+  while (file.good()) {
+    file >> D.x >> D.y >> D.id;
+    if (file.eof()) {
+      break;
+    }
+    dataset.insert(D);
+  }
+
+  int cellId = -1;
+  Cell C;
+  for (auto i : dataset) {
+    if (cellId != (int)(i.id)) {
+      if (cellId != -1) {
+        cells.push_back(C);
+        C.nodes.clear();
+      }
+      cellId = (int)(i.id);
+    }
+    C.nodes.emplace_back(i.x, i.y);
+  }
+  if (!C.nodes.empty()) {
+    cells.push_back(C);
+  }
+
+  // If the barWidth is given as a negative value, it is defined as half the minimum distance between nodes of different
+  // cells
+  if (barWidth < 0.0) {
+    barWidth = getMinimumNodeDistance();
+    std::cout << "@Lhyphen::readNodeFile, barWidth has been set to " << barWidth << std::endl;
+  }
+
+  for (size_t i = 0; i < cells.size(); i++) {
+    cells[i].reorderNodes();
+    if (reorder == 1) {
+      cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
+    }
+  }
+}
+
+// ======================================================================================================
+// Setting parameters
+// ======================================================================================================
 
 /**
  *   Utiliser cette méthode pour definir le pas de temps (comme ça dt/2 et dt^2/2 seront pré-calculées)
@@ -398,6 +529,12 @@ void Lhyphen::setNodeControlInBox(double t_xmin, double t_xmax, double t_ymin, d
   }
 }
 
+void Lhyphen::setCellInternalPressure(size_t c, double p) { cells[c].p_int = p; }
+
+// ======================================================================================================
+// Updating the neighbor list
+// ======================================================================================================
+
 /**
  *   Checks whether a node (cell ci, node in) and a bar (cell cj, bar starting with node jn) are close.
  *   Depending on the case, the pair in the list of neighbours is either added or removed.
@@ -448,67 +585,6 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
       double dist = fabs(b * T) - (cells[ci].radius + cells[cj].radius);
       bool isNear = dist < distVerlet;
       cells[ci].insertOrRemove(ci, cj, in, jn, isNear);
-    }
-  }
-}
-
-/**
- *   This function reads a file containing a list of x,y positions with cell numbers.
- *   The numbers don't matter as long as they are different for each cell.
- *   Pre-cleaning must be done so that there are at least 3 nodes per cell. All cells are closed.
- *
- *   @param name      name of the node file to read
- *   @param barWidth  width of the bar
- *   @param Kn        value of Kn
- *   @param Kr        value of Kr
- *   @param Mz_max    maximum value of Mz
- *   @param p_int     value of p_int
- */
-void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int) {
-  std::ifstream file(name);
-
-  struct data {
-    double x, y;
-    size_t id;
-    bool operator<(const data &rhs) const {
-      if (id < rhs.id) {
-        return true;
-      }
-      return false;
-    }
-  };
-
-  std::multiset<data> dataset;
-
-  data D;
-  while (file.good()) {
-    file >> D.x >> D.y >> D.id;
-    if (file.eof()) {
-      break;
-    }
-    dataset.insert(D);
-  }
-
-  int cellId = -1;
-  Cell C;
-  for (auto i : dataset) {
-    if (cellId != (int)(i.id)) {
-      if (cellId != -1) {
-        cells.push_back(C);
-        C.nodes.clear();
-      }
-      cellId = (int)(i.id);
-    }
-    C.nodes.emplace_back(i.x, i.y);
-  }
-  if (!C.nodes.empty()) {
-    cells.push_back(C);
-  }
-
-  for (size_t i = 0; i < cells.size(); i++) {
-    cells[i].reorderNodes();
-    if (reorder == 1) {
-      cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
     }
   }
 }
@@ -634,13 +710,13 @@ void Lhyphen::updateNeighbors_linkCells() {
                   P.jn = jn;
                   cellPairs.push_back(P);
                 }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+              } // for jn
+            } // if intersect
+          } // for bj
+        } // for bi
+      } // for v
+    } // for yc
+  } // for xc
 
   // Now we test if a too large bodies can collide another body in the
   cc = &(lc.oversized_bodies);
@@ -714,6 +790,10 @@ void Lhyphen::updateNeighbors_linkCells() {
     }
   }
 }
+
+// ======================================================================================================
+// Gluing the cells
+// ======================================================================================================
 
 /**
  *   Put a dot of glue where the distance is close enough
@@ -832,6 +912,100 @@ int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos)
   }
 }
 
+void Lhyphen::associateGlue(int modelGc) {
+
+  struct Connect {
+    size_t ic; // indice de la première cellule dans Sample::cells
+    size_t jc; // indice de la seconde cellule dans Sample::cells (ic <= jc)
+    size_t in; // indice du noeud de la première cellule dans Sample::cells[ic]
+    size_t jn; // indice du noeud de la seconde cellule dans Sample::cells[jc]
+    Neighbor *woami{nullptr};
+    Connect(size_t t_ic, size_t t_jc, size_t t_in, size_t t_jn, Neighbor *t_woami)
+        : ic(t_ic), jc(t_jc), in(t_in), jn(t_jn) {
+      woami = t_woami;
+    }
+  };
+
+  // on construit un vector de neighbors avec uniquement les points de colle
+  std::vector<Connect> connects;
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
+         ++InterIt) {
+      Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
+
+      if (Inter->glueState > 0) {
+        connects.push_back(Connect(ci, Inter->jc, Inter->in, Inter->jn, Inter));
+      }
+    }
+  }
+
+  // on réduit les plan collés à 2 points les plus éloignées et on calcul la distance (= surface collée)
+  std::map<std::pair<size_t, size_t>, std::vector<size_t>> planMap;
+  for (size_t i = 0; i < connects.size(); i++) {
+    size_t cinf = std::min(connects[i].ic, connects[i].jc);
+    size_t csup = std::max(connects[i].ic, connects[i].jc);
+    std::pair<size_t, size_t> p = std::make_pair(cinf, csup);
+    planMap[p].push_back(i);
+  }
+
+  for (const auto &elem : planMap) {
+
+    double dmax = -1.0;
+    size_t ii = 0, jj = 0;
+    for (size_t ei = 0; ei < elem.second.size(); ei++) {
+      for (size_t ej = ei + 1; ej < elem.second.size(); ej++) {
+
+        vec2r p1;
+        getPosition(connects[elem.second[ei]].ic, connects[elem.second[ei]].jc, connects[elem.second[ei]].in,
+                    connects[elem.second[ei]].jn, p1);
+        vec2r p2;
+        getPosition(connects[elem.second[ej]].ic, connects[elem.second[ej]].jc, connects[elem.second[ej]].in,
+                    connects[elem.second[ej]].jn, p2);
+
+        double dst = (p2 - p1).length();
+        if (dst > dmax) {
+          ii = elem.second[ei];
+          jj = elem.second[ej];
+          dmax = dst;
+        }
+      }
+    }
+
+    for (size_t e = 0; e < elem.second.size(); e++) {
+      connects[elem.second[e]].woami->glueState = 0;
+    }
+    connects[ii].woami->glueState = modelGc;
+    connects[jj].woami->glueState = modelGc;
+
+    connects[ii].woami->length = dmax;
+    connects[jj].woami->length = dmax;
+  }
+
+  // on re-parcours les neighbors pour identifier les brothers (liens collés aux mêmes cellules)
+  size_t cinfi, csupi;
+  size_t cinfj, csupj;
+  for (size_t i = 0; i < connects.size(); i++) {
+    cinfi = std::min(connects[i].ic, connects[i].jc);
+    csupi = std::max(connects[i].ic, connects[i].jc);
+    for (size_t j = 0; j < connects.size(); j++) {
+      if (i == j) {
+        continue;
+      }
+      cinfj = std::min(connects[j].ic, connects[j].jc);
+      csupj = std::max(connects[j].ic, connects[j].jc);
+      if (cinfi == cinfj && csupi == csupj) {
+        connects[j].woami->brother = connects[i].woami;
+        connects[i].woami->brother = connects[j].woami;
+        break;
+      }
+    }
+  }
+}
+
+// ======================================================================================================
+// Computing
+// ======================================================================================================
+
 /**
  *  Calculation of interaction forces (between cell-elements)
  *
@@ -867,8 +1041,9 @@ void Lhyphen::computeInteractionForces() {
           double dn = b_length - sumR;
           Inter->n = branch / b_length;
           Inter->fn = -kn * dn;
-          if (adaptativeStiffness == 1)
+          if (adaptativeStiffness == 1) {
             Inter->fn *= sumR / (sumR + dn);
+          }
           if (Inter->glueState == 0) {
             Inter->fn -= fadh;
           }
@@ -1169,8 +1344,9 @@ void Lhyphen::computeInteractionForces() {
             // here the normal vector is oriented from the bar to the disc
 
             Inter->fn = -kn * dn;
-            if (adaptativeStiffness == 1)
+            if (adaptativeStiffness == 1) {
               Inter->fn *= sumR / (sumR + dn);
+            }
 
             // vitesse relative noeud par rapport à barre
             wend = proj / u_length;
@@ -1187,8 +1363,9 @@ void Lhyphen::computeInteractionForces() {
               Inter->ft = -threshold;
             }
 
-            if (Inter->glueState == 0)
+            if (Inter->glueState == 0) {
               Inter->fn -= fadh;
+            }
 
             // transfert des forces vers les noeuds concernés
             // n est orienté de la barre vers le noeud
@@ -1434,10 +1611,11 @@ void Lhyphen::NodeAccelerations() {
   computeNodeForces();
   computeInteractionForces();
 
-  if (cellContent == CELL_CONTAIN_GAS)
+  if (cellContent == CELL_CONTAIN_GAS) {
     InternalGasPressureForce();
-  else if (cellContent == CELL_CONTAIN_LIQUID)
+  } else if (cellContent == CELL_CONTAIN_LIQUID) {
     InternalLiquidPressureForce();
+  }
 
 #pragma omp parallel for schedule(static, chunk_size)
   for (size_t c = 0; c < cells.size(); ++c) {
@@ -1597,6 +1775,72 @@ void Lhyphen::integrate() {
   }
 }
 
+// ======================================================================================================
+// Volume internal forces
+// ======================================================================================================
+
+// loi des gaz parfaits à température constante
+void Lhyphen::InternalGasPressureForce() {
+  START_TIMER("InternalGasPressureForce");
+
+  for (size_t c = 0; c < cells.size(); c++) {
+    if (cells[c].close == true) {
+      double PrevSurface = cells[c].surface; // plus utile
+      double PrevPint = cells[c].p_int;
+      cells[c].CellSurface();
+      // P(k-1) S(k-1) = P(k)S(k) -> P(k) = P(k-1) S(k-1)/S(k)
+      cells[c].p_int = PrevSurface * PrevPint / cells[c].surface;
+
+      for (size_t b = 0; b < cells[c].bars.size(); b++) {
+        // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
+        size_t i = cells[c].bars[b].i;
+        size_t j = cells[c].bars[b].j;
+        vec2r barVector = cells[c].nodes[i].pos - cells[c].nodes[j].pos;
+        vec2r barDir = barVector;
+        double barL = barDir.normalize();
+        vec2r barDirRot(-barDir.y, barDir.x);
+        vec2r Fp_bar = cells[c].p_int * barL * barDirRot;
+        cells[c].nodes[i].force += Fp_bar * 0.5;
+        cells[c].nodes[j].force += Fp_bar * 0.5;
+      }
+    } else {
+      continue;
+    }
+  }
+}
+
+// remarque : COMPRESSIBLE plutot que liquide
+void Lhyphen::InternalLiquidPressureForce() {
+  START_TIMER("InternalLiquidPressureForce");
+
+  for (size_t c = 0; c < cells.size(); c++) {
+    if (cells[c].close == true) {
+
+      cells[c].CellSurface();
+      cells[c].p_int = -compressFactor * (cells[c].surface - cells[c].surface0) / cells[c].surface0;
+
+      for (size_t b = 0; b < cells[c].bars.size(); b++) {
+        // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
+        size_t i = cells[c].bars[b].i;
+        size_t j = cells[c].bars[b].j;
+        vec2r barVector = cells[c].nodes[i].pos - cells[c].nodes[j].pos;
+        vec2r barDir = barVector;
+        double barL = barDir.normalize();
+        vec2r barDirRot(-barDir.y, barDir.x);
+        vec2r Fp_bar = cells[c].p_int * barL * barDirRot;
+        cells[c].nodes[i].force += Fp_bar * 0.5;
+        cells[c].nodes[j].force += Fp_bar * 0.5;
+      }
+    } else {
+      continue;
+    }
+  }
+}
+
+// ======================================================================================================
+// Dumping (conf-files)
+// ======================================================================================================
+
 /**
  *   Save the current configuration in a file
  *
@@ -1682,6 +1926,15 @@ void Lhyphen::saveCONF(const char *fname) {
       file << '\n';
     }
   }
+
+  if (!controlBoxAreas.empty()) {
+    file << "controlBoxAreas " << controlBoxAreas.size() << std::endl;
+    for (size_t i = 0; i < controlBoxAreas.size(); i++) {
+      file << controlBoxAreas[i].xmin << ' ' << controlBoxAreas[i].xmax << ' ' << controlBoxAreas[i].ymin << ' '
+           << controlBoxAreas[i].ymax << ' ' << controlBoxAreas[i].xmode << ' ' << controlBoxAreas[i].xvalue << ' '
+           << controlBoxAreas[i].ymode << ' ' << controlBoxAreas[i].yvalue << std::endl;
+    }
+  }
 }
 
 /**
@@ -1705,6 +1958,7 @@ void Lhyphen::loadCONF(const char *fname) {
   std::ifstream file(fname);
 
   int modelGc = 0;
+  controlBoxAreas.clear();
 
   std::string token;
   file >> token;
@@ -1856,15 +2110,15 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> d;
       findDisplayArea(d);
     } else if (token == "glue") {
-      double d;
-      file >> d;
+      double dist;
+      file >> dist;
       modelGc = 1;
-      glue(d, modelGc);
+      glue(dist, modelGc);
     } else if (token == "GcGlue") {
-      double d;
-      file >> d;
+      double dist;
+      file >> dist;
       modelGc = 2;
-      glue(d, modelGc);
+      glue(dist, modelGc);
     } else if (token == "setCellMasses") {
       double mass;
       file >> mass;
@@ -1892,11 +2146,21 @@ void Lhyphen::loadCONF(const char *fname) {
       int xmode, ymode;
       file >> xmin_ >> xmax_ >> ymin_ >> ymax_ >> xmode >> xvalue >> ymode >> yvalue;
       setNodeControlInBox(xmin_, xmax_, ymin_, ymax_, xmode, xvalue, ymode, yvalue);
+      controlBoxAreas.push_back(ControlBoxArea(xmin_, xmax_, ymin_, ymax_, xmode, xvalue, ymode, yvalue));
+    } else if (token == "controlBoxAreas") {
+      double xmin_, xmax_, ymin_, ymax_, xvalue, yvalue;
+      int xmode, ymode;
+      size_t nb = 0;
+      file >> nb;
+      for (size_t i = 0; i < nb; i++) {
+        file >> xmin_ >> xmax_ >> ymin_ >> ymax_ >> xmode >> xvalue >> ymode >> yvalue;
+        controlBoxAreas.push_back(ControlBoxArea(xmin_, xmax_, ymin_, ymax_, xmode, xvalue, ymode, yvalue));
+      }
     } else if (token == "captureNodes") {
       double xmin_, xmax_, ymin_, ymax_;
       std::string filename;
       file >> filename >> xmin_ >> xmax_ >> ymin_ >> ymax_;
-      CapturedNodes CN(filename.c_str());
+      CapturedNodes CN(filename.c_str(), xmin_, xmax_, ymin_, ymax_);
       for (size_t c = 0; c < cells.size(); c++) {
         for (size_t n = 0; n < cells[c].nodes.size(); n++) {
 
@@ -1972,106 +2236,18 @@ void Lhyphen::loadCONF(int ifile) {
   loadCONF(fname);
 }
 
-
-void Lhyphen::associateGlue(int modelGc) {
-
-  struct Connect {
-    size_t ic; // indice de la première cellule dans Sample::cells
-    size_t jc; // indice de la seconde cellule dans Sample::cells (ic <= jc)
-    size_t in; // indice du noeud de la première cellule dans Sample::cells[ic]
-    size_t jn; // indice du noeud de la seconde cellule dans Sample::cells[jc]
-    Neighbor *woami{nullptr};
-    Connect(size_t t_ic, size_t t_jc, size_t t_in, size_t t_jn, Neighbor *t_woami)
-        : ic(t_ic), jc(t_jc), in(t_in), jn(t_jn) {
-      woami = t_woami;
-    }
-  };
-
-  // on construit un vector de neighbors avec uniquement les points de colle
-  std::vector<Connect> connects;
-  for (size_t ci = 0; ci < cells.size(); ci++) {
-    for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
-         ++InterIt) {
-      Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
-
-      if (Inter->glueState > 0) {
-        connects.push_back(Connect(ci, Inter->jc, Inter->in, Inter->jn, Inter));
-      }
-    }
-  }
-
-  // on réduit les plan collés à 2 points les plus éloignées et on calcul la distance (= surface collée)
-  std::map<std::pair<size_t, size_t>, std::vector<size_t>> planMap;
-  for (size_t i = 0; i < connects.size(); i++) {
-    size_t cinf = std::min(connects[i].ic, connects[i].jc);
-    size_t csup = std::max(connects[i].ic, connects[i].jc);
-    std::pair<size_t, size_t> p = std::make_pair(cinf, csup);
-    planMap[p].push_back(i);
-  }
-
-  for (const auto &elem : planMap) {
-
-    double dmax = -1.0;
-    size_t ii = 0, jj = 0;
-    for (size_t ei = 0; ei < elem.second.size(); ei++) {
-      for (size_t ej = ei + 1; ej < elem.second.size(); ej++) {
-
-        vec2r p1;
-        getPosition(connects[elem.second[ei]].ic, connects[elem.second[ei]].jc, connects[elem.second[ei]].in,
-                    connects[elem.second[ei]].jn, p1);
-        vec2r p2;
-        getPosition(connects[elem.second[ej]].ic, connects[elem.second[ej]].jc, connects[elem.second[ej]].in,
-                    connects[elem.second[ej]].jn, p2);
-
-        double dst = (p2 - p1).length();
-        if (dst > dmax) {
-          ii = elem.second[ei];
-          jj = elem.second[ej];
-          dmax = dst;
-        }
-      }
-    }
-
-    for (size_t e = 0; e < elem.second.size(); e++) {
-      connects[elem.second[e]].woami->glueState = 0;
-    }
-    connects[ii].woami->glueState = modelGc;
-    connects[jj].woami->glueState = modelGc;
-
-    connects[ii].woami->length = dmax;
-    connects[jj].woami->length = dmax;
-  }
-
-  // on re-parcours les neighbors pour identifier les brothers (liens collés aux mêmes cellules)
-  size_t cinfi, csupi;
-  size_t cinfj, csupj;
-  for (size_t i = 0; i < connects.size(); i++) {
-    cinfi = std::min(connects[i].ic, connects[i].jc);
-    csupi = std::max(connects[i].ic, connects[i].jc);
-    for (size_t j = 0; j < connects.size(); j++) {
-      if (i == j) {
-        continue;
-      }
-      cinfj = std::min(connects[j].ic, connects[j].jc);
-      csupj = std::max(connects[j].ic, connects[j].jc);
-      if (cinfi == cinfj && csupi == csupj) {
-        connects[j].woami->brother = connects[i].woami;
-        connects[i].woami->brother = connects[j].woami;
-        break;
-      }
-    }
-  }
-}
-
 void Lhyphen::initCellInitialSurfaces() {
   for (size_t c = 0; c < cells.size(); c++) {
-
     if (cells[c].close == true && cells[c].surface0 == 0.0) {
       cells[c].CellSurface();
       cells[c].surface0 = cells[c].surface;
     }
   }
 }
+
+// ======================================================================================================
+// Saving SVG
+// ======================================================================================================
 
 /**
  *  Find the boundaries of the area drawn in the svg files
@@ -2089,14 +2265,18 @@ void Lhyphen::findDisplayArea(double factor) {
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
 
-      if (cells[c].nodes[n].pos.x < xmin)
+      if (cells[c].nodes[n].pos.x < xmin) {
         xmin = cells[c].nodes[n].pos.x;
-      if (cells[c].nodes[n].pos.x > xmax)
+      }
+      if (cells[c].nodes[n].pos.x > xmax) {
         xmax = cells[c].nodes[n].pos.x;
-      if (cells[c].nodes[n].pos.y < ymin)
+      }
+      if (cells[c].nodes[n].pos.y < ymin) {
         ymin = cells[c].nodes[n].pos.y;
-      if (cells[c].nodes[n].pos.y > ymax)
+      }
+      if (cells[c].nodes[n].pos.y > ymax) {
         ymax = cells[c].nodes[n].pos.y;
+      }
     }
   }
 
@@ -2118,7 +2298,7 @@ void Lhyphen::findDisplayArea(double factor) {
 
 /**
  *   Very basic function for drawing cells with blue lines,
- *   TODO: pour d'autre sorties graphiques, on verra après :)
+ *   Remarque: pour d'autre sorties graphiques, il vaut mieux le faire en post-traitement à partir des fichiers conf :)
  *
  *   @param num         numero du fichier
  *   @param nameBase    nom de base (dans lequel sera inséré le numéro)
@@ -2148,10 +2328,12 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
     double pmin = 1e20;
     double pmax = -1e20;
     for (size_t c = 0; c < cells.size(); c++) {
-      if (cells[c].p_int > pmax)
+      if (cells[c].p_int > pmax) {
         pmax = cells[c].p_int;
-      if (cells[c].p_int < pmin)
+      }
+      if (cells[c].p_int < pmin) {
         pmin = cells[c].p_int;
+      }
     }
 
     double pp = std::max(fabs(pmax), fabs(pmin));
@@ -2164,8 +2346,9 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
     double NRJmax = 0.0;
     for (size_t c = 0; c < cells.size(); c++) {
       double NRJ = cells[c].getElasticNRJ(compressFactor);
-      if (NRJ > NRJmax)
+      if (NRJ > NRJmax) {
         NRJmax = NRJ;
+      }
     }
     ctPos.setMinMax(0.0, (float)NRJmax);
   } break;
@@ -2178,10 +2361,11 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
 
       switch (SVG_colorCells) {
       case 1: {
-        if (cells[c].p_int >= 0.0)
+        if (cells[c].p_int >= 0.0) {
           ctPos.getRGB((float)cells[c].p_int, &col);
-        else
+        } else {
           ctNeg.getRGB((float)cells[c].p_int, &col);
+        }
       } break;
 
       case 2: {
@@ -2247,7 +2431,6 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
       for (auto &fm : force_map) {
         size_t ic = fm.first.first;
         size_t jc = fm.first.second;
-        // vec2r branch = cells[jc].center - cells[ic].center;
         double width = norm(fm.second) / fnMax;
         snprintf(opt, 256, "stroke:black;fill:none;stroke-linecap:round;stroke-width:%g", req * width * vz.scalex);
         svg.line(vz, cells[ic].center.x, cells[ic].center.y, cells[jc].center.x, cells[jc].center.y, opt);
@@ -2257,83 +2440,3 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
 
   svg.end();
 }
-
-/**
- * @brief Get the Rotation Velocity Bar object
- *
- * @param a Position point A
- * @param b Position point B
- * @param va Vitesse point A
- * @param vb Vitesse point B
- * @return double vitesse de rotation de solide rigide
- */
-/*
-double Lhyphen::getRotationVelocityBar(vec2r &a, vec2r &b, vec2r &va, vec2r &vb) {
-  START_TIMER("getRotationVelocityBar");
-  vec2r u = b - a;
-  // double l = u.normalize();
-  double l = u * u;
-  vec2r T(-u.y, u.x);
-  return ((vb - va) * T / l);
-}
-*/
-
-// loi des gaz parfaits à température constante
-void Lhyphen::InternalGasPressureForce() {
-  START_TIMER("InternalGasPressureForce");
-
-  for (size_t c = 0; c < cells.size(); c++) {
-    if (cells[c].close == true) {
-      double PrevSurface = cells[c].surface; // plus utile
-      double PrevPint = cells[c].p_int;
-      cells[c].CellSurface();
-      // P(k-1) S(k-1) = P(k)S(k) -> P(k) = P(k-1) S(k-1)/S(k)
-      cells[c].p_int = PrevSurface * PrevPint / cells[c].surface;
-
-      for (size_t b = 0; b < cells[c].bars.size(); b++) {
-        // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
-        size_t i = cells[c].bars[b].i;
-        size_t j = cells[c].bars[b].j;
-        vec2r barVector = cells[c].nodes[i].pos - cells[c].nodes[j].pos;
-        vec2r barDir = barVector;
-        double barL = barDir.normalize();
-        vec2r barDirRot(-barDir.y, barDir.x);
-        vec2r Fp_bar = cells[c].p_int * barL * barDirRot;
-        cells[c].nodes[i].force += Fp_bar * 0.5;
-        cells[c].nodes[j].force += Fp_bar * 0.5;
-      }
-    } else {
-      continue;
-    }
-  }
-}
-
-// remarque : COMPRESSIBLE plutot que liquide
-void Lhyphen::InternalLiquidPressureForce() {
-  START_TIMER("InternalLiquidPressureForce");
-
-  for (size_t c = 0; c < cells.size(); c++) {
-    if (cells[c].close == true) {
-
-      cells[c].CellSurface();
-      cells[c].p_int = -compressFactor * (cells[c].surface - cells[c].surface0) / cells[c].surface0;
-
-      for (size_t b = 0; b < cells[c].bars.size(); b++) {
-        // FIXME : pour l'instant  on fait l'hypothèse que les noeuds sont ordonnées (sens trigo ?)
-        size_t i = cells[c].bars[b].i;
-        size_t j = cells[c].bars[b].j;
-        vec2r barVector = cells[c].nodes[i].pos - cells[c].nodes[j].pos;
-        vec2r barDir = barVector;
-        double barL = barDir.normalize();
-        vec2r barDirRot(-barDir.y, barDir.x);
-        vec2r Fp_bar = cells[c].p_int * barL * barDirRot;
-        cells[c].nodes[i].force += Fp_bar * 0.5;
-        cells[c].nodes[j].force += Fp_bar * 0.5;
-      }
-    } else {
-      continue;
-    }
-  }
-}
-
-void Lhyphen::setCellInternalPressure(size_t c, double p) { cells[c].p_int = p; }

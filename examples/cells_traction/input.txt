@@ -1,7 +1,7 @@
 # SIMULATION INPUTS ===================================================
 
 # time flow
-# t 0
+t 0
 dt 1e-4 
 nstep  2000000
 
@@ -35,8 +35,8 @@ mu 0.3
 # SAMPLE ===================================================
 
 #E = 12GPa
-#             filename       barWidth  kv/kn     kb/kr          mz_max   pressure
-readNodeFile  nodeFile.txt   0.012    3.66782  305.652    4.401e-04        0
+#             filename       barWidth  kv/kn     kb/kr      mz_max      pressure
+readNodeFile  nodeFile.txt   0.010     3.66782   305.652    4.401e-04   0
 #    Plasticity -------^
 #readNodeFile  nodeFile.txt   0.006     2e8  2e6   100000      1000
 #    Full Elastic -----^
@@ -65,6 +65,6 @@ Gcglue 0.005
 #setGlueSameProperties 1e5 1e5 5000 5000 5
 
 #setGlueSameProperties 36.678  3056.524  0.0432  0.0432  2
-setGcGlueSameProperties 4 4 0.2
+setGcGlueSameProperties 1e3 1e3 1e9
 
 findDisplayArea 1.5 

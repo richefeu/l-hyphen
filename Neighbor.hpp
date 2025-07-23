@@ -3,7 +3,6 @@
 
 #include "vec2.hpp"
 
-
 /**
  * Contact potentiel (voisin ou interaction)
  *
@@ -34,7 +33,7 @@ public:
   double kt_coh;
   double fn_coh_max;
   double ft_coh_max;
-  
+
   // rupture avec critère en energie
   double length;
   double yieldPower;
@@ -47,12 +46,15 @@ namespace std {
 // par defaut, la comparaison std::less est utilisée pour assurer l'ordre dans un std::set
 template <> struct less<Neighbor> {
   bool operator()(const Neighbor &lhs, const Neighbor &rhs) const {
-    if (lhs.jc < rhs.jc)
+    if (lhs.jc < rhs.jc) {
       return true;
-    if (lhs.jc == rhs.jc && lhs.in < rhs.in)
+    }
+    if (lhs.jc == rhs.jc && lhs.in < rhs.in) {
       return true;
-    if (lhs.jc == rhs.jc && lhs.in == rhs.in && lhs.jn < rhs.jn)
+    }
+    if (lhs.jc == rhs.jc && lhs.in == rhs.in && lhs.jn < rhs.jn) {
       return true;
+    }
     return false;
   }
 };
