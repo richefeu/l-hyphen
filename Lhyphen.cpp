@@ -1883,18 +1883,18 @@ void Lhyphen::integrate() {
     if (nstepPeriodSVG > 0 && step % nstepPeriodSVG == 0) {
 
       for (size_t c = 0; c < capturedNodes.size(); c++) {
-        vec2r meanPos, meanForce;
+        vec2r meanPos, sumForce, meanForce;
         for (size_t cn = 0; cn < capturedNodes[c].cellNodeIDs.size(); cn++) {
           size_t C = capturedNodes[c].cellNodeIDs[cn].c;
           size_t N = capturedNodes[c].cellNodeIDs[cn].n;
           meanPos += cells[C].nodes[N].pos;
-          meanForce += cells[C].nodes[N].force;
+          sumForce += cells[C].nodes[N].force;
         }
         if (capturedNodes[c].cellNodeIDs.size() > 0) {
           meanPos /= (double)capturedNodes[c].cellNodeIDs.size();
-          meanForce /= (double)capturedNodes[c].cellNodeIDs.size();
+          meanForce = sumForce / (double)capturedNodes[c].cellNodeIDs.size();
         }
-        of[c] << meanPos << ' ' << meanForce << '\n' << std::flush;
+        of[c] << meanPos << ' ' << sumForce << ' ' << meanForce << '\n' << std::flush;
       }
 
       saveSVG(isvg);
@@ -2250,7 +2250,7 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> dist;
       modelGc = 1;
       glue(dist, modelGc);
-    } else if (token == "GcGlue") {
+    } else if (token == "GcGlue" || token == "distGcGlue") {
       double dist;
       file >> dist;
       modelGc = 2;
