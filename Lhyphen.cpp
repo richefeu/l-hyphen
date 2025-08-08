@@ -7,9 +7,9 @@
  */
 Lhyphen::Lhyphen()
     : xmin(0.0), xmax(0.0), ymin(0.0), ymax(0.0), t(0.0), cyclicVelPeriod(0.0), dt(0.0), globalViscosity(0.0),
-      numericalDissipation(0.0), gravity(), distVerlet(0.0), cellContent(CELL_CONTAIN_NOTHING), compressFactor(0.0),
-      kn(1000.0), kt(1000.0), mu(0.0), fadh(0.0), nstep(1000), nstepPeriodVerlet(1), nstepPeriodSVG(10),
-      nstepPeriodRecord(1), nstepPeriodConf(10), isvg(0), iconf(0) {
+      numericalDissipation(0.0), gravity(), distVerlet(0.0), cellContent(CELL_EMPTY), compressFactor(0.0), kn(1000.0),
+      kt(1000.0), mu(0.0), fadh(0.0), nstep(1000), nstepPeriodVerlet(1), nstepPeriodSVG(10), nstepPeriodRecord(1),
+      nstepPeriodConf(10), isvg(0), iconf(0) {
 
   SVG_colorCells = 2;
   SVG_colorTableRescale = 0;
@@ -390,7 +390,7 @@ void Lhyphen::setCellDensities(double rho, double thickness) {
 }
 
 /**
- *   Sets the masses of all cells in the Lhyphen object.
+ *   Sets the masses of all cells in the Lhyphen object. Mass of each node is cellMass / nbNodes
  *
  *   @param cellMass  mass value to be set for each cell
  */
@@ -404,7 +404,7 @@ void Lhyphen::setCellMasses(double cellMass) {
 }
 
 /**
- *   Set the masses of all nodes in the Lhyphen object.
+ *   Set the same mass to all nodes in the Lhyphen object.
  *
  *   @param nodeMass  mass to set for all nodes
  */
@@ -417,7 +417,7 @@ void Lhyphen::setNodeMasses(double nodeMass) {
 }
 
 /**
- *   Set the same glue properties for all interactions.
+ *   Set the same 'force' glue properties for all interactions.
  *
  *   @param kn_coh      cohesion normal stiffness
  *   @param kt_coh      cohesion tangential stiffness
@@ -433,7 +433,7 @@ void Lhyphen::setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_
          ++InterIt) {
 
       Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
-      if (Inter->glueState == 1) {
+      if (Inter->glueState == GLUE_FORCE_THRESHOLD) {
         Inter->kn_coh = kn_coh;
         Inter->kt_coh = kt_coh;
         Inter->fn_coh_max = fn_coh_max;
@@ -445,7 +445,7 @@ void Lhyphen::setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_
 }
 
 /**
- *   Set the same Gc glue properties for all interactions.
+ *   Set the same 'Gc' glue properties for all interactions.
  *
  *   @param kn_coh      cohesion normal stiffness
  *   @param kt_coh      cohesion tangential stiffness
@@ -457,7 +457,7 @@ void Lhyphen::setGcGlueSameProperties(double kn_coh, double kt_coh, double Gc) {
          ++InterIt) {
 
       Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
-      if (Inter->glueState == 2) {
+      if (Inter->glueState == GLUE_GC) {
         Inter->kn_coh = kn_coh;
         Inter->kt_coh = kt_coh;
         Inter->Gc = Gc;
@@ -529,11 +529,34 @@ void Lhyphen::setNodeControlInBox(double t_xmin, double t_xmax, double t_ymin, d
   }
 }
 
+/**
+ *   Sets the internal pressure of a cell.
+ *
+ *   @param c  number of the cell
+ *   @param p  new internal pressure of the cell
+ */
 void Lhyphen::setCellInternalPressure(size_t c, double p) { cells[c].p_int = p; }
 
 // ======================================================================================================
 // Updating the neighbor list
 // ======================================================================================================
+
+/**
+ *   Function to copy the neighbors set of each cell into a vector of neighbor pointers
+ *
+ */
+void Lhyphen::copy_neighbors_set_to_vec() {
+  for (auto &cell : cells) {
+    size_t nbv = cell.neighbors.size();
+    cell.vec_neighbors.clear();
+    cell.vec_neighbors.resize(nbv);
+
+    size_t index = 0;
+    for (auto &neighbor : cell.neighbors) {
+      cell.vec_neighbors[index++] = (Neighbor *)&neighbor;
+    }
+  }
+}
 
 /**
  *   Checks whether a node (cell ci, node in) and a bar (cell cj, bar starting with node jn) are close.
@@ -626,7 +649,7 @@ void Lhyphen::updateNeighbors_brute_force() {
     }
   }
 
-  // Effectively builds the list of neighbours
+  // builds the list of neighbours
   for (size_t ip = 0; ip < cellPairs.size(); ++ip) {
 
     size_t ci = cellPairs[ip].i;
@@ -646,6 +669,8 @@ void Lhyphen::updateNeighbors_brute_force() {
       }
     }
   }
+
+  copy_neighbors_set_to_vec();
 }
 
 // En cours de devel. !!!!!!!!!! (ne pas utiliser)
@@ -789,6 +814,8 @@ void Lhyphen::updateNeighbors_linkCells() {
       addNodeToBarNeighbor(cj, ci, jn, in, cells[cj].radius);
     }
   }
+
+  copy_neighbors_set_to_vec();
 }
 
 // ======================================================================================================
@@ -872,6 +899,26 @@ void Lhyphen::glue(double epsilonDist, int modelGc) {
   associateGlue(modelGc);
 }
 
+/**
+ *   Given a cell-cell interaction, compute the "position" of interaction.
+ *   This is a point such that the distance between this point and the
+ *   node in (ci,in) is equal to the radius of node in (ci,in).
+ *   This point is either on the bar (cj,jn) or one of the disks at its
+ *   extremities (cj,jn) or (cj,jnext).
+ *   This is used to compute the force in the modelGc.
+ *
+ *   @param ci      cell i
+ *   @param cj      cell j
+ *   @param in      node number in cell ci
+ *   @param jn      node number at the start of a bar in cell cj
+ *   @param pos     output position
+ *   @return        code indicating which case was used:
+ *                  0: no bar in cj
+ *                  1: interaction with disk j
+ *                  2: interaction with disk jnext
+ *                  3: interaction with bar
+ *
+ */
 int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos) {
   if (cells[cj].nodes[jn].nextNode == null_size_t) { // This is the case where the bar in cj does not exist.
 
@@ -912,7 +959,12 @@ int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos)
   }
 }
 
-void Lhyphen::associateGlue(int modelGc) {
+/**
+ *   Associate a model of glue to all the neighbors between cells having a positive glueState.
+ *
+ *   @param modelGc the model of glue to associate
+ */
+void Lhyphen::associateGlue(int modelGc, double activationLength) {
 
   struct Connect {
     size_t ic; // indice de la première cellule dans Sample::cells
@@ -974,11 +1026,14 @@ void Lhyphen::associateGlue(int modelGc) {
     for (size_t e = 0; e < elem.second.size(); e++) {
       connects[elem.second[e]].woami->glueState = 0;
     }
-    connects[ii].woami->glueState = modelGc;
-    connects[jj].woami->glueState = modelGc;
 
-    connects[ii].woami->length = dmax;
-    connects[jj].woami->length = dmax;
+    if (dmax >= activationLength) {
+      connects[ii].woami->glueState = modelGc;
+      connects[jj].woami->glueState = modelGc;
+
+      connects[ii].woami->length = dmax;
+      connects[jj].woami->length = dmax;
+    }
   }
 
   // on re-parcours les neighbors pour identifier les brothers (liens collés aux mêmes cellules)
@@ -987,13 +1042,13 @@ void Lhyphen::associateGlue(int modelGc) {
   for (size_t i = 0; i < connects.size(); i++) {
     cinfi = std::min(connects[i].ic, connects[i].jc);
     csupi = std::max(connects[i].ic, connects[i].jc);
-    for (size_t j = 0; j < connects.size(); j++) {
+    for (size_t j = 0; j < connects.size(); j++) { // FIXME: commencer à i+1 ????
       if (i == j) {
         continue;
       }
       cinfj = std::min(connects[j].ic, connects[j].jc);
       csupj = std::max(connects[j].ic, connects[j].jc);
-      if (cinfi == cinfj && csupi == csupj) {
+      if (cinfi == cinfj && csupi == csupj && connects[i].woami->glueState > 0 && connects[j].woami->glueState > 0) {
         connects[j].woami->brother = connects[i].woami;
         connects[i].woami->brother = connects[j].woami;
         break;
@@ -1006,6 +1061,85 @@ void Lhyphen::associateGlue(int modelGc) {
 // Computing
 // ======================================================================================================
 
+void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext, double wbeg,
+                            double wend) {
+
+  if (Inter->glueState == GLUE_FORCE_THRESHOLD) {
+
+    double zeta =
+        -Inter->fn_coh / Inter->fn_coh_max + pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
+    if (zeta > 0.0) {
+      Inter->fn_coh = 0.0;
+      Inter->ft_coh = 0.0;
+      Inter->glueState = 0;
+      if (Inter->brother != nullptr) {
+        Inter->brother->fn_coh = 0.0;
+        Inter->brother->ft_coh = 0.0;
+        Inter->brother->glueState = 0;
+      }
+    } else {
+      // transfert des force vers les noeuds concernés
+      vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
+      cells[ci].nodes[in].force += finc;
+      // cells[cj].nodes[jn].force -= finc;
+      if (wbeg > 0.0) {
+        cells[cj].nodes[jn].force -= wbeg * finc;
+      }
+      if (wend > 0.0) {
+        cells[cj].nodes[jnext].force -= wend * finc;
+      }
+    }
+
+  } else if (Inter->glueState == GLUE_GC) {
+    double W = 0.0;
+    if (Inter->fn_coh < 0.0) { // heaviside(dn)
+      W += Inter->fn_coh * Inter->fn_coh / Inter->kn_coh;
+    }
+    W += Inter->ft_coh * Inter->ft_coh / Inter->kt_coh;
+
+    if (Inter->brother != nullptr) {
+
+      if (Inter->brother->fn < 0.0) { // heaviside(dn)
+        W += Inter->brother->fn_coh * Inter->brother->fn_coh / Inter->brother->kn_coh;
+      }
+      W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
+
+      double G = W / (2.0 * Inter->length);
+
+      if (G > Inter->Gc) {
+        // breakage
+        Inter->fn_coh = 0.0;
+        Inter->ft_coh = 0.0;
+        Inter->glueState = 0;
+        Inter->brother->fn_coh = 0.0;
+        Inter->brother->ft_coh = 0.0;
+        Inter->brother->glueState = 0;
+        if (Inter->length > 1.0e-12) {
+          cumulatedG += G;
+          cumulatedL += Inter->length;
+        }
+      } else {
+        // transfert des force vers les noeuds concernés
+        vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
+        cells[ci].nodes[in].force += finc;
+        // cells[cj].nodes[jn].force -= finc;
+        if (wbeg > 0.0) {
+          cells[cj].nodes[jn].force -= wbeg * finc;
+        }
+        if (wend > 0.0) {
+          cells[cj].nodes[jnext].force -= wend * finc;
+        }
+      }
+
+    } else {
+      // breakage if a 'brother' exists
+      Inter->fn_coh = 0.0;
+      Inter->ft_coh = 0.0;
+      Inter->glueState = 0;
+    }
+  }
+}
+
 /**
  *  Calculation of interaction forces (between cell-elements)
  *
@@ -1013,20 +1147,18 @@ void Lhyphen::associateGlue(int modelGc) {
 void Lhyphen::computeInteractionForces() {
   START_TIMER("computeInteractionForces");
 
-  vec2r vrel, T;
+  vec2r vrel;
 
   for (size_t ci = 0; ci < cells.size(); ci++) {
-    for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
-         ++InterIt) {
-
-      // the iterator must be converted to a std::set, otherwise we won't be able to modify the values
-      Neighbor *Inter = const_cast<Neighbor *>(std::addressof(*InterIt));
+    for (size_t ii = 0; ii < cells[ci].vec_neighbors.size(); ++ii) {
+      Neighbor *Inter = cells[ci].vec_neighbors[ii];
 
       size_t cj = Inter->jc;
       size_t in = Inter->in;
       size_t jn = Inter->jn;
+      size_t jnext = cells[cj].nodes[jn].nextNode;
 
-      if (cells[cj].nodes[jn].nextNode == null_size_t) {
+      if (jnext == null_size_t) {
         // =============================================================================
         // This is the case where the bar in cj does not exist.
         // In other words, it's an interaction between a disk of ci and a disc of cj
@@ -1075,7 +1207,6 @@ void Lhyphen::computeInteractionForces() {
         // =============================================================================
         // a disk (ci,in) interacts with a bar (cj, jn -> jnext)
 
-        size_t jnext = cells[cj].nodes[jn].nextNode;
         // jnext est le numéro du noeud à la fin de la barre dans la cellule cj (jn c'est le début)
         vec2r b = cells[ci].nodes[in].pos - cells[cj].nodes[jn].pos;
         vec2r u = cells[cj].nodes[jnext].pos - cells[cj].nodes[jn].pos;
@@ -1084,27 +1215,27 @@ void Lhyphen::computeInteractionForces() {
 
         // on doit gérer le calcul des forces (contact, frottement, cohesion...)
         // pour chacun des 3 cas suivants :
-        //   disque (ci, in)   ---   disque (cj, jn) début de la barre
-        //   disque (ci, in)   ---   disque (cj, jnext) fin de la barre
-        //   disque (ci, in)   ---   barre (cj, jn--jnext)
+        //   cas 1 / disque (ci, in)   ---   disque (cj, jn) début de la barre
+        //   cas 2 / disque (ci, in)   ---   disque (cj, jnext) fin de la barre
+        //   cas 3 / disque (ci, in)   ---   barre (cj, jn--jnext)
 
-        if (proj <= 0.0) { // ====================== disque j du début
+        if (proj <= 0.0) { // cas 1 / ====================== disque j du début
 
           double sqrDist = norm2(b);
           double sumR = cells[ci].radius + cells[cj].radius;
           if (sqrDist - sumR * sumR < 0.0) {
-            Inter->contactState = 1;
+            Inter->contactState = TOUCHING;
             double b_lenght = sqrt(sqrDist);
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
             Inter->fn = -kn * dn;
-            if (adaptativeStiffness == 1) {
+            if (adaptativeStiffness == LH_ENABLED) {
               Inter->fn *= sumR / (sumR + dn);
             }
 
             vrel = cells[ci].nodes[in].vel - cells[cj].nodes[jn].vel;
-            T.set(-Inter->n.y, Inter->n.x);
-            Inter->ft -= kt * (vrel * T) * dt;
+            Inter->T.set(-Inter->n.y, Inter->n.x);
+            Inter->ft -= kt * (vrel * Inter->T) * dt;
             double threshold = mu * Inter->fn;
             if (Inter->ft > threshold) {
               Inter->ft = threshold;
@@ -1121,27 +1252,28 @@ void Lhyphen::computeInteractionForces() {
             cells[ci].nodes[in].force += finc;
             cells[cj].nodes[jn].force -= finc;
           } else {
-            Inter->contactState = 0;
+            Inter->contactState = NOT_TOUCHING;
             Inter->fn = 0.0;
             Inter->ft = 0.0;
           }
 
-          if (Inter->glueState == 1 || Inter->glueState == 2) {
-            if (Inter->contactState == 0) {
+          if (Inter->glueState >= 1) {
+            if (Inter->contactState == NOT_TOUCHING) {
               double b_lenght = sqrt(sqrDist);
               Inter->n = b / b_lenght;
               vrel = cells[ci].nodes[in].vel - cells[cj].nodes[jn].vel;
-              T.set(-Inter->n.y, Inter->n.x);
+              Inter->T.set(-Inter->n.y, Inter->n.x);
             }
 
             Inter->fn_coh += -Inter->kn_coh * vrel * Inter->n * dt;
-            Inter->ft_coh += -Inter->kt_coh * vrel * T * dt;
+            Inter->ft_coh += -Inter->kt_coh * vrel * Inter->T * dt;
 
             if (Inter->fn_coh > 0.0) {
               Inter->fn_coh = 0.0;
             }
 
-            if (Inter->glueState == 1) { // RUPTURE par forces
+            // glue_breakage(Inter, ci, cj, in, jn, jnext, 1.0, 0.0);
+            if (Inter->glueState == GLUE_FORCE_THRESHOLD) { // RUPTURE par forces
               // rupture
               double zeta = -Inter->fn_coh / Inter->fn_coh_max +
                             pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
@@ -1156,11 +1288,11 @@ void Lhyphen::computeInteractionForces() {
                 }
               } else {
                 // transfert des force vers les noeuds concernés
-                vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
+                vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
                 cells[ci].nodes[in].force += finc;
                 cells[cj].nodes[jn].force -= finc;
               }
-            } else if (Inter->glueState == 2) { // model rupture Gc
+            } else if (Inter->glueState == GLUE_GC) { // model rupture Gc
               double W = 0.0;
               if (Inter->fn_coh < 0.0) { // heaviside(dn)
                 W += Inter->fn_coh * Inter->fn_coh / Inter->kn_coh;
@@ -1190,7 +1322,7 @@ void Lhyphen::computeInteractionForces() {
                   }
                 } else {
                   // transfert des force vers les noeuds concernés
-                  vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
+                  vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
                   cells[ci].nodes[in].force += finc;
 
                   cells[cj].nodes[jn].force -= finc;
@@ -1206,24 +1338,24 @@ void Lhyphen::computeInteractionForces() {
           } // if glueState == 1 ou 2
 
         } // fin de (disque j du début)
-        else if (proj >= u_length) { // ====================== disque jnext (de fin)
+        else if (proj >= u_length) { // cas 2 / ====================== disque jnext (de fin)
 
           b = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
           double sqrDist = norm2(b);
           double sumR = cells[ci].radius + cells[cj].radius;
           if (sqrDist - sumR * sumR < 0.0) {
-            Inter->contactState = 1;
+            Inter->contactState = TOUCHING;
             double b_lenght = sqrt(sqrDist);
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
             Inter->fn = -kn * dn;
-            if (adaptativeStiffness == 1) {
+            if (adaptativeStiffness == LH_ENABLED) {
               Inter->fn *= sumR / (sumR + dn);
             }
 
             vrel = cells[ci].nodes[in].vel - cells[cj].nodes[jnext].vel;
-            T.set(-Inter->n.y, Inter->n.x);
-            Inter->ft -= kt * (vrel * T) * dt;
+            Inter->T.set(-Inter->n.y, Inter->n.x);
+            Inter->ft -= kt * (vrel * Inter->T) * dt;
             double threshold = mu * Inter->fn;
             if (Inter->ft > threshold) {
               Inter->ft = threshold;
@@ -1231,7 +1363,7 @@ void Lhyphen::computeInteractionForces() {
               Inter->ft = -threshold;
             }
 
-            if (Inter->glueState == 0) {
+            if (Inter->glueState == GLUE_NONE) {
               Inter->fn -= fadh; // this adhesion can only act if there is no solid cohesion
             }
 
@@ -1241,27 +1373,28 @@ void Lhyphen::computeInteractionForces() {
             cells[cj].nodes[jnext].force -= finc;
 
           } else {
-            Inter->contactState = 0;
+            Inter->contactState = NOT_TOUCHING;
             Inter->fn = 0.0;
             Inter->ft = 0.0;
           }
 
-          if (Inter->glueState == 1 || Inter->glueState == 2) {
-            if (Inter->contactState == 0) {
+          if (Inter->glueState >= 1) {
+            if (Inter->contactState == NOT_TOUCHING) {
               double b_lenght = sqrt(sqrDist);
               Inter->n = b / b_lenght;
               vrel = cells[ci].nodes[in].vel - cells[cj].nodes[jnext].vel;
-              T.set(-Inter->n.y, Inter->n.x);
+              Inter->T.set(-Inter->n.y, Inter->n.x);
             }
 
             Inter->fn_coh += -Inter->kn_coh * vrel * Inter->n * dt;
-            Inter->ft_coh += -Inter->kt_coh * vrel * T * dt;
+            Inter->ft_coh += -Inter->kt_coh * vrel * Inter->T * dt;
 
             if (Inter->fn_coh > 0.0) {
               Inter->fn_coh = 0.0;
             }
 
-            if (Inter->glueState == 1) { // RUPTURE par forces
+            // glue_breakage(Inter, ci, cj, in, jnext, 0.0, 1.0);
+            if (Inter->glueState == GLUE_FORCE_THRESHOLD) { // RUPTURE par forces
 
               double zeta = -Inter->fn_coh / Inter->fn_coh_max +
                             pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
@@ -1276,11 +1409,11 @@ void Lhyphen::computeInteractionForces() {
                 }
               } else {
                 // transfert des force vers les noeuds concernés
-                vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
+                vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
                 cells[ci].nodes[in].force += finc;
                 cells[cj].nodes[jnext].force -= finc;
               }
-            } else if (Inter->glueState == 2) { // model rupture Gc
+            } else if (Inter->glueState == GLUE_GC) { // model rupture Gc
               double W = 0.0;
               if (Inter->fn_coh < 0.0) { // heaviside(dn)
                 W += Inter->fn_coh * Inter->fn_coh / Inter->kn_coh;
@@ -1310,7 +1443,7 @@ void Lhyphen::computeInteractionForces() {
                   }
                 } else {
                   // transfert des force vers les noeuds concernés
-                  vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
+                  vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
                   cells[ci].nodes[in].force += finc;
 
                   cells[cj].nodes[jnext].force -= finc;
@@ -1326,7 +1459,7 @@ void Lhyphen::computeInteractionForces() {
           } // if glueState == 1 ou 2
 
         } // fin "disque jnext (de fin)"
-        else { // ====================== sur la barre
+        else { // cas 3 / ====================== sur la barre
 
           vec2r urot(-u.y, u.x); // turn 90°
           double wend = 0.0;
@@ -1336,7 +1469,7 @@ void Lhyphen::computeInteractionForces() {
           double dn = fabs(dist) - sumR;
 
           if (dn < 0.0) { // overlap
-            Inter->contactState = 1;
+            Inter->contactState = TOUCHING;
             Inter->n = urot;
             if (dist < 0.0) {
               Inter->n *= -1.0;
@@ -1344,7 +1477,7 @@ void Lhyphen::computeInteractionForces() {
             // here the normal vector is oriented from the bar to the disc
 
             Inter->fn = -kn * dn;
-            if (adaptativeStiffness == 1) {
+            if (adaptativeStiffness == LH_ENABLED) {
               Inter->fn *= sumR / (sumR + dn);
             }
 
@@ -1354,8 +1487,8 @@ void Lhyphen::computeInteractionForces() {
             // on neglige l'épaisseur des barres
             // à voir si c'est ok car on fait une approximation
             vrel = cells[ci].nodes[in].vel - (wbeg * cells[cj].nodes[jn].vel + wend * cells[cj].nodes[jnext].vel);
-            T.set(-Inter->n.y, Inter->n.x);
-            Inter->ft -= kt * (vrel * T) * dt;
+            Inter->T.set(-Inter->n.y, Inter->n.x);
+            Inter->ft -= kt * (vrel * Inter->T) * dt;
             double threshold = mu * Inter->fn;
             if (Inter->ft > threshold) {
               Inter->ft = threshold;
@@ -1363,7 +1496,7 @@ void Lhyphen::computeInteractionForces() {
               Inter->ft = -threshold;
             }
 
-            if (Inter->glueState == 0) {
+            if (Inter->glueState == GLUE_NONE) {
               Inter->fn -= fadh;
             }
 
@@ -1371,22 +1504,23 @@ void Lhyphen::computeInteractionForces() {
             // n est orienté de la barre vers le noeud
             // donc fn positif correspond à une force de la barre qui pousse le noeud
 
-            vec2r finc = Inter->fn * Inter->n + Inter->ft * T;
+            vec2r finc = Inter->fn * Inter->n + Inter->ft * Inter->T;
             cells[ci].nodes[in].force += finc;
 
             cells[cj].nodes[jn].force -= wbeg * finc;
             cells[cj].nodes[jnext].force -= wend * finc;
 
           } else {
-            Inter->contactState = 0;
+            Inter->contactState = NOT_TOUCHING;
             Inter->fn = 0.0;
             Inter->ft = 0.0;
           }
 
-          if (Inter->glueState == 1 || Inter->glueState == 2) {
+          // glue_breakage(Inter, ci, cj, in, jn, jnext, wbeg, wend);
+          if (Inter->glueState >= 1) {
 
             // if there is no contact, some variables have not been calculated yet
-            if (Inter->contactState == 0) {
+            if (Inter->contactState == NOT_TOUCHING) {
               Inter->n = urot;
               if (dist < 0.0) {
                 Inter->n *= -1.0;
@@ -1395,17 +1529,19 @@ void Lhyphen::computeInteractionForces() {
               wend = proj / u_length;
               wbeg = 1.0 - wend;
               vrel = cells[ci].nodes[in].vel - (wbeg * cells[cj].nodes[jn].vel + wend * cells[cj].nodes[jnext].vel);
-              T.set(-Inter->n.y, Inter->n.x);
+              Inter->T.set(-Inter->n.y, Inter->n.x);
             }
 
             Inter->fn_coh += -Inter->kn_coh * vrel * Inter->n * dt;
-            Inter->ft_coh += -Inter->kt_coh * vrel * T * dt;
+            Inter->ft_coh += -Inter->kt_coh * vrel * Inter->T * dt;
 
-            if (Inter->fn_coh > 0.0)
+            if (Inter->fn_coh > 0.0) {
               Inter->fn_coh = 0.0;
+            }
 
             // rupture
-            if (Inter->glueState == 1) { // RUPTURE par forces
+            // glue_breakage(Inter, ci, cj, in, jn, jnext, wbeg, wend);
+            if (Inter->glueState == GLUE_FORCE_THRESHOLD) { // RUPTURE par forces
               double zeta = -Inter->fn_coh / Inter->fn_coh_max +
                             pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
               if (zeta > 0.0) {
@@ -1419,13 +1555,13 @@ void Lhyphen::computeInteractionForces() {
                 }
               } else {
                 // transfert des force vers les noeuds concernés
-                vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
+                vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
                 cells[ci].nodes[in].force += finc;
 
                 cells[cj].nodes[jn].force -= wbeg * finc;
                 cells[cj].nodes[jnext].force -= wend * finc;
               }
-            } else if (Inter->glueState == 2) { // model rupture Gc
+            } else if (Inter->glueState == GLUE_GC) { // model rupture Gc
               double W = 0.0;
               if (Inter->fn_coh < 0.0) { // heaviside(dn)
                 W += Inter->fn_coh * Inter->fn_coh / Inter->kn_coh;
@@ -1456,7 +1592,7 @@ void Lhyphen::computeInteractionForces() {
                   }
                 } else {
                   // transfert des force vers les noeuds concernés
-                  vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * T;
+                  vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
                   cells[ci].nodes[in].force += finc;
 
                   cells[cj].nodes[jn].force -= wbeg * finc;
@@ -1611,9 +1747,9 @@ void Lhyphen::NodeAccelerations() {
   computeNodeForces();
   computeInteractionForces();
 
-  if (cellContent == CELL_CONTAIN_GAS) {
+  if (cellContent == CELL_CONSTANT_PV) {
     InternalGasPressureForce();
-  } else if (cellContent == CELL_CONTAIN_LIQUID) {
+  } else if (cellContent == CELL_ELASTIC_PV) {
     InternalLiquidPressureForce();
   }
 
@@ -2202,12 +2338,12 @@ void Lhyphen::loadCONF(const char *fname) {
       std::cout << "disablePressures has been replaced by cellContent\n";
     } else if (token == "cellContent") {
       file >> cellContent;
-      if (cellContent == CELL_CONTAIN_NOTHING)
-        std::cout << "cellContent = CELL_CONTAIN_NOTHING\n";
-      else if (cellContent == CELL_CONTAIN_GAS)
-        std::cout << "cellContent = CELL_CONTAIN_GAS\n";
-      else if (cellContent == CELL_CONTAIN_LIQUID)
-        std::cout << "cellContent = CELL_CONTAIN_LIQUID\n";
+      if (cellContent == CELL_EMPTY)
+        std::cout << "cellContent = CELL_EMPTY\n";
+      else if (cellContent == CELL_CONSTANT_PV)
+        std::cout << "cellContent = CELL_CONSTANT_PV\n";
+      else if (cellContent == CELL_ELASTIC_PV)
+        std::cout << "cellContent = CELL_ELASTIC_PV\n";
     } else if (token == "setCellAsOpen") {
       size_t c;
       file >> c;
@@ -2224,6 +2360,7 @@ void Lhyphen::loadCONF(const char *fname) {
   }
 
   initCellInitialSurfaces(); // surface des cellules
+  copy_neighbors_set_to_vec();
 
   if (modelGc > 0) {
     associateGlue(modelGc);
@@ -2409,7 +2546,7 @@ void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
         if (cells[in.ic].close == false || cells[in.jc].close == false)
           continue;
 
-        if (in.contactState == 1) {
+        if (in.contactState == TOUCHING) {
           auto it = force_map.find(duo);
           if (it != force_map.end())
             it->second += in.fn * in.n;

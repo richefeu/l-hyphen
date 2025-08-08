@@ -40,7 +40,7 @@ int show_bar_colors = 0;
 int show_inter_cells_forces = 0;
 int show_pressure = 0;
 int show_nodes = 1;
-int show_control_boxes = 1;
+int show_control_boxes = 0;
 
 // arrow sizes
 double arrowSize = 0.15;
@@ -59,6 +59,8 @@ MouseMode mouse_mode = MouseMode::NOTHING;
 
 int display_mode = 0; // sample or slice rotation
 int mouse_start[2];
+
+glInputBox inputBox(&width, &height);
 
 // drawing functions
 void drawCircle(double xc, double yc, double radius, int nbDiv = 18);
@@ -80,12 +82,12 @@ void mouse(int button, int state, int x, int y);
 void motion(int x, int y);
 void display();
 void reshape(int x, int y);
-void menu(int num);
+//void menu(int num);
 
 // Helper functions
 void printHelp();
 void fit_view();
-bool fileExists(const char *fileName);
+//bool fileExists(const char *fileName);
 void try_to_readConf(int num, Lhyphen &conf, int &OKNum);
 
 #endif /* end of include guard: SEE_HPP */

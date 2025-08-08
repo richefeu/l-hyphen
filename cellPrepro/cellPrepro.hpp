@@ -158,7 +158,7 @@ private:
     }
     ifile.close();
   }
-  
+
 public:
   // Save a PGM P3 file (rgb colors)
   void write_pgm(const std::string &output_file) {
@@ -369,20 +369,23 @@ public:
     int nbVertices = cells[i].shifted.size();
     for (int k0 = 0; k0 < nbVertices; k0++) {
       int k1 = k0 + 1;
-      if (k1 >= nbVertices)
+      if (k1 >= nbVertices) {
         k1 -= nbVertices;
+      }
       int k2 = k1 + 1;
-      if (k2 >= nbVertices)
+      if (k2 >= nbVertices) {
         k2 -= nbVertices;
+      }
       int k3 = k2 + 1;
-      if (k3 >= nbVertices)
+      if (k3 >= nbVertices) {
         k3 -= nbVertices;
+      }
 
       vec2r A = cells[i].shifted[k0];
       vec2r B = cells[i].shifted[k1];
       vec2r C = cells[i].shifted[k2];
       vec2r D = cells[i].shifted[k3];
-      double alphaAB=0.0;
+      double alphaAB = 0.0;
       if (intersectSeg(A, B, C, D, alphaAB)) {
         cells[i].shifted[k2] = A + alphaAB * (B - A);
         cells[i].shifted.erase(cells[i].shifted.begin() + k1);
@@ -396,17 +399,20 @@ public:
     std::ofstream file("sample.txt");
 
     for (size_t i = 0; i < cells.size(); i++) {
-      if (cells[i].convex_hull.empty())
+      if (cells[i].convex_hull.empty()) {
         continue;
+      }
 
       int nbVertices = (int)cells[i].convex_hull.size();
       for (int k = 0; k < nbVertices; k++) {
         int knext = k + 1;
-        if (knext >= nbVertices)
+        if (knext >= nbVertices) {
           knext = 0;
+        }
         int kprev = k - 1;
-        if (kprev < 0)
+        if (kprev < 0) {
           kprev = nbVertices - 1;
+        }
 
         vec2r t = cells[i].convex_hull[knext] - cells[i].convex_hull[k];
         t.y *= -1.0;
@@ -429,33 +435,34 @@ public:
     if (repair_cell_flag > 0) {
       for (size_t i = 0; i < cells.size(); i++) {
         while (!repair_cell(i)) {
+          // ?????
         }
       }
     }
 
     //
     for (size_t i = 0; i < cells.size(); i++) {
-      if (cells[i].convex_hull.empty())
+      if (cells[i].convex_hull.empty()) {
         continue;
+      }
       for (int k = 0; k < (int)cells[i].shifted.size(); k++) {
         file << cells[i].shifted[k].x << ' ' << cells[i].shifted[k].y << '\n';
       }
       file << cells[i].shifted[0].x << ' ' << cells[i].shifted[0].y << "\n\n";
     }
-    
-    
+
     std::ofstream nodefile("nodeFile.txt");
     int ID = 0;
     for (size_t i = 0; i < cells.size(); i++) {
-      if (cells[i].convex_hull.empty())
+      if (cells[i].convex_hull.empty()) {
         continue;
-      
+      }
+
       for (int k = 0; k < (int)cells[i].shifted.size(); k++) {
         nodefile << cells[i].shifted[k].x << ' ' << cells[i].shifted[k].y << ' ' << ID << '\n';
       }
       ID++;
     }
-    
   }
 
 private:
@@ -531,11 +538,13 @@ private:
       double y = (double)(p % ly);
       vec2r a(x - cells[i].x, y - cells[i].y);
       double proj = a * u;
-      if (proj > iprojmax)
+      if (proj > iprojmax) {
         iprojmax = proj;
+      }
     }
-    if (iprojmax > len)
+    if (iprojmax > len) {
       iprojmax = 0.5 * len;
+    }
 
     double jprojmin = len;
     for (size_t k = 0; k < cells[j].stack_pixels.size(); k++) {
@@ -544,11 +553,13 @@ private:
       double y = (double)(p % ly);
       vec2r a(x - cells[i].x, y - cells[i].y);
       double proj = a * u;
-      if (proj < jprojmin)
+      if (proj < jprojmin) {
         jprojmin = proj;
+      }
     }
-    if (jprojmin < 0.0)
+    if (jprojmin < 0.0) {
       jprojmin = 0.5 * len;
+    }
 
     vec2r mid(cells[i].x, cells[i].y);
     mid += 0.5 * (iprojmax + jprojmin) * u;
@@ -562,8 +573,9 @@ private:
     vec2r PA = A - pl_pos;
     vec2r u = B - A; // do not normalize!
     double un = u * pl_normal;
-    if (fabs(un) < 1e-20)
+    if (fabs(un) < 1e-20) {
       return false;
+    }
     double PAn = PA * pl_normal;
     alpha = -PAn / un;
     return true;
@@ -574,15 +586,17 @@ private:
     vec2r n(t.y, -t.x);
     n.normalize();
     intersect(A, B, C, n, alphaAB);
-    if (alphaAB < 0.0 || alphaAB > 1.0)
+    if (alphaAB < 0.0 || alphaAB > 1.0) {
       return false;
+    }
     t = B - A;
     n.set(t.y, -t.x);
     n.normalize();
     double alphaCD = 0.0;
     intersect(C, D, A, n, alphaCD);
-    if (alphaCD < 0.0 || alphaCD > 1.0)
+    if (alphaCD < 0.0 || alphaCD > 1.0) {
       return false;
+    }
 
     return true;
   }
@@ -596,11 +610,13 @@ private:
     std::vector<vec2r> lstPts;
     for (size_t i0 = 0; i0 < hull0.size(); i0++) {
       size_t i1 = i0 + 1;
-      if (i1 == hull0.size())
+      if (i1 == hull0.size()) {
         i1 = 0;
+      }
       double alpha;
-      if (!intersect(hull0[i0], hull0[i1], pos_plan, normal, alpha))
+      if (!intersect(hull0[i0], hull0[i1], pos_plan, normal, alpha)) {
         return;
+      }
       if (alpha > 0.0 && alpha < 1.0) {
         vec2r newPt = hull0[i0] + alpha * (hull0[i1] - hull0[i0]);
         lstPts.push_back(newPt);
@@ -610,8 +626,9 @@ private:
     for (size_t i = 0; i < hull0.size(); i++) {
       vec2r a = hull0[i] - pos_plan;
       double sgn = a * normal;
-      if (sgn >= 0.0)
+      if (sgn >= 0.0) {
         lstPts.push_back(hull0[i]);
+      }
     }
     if (lstPts.size() < 3) {
       return;
@@ -645,8 +662,10 @@ private:
   const int dy[8] = {-1, -1, 0, 1, 1, 1, 0, -1}; // relative neighbor y coordinates
 
   bool floodFill8Stack(int x, int y, int newColor, int oldColor) {
-    if (newColor == oldColor)
-      return false; // if you don't do this: infinite loop!
+    if (newColor == oldColor) {
+      return false;
+    } // if you don't do this: infinite loop!
+    
     // empty stack
     stack_pixels.clear();
 

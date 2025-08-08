@@ -33,6 +33,9 @@
 #include <omp.h>
 #endif
 
+#define LH_ENABLED 1
+#define LH_DISABLED 0
+
 /**
  *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
  *  lors de la définition de certaine cellules
@@ -103,9 +106,9 @@ struct ControlBoxArea {
         yvalue(t_yvalue) {}
 };
 
-#define CELL_CONTAIN_NOTHING 0
-#define CELL_CONTAIN_GAS 1
-#define CELL_CONTAIN_LIQUID 2
+#define CELL_EMPTY 0
+#define CELL_CONSTANT_PV 1
+#define CELL_ELASTIC_PV 2
 
 /**
  *  Le système entier
@@ -129,7 +132,7 @@ public:
   double ymin;
   double ymax;
 
-  double t;               ///< temps courant
+  double t{0.0};          ///< temps courant
   double cyclicVelPeriod; ///< durée d'un cycle (inversion de la vitesse de chargement)
 
   double dt;    ///< pas de temps
@@ -172,7 +175,7 @@ public:
 
   ColorTable ctNeg, ctPos;
 
-  int reorder{1}; ///< flag pour ré-ordonner les noeud dans la fonction ReadNodeFile
+  int reorder{LH_ENABLED}; ///< flag pour ré-ordonner les noeud dans la fonction ReadNodeFile
 
   std::ofstream breakHistory;
   std::ofstream breakEvol;
@@ -213,10 +216,13 @@ public:
   std::function<void()> updateNeighbors;
   void updateNeighbors_brute_force();
   void updateNeighbors_linkCells();
+  void copy_neighbors_set_to_vec();
 
   int getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos);
   void glue(double epsilonDist, int modelGc = 1);
-  void associateGlue(int modelGc = 1);
+  void associateGlue(int modelGc = 1, double activationLength = 0.0);
+  void glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext, double wbeg,
+                     double wend);
   void computeInteractionForces();
   void computeNodeForces();
   void NodeAccelerations();

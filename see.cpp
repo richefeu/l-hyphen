@@ -21,6 +21,11 @@ void printHelp() {
 }
 
 void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
+  if (inputBox.inputMode) {
+    inputBox.keyboard(Key);
+    return;
+  }
+
   switch (Key) {
 
   case 'a': {
@@ -61,9 +66,11 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
 
   case 's': {
     vScale *= 0.9;
+    textZone.addLine("vScale = %g", vScale);
   } break;
   case 'S': {
     vScale *= 1.1;
+    textZone.addLine("vScale = %g", vScale);
   } break;
 
   case 'z': {
@@ -103,6 +110,47 @@ void keyboard(unsigned char Key, int /*x*/, int /*y*/) {
     fit_view();
     reshape(width, height);
   } break;
+
+  case '@': {
+    inputBox.start("Enter an int", [&]() {
+      int val = atoi(inputBox.inputText.c_str());
+      try_to_readConf(val, Conf, confNum);
+      updateTextLine();
+    });
+  } break;
+  };
+
+  glutPostRedisplay();
+}
+
+void keyboardSpecial(int Key, int /*x*/, int /*y*/) {
+  if (inputBox.inputMode) {
+    inputBox.specialKeyboard(Key);
+    return;
+  }
+
+  switch (Key) {
+
+  case GLUT_KEY_LEFT: {
+    if (confNum > 0) {
+      try_to_readConf(confNum - 1, Conf, confNum);
+      updateTextLine();
+    }
+  } break;
+
+  case GLUT_KEY_RIGHT: {
+    try_to_readConf(confNum + 1, Conf, confNum);
+    updateTextLine();
+  } break;
+
+  case GLUT_KEY_UP: {
+    textZone.increase_nbLine();
+  } break;
+
+  case GLUT_KEY_DOWN: {
+    textZone.decrease_nbLine();
+  } break;
+  
   };
 
   glutPostRedisplay();
@@ -173,6 +221,12 @@ void motion(int x, int y) {
 }
 
 void display() {
+  if (inputBox.inputMode) {
+    inputBox.render();
+    glutSwapBuffers();
+    return;
+  }
+
   sleep(0);
   glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -634,9 +688,10 @@ void drawControlBoxes() {
   glDisable(GL_LIGHTING);
 
   for (size_t i = 0; i < Conf.controlBoxAreas.size(); i++) {
-    glText::print((GLfloat)Conf.controlBoxAreas[i].xmin, (GLfloat)Conf.controlBoxAreas[i].ymin, "%sx = %g, %sy = %g",
-                  (Conf.controlBoxAreas[i].xmode == 1) ? "v" : "f", Conf.controlBoxAreas[i].xvalue,
-                  (Conf.controlBoxAreas[i].ymode == 1) ? "v" : "f", Conf.controlBoxAreas[i].yvalue);
+    glText::print((GLfloat)Conf.controlBoxAreas[i].xmin, (GLfloat)Conf.controlBoxAreas[i].ymin, 0.0f,
+                  "%sx = %g, %sy = %g", (Conf.controlBoxAreas[i].xmode == 1) ? "v" : "f",
+                  Conf.controlBoxAreas[i].xvalue, (Conf.controlBoxAreas[i].ymode == 1) ? "v" : "f",
+                  Conf.controlBoxAreas[i].yvalue);
     glBegin(GL_LINE_LOOP);
     glVertex2d(Conf.controlBoxAreas[i].xmin, Conf.controlBoxAreas[i].ymin);
     glVertex2d(Conf.controlBoxAreas[i].xmax, Conf.controlBoxAreas[i].ymin);
@@ -653,8 +708,9 @@ void try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
     std::cout << "Read " << file_name << std::endl;
     OKNum = num;
     CF.loadCONF(file_name);
-  } else
+  } else {
     std::cout << file_name << " does not exist" << std::endl;
+  }
 }
 
 // =====================================================================
@@ -665,11 +721,17 @@ int main(int argc, char *argv[]) {
 
   if (argc == 1) {
     confNum = 0;
+    try_to_readConf(confNum, Conf, confNum);
   } else if (argc == 2) {
-    confNum = atoi(argv[1]);
+    if (fileTool::fileExists(argv[1])) {
+      std::cout << "Read " << argv[1] << std::endl;
+      Conf.loadCONF(argv[1]);
+    } else {
+      confNum = atoi(argv[1]);
+      try_to_readConf(confNum, Conf, confNum);
+    }
   }
 
-  try_to_readConf(confNum, Conf, confNum);
   Conf.findDisplayArea(1.15);
 
   // init color tables
@@ -696,6 +758,7 @@ int main(int argc, char *argv[]) {
   glutDisplayFunc(display);
   glutReshapeFunc(reshape);
   glutKeyboardFunc(keyboard);
+  glutSpecialFunc(keyboardSpecial);
   glutMouseFunc(mouse);
   glutMotionFunc(motion);
 
@@ -715,3 +778,42 @@ int main(int argc, char *argv[]) {
   glutMainLoop();
   return 0;
 }
+
+/*
+
+// Global instance
+glInputBox inputBox;
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT);
+    inputBox.render();
+    glutSwapBuffers();
+}
+
+void keyboard(unsigned char key, int x, int y) {
+    if (inputBox.inputMode) {
+        inputBox.keyboard(key);
+    }
+    // Handle other keyboard events
+}
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutCreateWindow("OpenGL Input Box Example");
+    glutDisplayFunc(display);
+    glutKeyboardFunc(keyboard);
+
+    inputBox.start("Enter something: ", []() {
+        int val = atoi(inputBox.inputText.c_str());
+        if (val > 10) val = 10;
+        return val;
+    });
+
+    glutMainLoop();
+    return 0;
+}
+
+
+
+
+*/

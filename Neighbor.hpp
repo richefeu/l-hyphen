@@ -3,6 +3,13 @@
 
 #include "vec2.hpp"
 
+#define NOT_TOUCHING 0
+#define TOUCHING 1
+
+#define GLUE_NONE 0
+#define GLUE_FORCE_THRESHOLD 1
+#define GLUE_GC 2
+
 /**
  * Contact potentiel (voisin ou interaction)
  *
@@ -17,6 +24,7 @@ public:
   // jn code pour la barre qui commence par jn
 
   vec2r n; // vecteur normal (de j vers i)
+  vec2r T;
 
   Neighbor *brother{nullptr};
 
