@@ -1,39 +1,70 @@
-# The compiler to be used
-CXX = g++-14
-LINK = $(CXX)
 
-# Paths
-TOOFUSPATH = ~/toofus
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  GNU_GPP := $(shell ls /usr/local/bin/g++-* /opt/homebrew/bin/g++-* 2>/dev/null | grep -Eo 'g\+\+-([0-9]+)' | sort -V | tail -1)
+  CXX := $(if $(GNU_GPP),$(GNU_GPP),g++)
+  
+  CXXFLAGS = -O3 -Wall -Wextra -pedantic -Wno-unknown-pragmas -std=c++17 -I ./toofus
+  GLLINK = `pkg-config --libs gl glu glut`
+	GLFLAGS = `pkg-config --cflags gl glu glut`	
+	# on apple, use brew to install freeglut and mesa-glu
+else
+  CXX = g++
+  CXXFLAGS = -O3 -Wall -std=c++17 -I ./toofus
+  GLLINK = -lGLU -lGL -L/usr/X11R6/lib -lglut -lXmu -lXext -lX11 -lXi
+endif
 
-# The list of flags passed to the compiler
-CXXFLAGS = -Wall -Wextra -pedantic -Wconversion -Wno-unknown-pragmas -O3 -std=c++20 -I $(TOOFUSPATH) -DENABLE_PROFILING
-# add -fopenmp to enable OpenMP (but for now it is worst, excepted if the number of cells is very high)
-
-GLUTFLAGS = `pkg-config --cflags gl glu glut`
-GLUTLINK = `pkg-config --libs gl glu glut` 
+# Ensure the toofus directory exists
+ifeq ($(wildcard ./toofus),)
+$(info Cloning ToOfUs repository)
+$(shell git clone https://github.com/richefeu/toofus.git > /dev/null 2>&1)
+endif
 
 SOURCES = Neighbor.cpp Control.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
-HEADERS = $(SOURCES:%.cpp=%.hpp)
 OBJECTS = $(SOURCES:%.cpp=%.o)
 
-%.o:%.cpp
-	$(CXX) $(CXXFLAGS) -c $<
-
-.PHONY: all clean
+.PHONY: all clean clone_toofus
 
 all: run see
 
 clean:
-	rm -f *~ *.o run see conf2z
+	@echo "\033[0;32m-> Remove object files\033[0m"
+	rm -f *.o
+	@echo "\033[0;32m-> Remove compiled applications\033[0m"
+	rm -f run see 
+	@echo "\033[0;32m-> Remove liblhyphen.a\033[0m"
+	rm -f liblhyphen.a
 
-run: run.cpp $(HEADERS) $(SOURCES) $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -c $<
-	$(LINK) $(CXXFLAGS) -o $@ $@.o $(OBJECTS)
+clean+: clean
+	@echo "\033[0;32m-> Remove local folder toofus\033[0m"
+	rm -rf ./toofus
+	
+clone_toofus:
+	@if [ ! -d "./toofus" ]; then \
+		@echo "\033[0;32m-> CLONING ToOfUs (Tools often used)\033[0m"; \
+		git clone https://github.com/richefeu/toofus.git; \
+	fi
 
-see: see.cpp see.hpp run
-	$(CXX) $(CXXFLAGS) $(GLUTFLAGS) -c $<
-	$(LINK) $(CXXFLAGS) -o $@ $@.o $(OBJECTS) $(GLUTLINK)
+%.o: %.cpp 
+	@echo "\033[0;32m-> COMPILING OBJECT" $@ "\033[0m"
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-conf2z: conf2z.cpp $(HEADERS) $(SOURCES) $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -c $<
-	$(LINK) $(CXXFLAGS) -o $@ $@.o $(OBJECTS)
+liblhyphen.a: $(OBJECTS)
+	@echo "\033[0;32m-> BUILDING LIBRARY" $@ "\033[0m"
+	ar rcs $@ $^
+
+run: run.cpp liblhyphen.a
+	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
+	$(CXX) $(CXXFLAGS) -c $< -o run.o
+	$(CXX) -o $@ run.o liblhyphen.a
+	
+see: see.cpp liblhyphen.a
+	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
+	$(CXX) $(CXXFLAGS) -c $< -o see.o $(GLFLAGS)
+	$(CXX) -o $@ see.o liblhyphen.a $(GLLINK)
+	
+conf2z: conf2z.cpp liblhyphen.a
+	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
+	$(CXX) $(CXXFLAGS) -c $< -o conf2z.o
+	$(CXX) -o $@ conf2z.o liblhyphen.a
+

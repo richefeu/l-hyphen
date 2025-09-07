@@ -13,7 +13,7 @@
 
 #include "ColorTable.hpp"
 #include "fileTool.hpp"
-#include "glTools.hpp"
+#include "glutTools.hpp"
 #include "message.hpp"
 #include "triangulatePolygon.hpp"
 
