@@ -1722,8 +1722,8 @@ void Lhyphen::computeNodeForces() {
  *  Compute the node accelerations
  *
  */
-void Lhyphen::NodeAccelerations() {
-  START_TIMER("NodeAccelerations");
+void Lhyphen::nodeAccelerations() {
+  START_TIMER("nodeAccelerations");
 
 #ifdef _OPENMP
   int chunk_size = (int)cells.size() / nbThreads;
@@ -1806,7 +1806,7 @@ void Lhyphen::SingleStep() {
     }
   }
 
-  NodeAccelerations();
+  nodeAccelerations();
 
 #pragma omp parallel for schedule(static, chunk_size)
   for (size_t c = 0; c < cells.size(); ++c) {
@@ -2359,7 +2359,7 @@ void Lhyphen::loadCONF(const char *fname) {
     file >> token;
   }
 
-  initCellInitialSurfaces(); // surface des cellules
+  computeCellInitialSurfaces(); // surface des cellules
   copy_neighbors_set_to_vec();
 
   if (modelGc > 0) {
@@ -2373,7 +2373,7 @@ void Lhyphen::loadCONF(int ifile) {
   loadCONF(fname);
 }
 
-void Lhyphen::initCellInitialSurfaces() {
+void Lhyphen::computeCellInitialSurfaces() {
   for (size_t c = 0; c < cells.size(); c++) {
     if (cells[c].close == true && cells[c].surface0 == 0.0) {
       cells[c].CellSurface();

@@ -4,13 +4,15 @@ ifeq ($(UNAME_S),Darwin)
   GNU_GPP := $(shell ls /usr/local/bin/g++-* /opt/homebrew/bin/g++-* 2>/dev/null | grep -Eo 'g\+\+-([0-9]+)' | sort -V | tail -1)
   CXX := $(if $(GNU_GPP),$(GNU_GPP),g++)
   
-  CXXFLAGS = -O3 -Wall -Wextra -pedantic -Wno-unknown-pragmas -std=c++17 -I ./toofus
+  CXXFLAGS = -O3 -Wall -Wextra -pedantic -std=c++17 -I ./toofus
+  LDFLAGS = 
   GLLINK = `pkg-config --libs gl glu glut`
 	GLFLAGS = `pkg-config --cflags gl glu glut`	
 	# on apple, use brew to install freeglut and mesa-glu
 else
   CXX = g++
-  CXXFLAGS = -O3 -Wall -std=c++17 -I ./toofus
+  CXXFLAGS = -fopenmp -O3 -Wall -std=c++17 -I ./toofus
+  LDFLAGS = -lomp
   GLLINK = -lGLU -lGL -L/usr/X11R6/lib -lglut -lXmu -lXext -lX11 -lXi
 endif
 
@@ -56,15 +58,15 @@ liblhyphen.a: $(OBJECTS)
 run: run.cpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
 	$(CXX) $(CXXFLAGS) -c $< -o run.o
-	$(CXX) -o $@ run.o liblhyphen.a
+	$(CXX) $(LDFLAGS) -o $@ run.o liblhyphen.a
 	
 see: see.cpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
 	$(CXX) $(CXXFLAGS) -c $< -o see.o $(GLFLAGS)
-	$(CXX) -o $@ see.o liblhyphen.a $(GLLINK)
+	$(CXX) $(LDFLAGS) -o $@ see.o liblhyphen.a $(GLLINK)
 	
 conf2z: conf2z.cpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
 	$(CXX) $(CXXFLAGS) -c $< -o conf2z.o
-	$(CXX) -o $@ conf2z.o liblhyphen.a
+	$(CXX) $(LDFLAGS) -o $@ conf2z.o liblhyphen.a
 

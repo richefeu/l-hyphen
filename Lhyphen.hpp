@@ -1,8 +1,5 @@
 // l-hyphen (lodge hyphen) is a multi-purpose system made of cells that are themeself composed of bars
 //
-// ============================================
-// Ce fichier contient tout le code du modèle !
-// Pour l'utiliser il suffit de l'inclure
 
 #ifndef L_HYPHEN_HPP
 #define L_HYPHEN_HPP
@@ -173,7 +170,7 @@ public:
   double SVG_colorTableMax;
   int SVG_cellForces; // 0=rien, 1=rouge/bleu
 
-  ColorTable ctNeg, ctPos;
+  ColorTable ctNeg, ctPos; // ??????? c'est pas le bon endroit pour mettre ça
 
   int reorder{LH_ENABLED}; ///< flag pour ré-ordonner les noeud dans la fonction ReadNodeFile
 
@@ -197,6 +194,7 @@ public:
                                named_arg_CellProperties p);
   void addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                          named_arg_CellProperties p);
+						 
 
   void setTimeStep(double t_dt);
   void setCellWallDensities(double rho, double thickness = 1.0);
@@ -213,6 +211,7 @@ public:
   double getMinimumNodeDistance();
   void readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int);
 
+
   std::function<void()> updateNeighbors;
   void updateNeighbors_brute_force();
   void updateNeighbors_linkCells();
@@ -225,7 +224,7 @@ public:
                      double wend);
   void computeInteractionForces();
   void computeNodeForces();
-  void NodeAccelerations();
+  void nodeAccelerations();
   void SingleStep();
   void integrate();
 
@@ -233,7 +232,7 @@ public:
   void saveCONF(int ifile);
   void loadCONF(const char *fname);
   void loadCONF(int ifile);
-  void initCellInitialSurfaces();
+  void computeCellInitialSurfaces();
 
   void findDisplayArea(double factor = 1.0);
   void saveSVG(int num, const char *nameBase = "sample%04d.svg", int Canvaswidth = 400);
