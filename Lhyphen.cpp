@@ -94,6 +94,7 @@ void Lhyphen::addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties 
  */
 void Lhyphen::addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p) {
   Cell C;
+  C.close = false;
   C.nodes.emplace_back(h.xo, h.yo);
   C.nodes.emplace_back(h.xe, h.ye);
   C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, 0.0, false);
@@ -112,11 +113,13 @@ void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellPropertie
   double dy = (h.ye - h.yo) / (double)n;
 
   Cell C;
+  C.close = false;
   C.nodes.emplace_back(h.xo, h.yo);
 
   for (int i = 1; i <= n; i++) {
     C.nodes.emplace_back(h.xo + i * dx, h.yo + i * dy);
   }
+  
   C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, 0.0, false);
 
   cells.push_back(C);
@@ -285,6 +288,7 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
       return false;
     }
   };
+  
 
   std::multiset<data> dataset;
 
@@ -297,6 +301,7 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
     dataset.insert(D);
   }
 
+  size_t i0 = cells.size();
   int cellId = -1;
   Cell C;
   for (auto i : dataset) {
@@ -320,7 +325,7 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
     std::cout << "@Lhyphen::readNodeFile, barWidth has been set to " << barWidth << std::endl;
   }
 
-  for (size_t i = 0; i < cells.size(); i++) {
+  for (size_t i = i0; i < cells.size(); i++) {
     cells[i].reorderNodes();
     if (reorder == 1) {
       cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
@@ -2225,6 +2230,7 @@ void Lhyphen::loadCONF(const char *fname) {
       int n;
       file >> h.xo >> h.yo >> h.xe >> h.ye >> h.barWidth >> n;
       file >> p.kn >> p.kr >> p.mz_max;
+	  p.p_int = 0.0;	  
       addMultiLine(h, p, n);
     } else if (token == "addRegularPolygonalCell") {
       named_arg_RegularCellDataset h;
