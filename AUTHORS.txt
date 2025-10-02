@@ -1,0 +1,11 @@
+The code was initially developed by Vincent Richefeu (University of Grenoble Alpes, France) and Jean-Yves Delenne (INRAe, France). This work was part of Yohann Trivino's PhD research, which concluded in November 2024. Farhang Radjai (CNRS, Université Montpellier, France) also strongly contributed with valuable enhancements to the code, showcasing his expertise in granular physics.
+
+Since then, several new features have been added to this codebase. Notably, they are now being actively developed for the ongoing PhD research project conducted by Frank Tsemo at Université Montpellier and through the French National Project PlantCom. 
+
+Here is the non-exhaustive list of involved persons with their main mission: 
+
+Vincent Richefeu <vincent.richefeu@univ-grenoble-alpes.fr> (Laboratoire 3SR, UGA): mastering the c++ project
+Jean-Yves Delenne <jean-yves.delenne@inrae.fr> (IATE, INRAE): mechanical/biological modelling
+Farhang Radjai <franck.radjai@umontpellier.fr> (LMGC, CNRS): mechanical/physical Mentor
+Yohann Trivino <yohann.trivino@umontpellier.fr> (PhD and post-doctoral studies)
+Frank Tsemo <frank-ulrich.tsemo-tayou@umontpellier.fr> (PhD)
