@@ -1,10 +1,40 @@
+#  Copyright or © or Copr. l-hyphen
+#
+#  This software is developed for an ACADEMIC USAGE
+#
+#  This software is governed by the CeCILL-B license under French law and
+#  abiding by the rules of distribution of free software.  You can  use,
+#  modify and/ or redistribute the software under the terms of the CeCILL-B
+#  license as circulated by CEA, CNRS and INRIA at the following URL
+#  "http://www.cecill.info".
+#
+#  As a counterpart to the access to the source code and  rights to copy,
+#  modify and redistribute granted by the license, users are provided only
+#  with a limited warranty  and the software's author,  the holder of the
+#  economic rights,  and the successive licensors  have only  limited
+#  liability.
+#
+#  In this respect, the user's attention is drawn to the risks associated
+#  with loading,  using,  modifying and/or developing or reproducing the
+#  software by the user in light of its specific status of free software,
+#  that may mean  that it is complicated to manipulate,  and  that  also
+#  therefore means  that it is reserved for developers  and  experienced
+#  professionals having in-depth computer knowledge. Users are therefore
+#  encouraged to load and test the software's suitability as regards their
+#  requirements in conditions enabling the security of their systems and/or
+#  data to be ensured and,  more generally, to use and operate it in the
+#  same conditions as regards security.
+#
+#  The fact that you are presently reading this means that you have had
+#  knowledge of the CeCILL-B license and that you accept its terms.
+
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
   GNU_GPP := $(shell ls /usr/local/bin/g++-* /opt/homebrew/bin/g++-* 2>/dev/null | grep -Eo 'g\+\+-([0-9]+)' | sort -V | tail -1)
   CXX := $(if $(GNU_GPP),$(GNU_GPP),g++)
   
-  CXXFLAGS = -O3 -Wall -Wextra -pedantic -std=c++17 -I ./toofus
+  CXXFLAGS = -O3 -Wall -Wextra -pedantic -Wno-unknown-pragmas -std=c++17 -I ./toofus
   LDFLAGS = 
   GLLINK = `pkg-config --libs gl glu glut`
 	GLFLAGS = `pkg-config --cflags gl glu glut`	
@@ -65,8 +95,4 @@ see: see.cpp liblhyphen.a
 	$(CXX) $(CXXFLAGS) -c $< -o see.o $(GLFLAGS)
 	$(CXX) $(LDFLAGS) -o $@ see.o liblhyphen.a $(GLLINK)
 	
-conf2z: conf2z.cpp liblhyphen.a
-	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
-	$(CXX) $(CXXFLAGS) -c $< -o conf2z.o
-	$(CXX) $(LDFLAGS) -o $@ conf2z.o liblhyphen.a
 
