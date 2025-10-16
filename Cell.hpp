@@ -49,12 +49,12 @@ public:
   std::set<Neighbor> neighbors;          ///< les voisins
   std::vector<Neighbor *> vec_neighbors; ///< vecteur de pointeurs de voisins pour un accès rapide
 
-  double radius;   ///< un seul rayon pour toute la cellule
-  double surface;  ///< surface (volume) intérieure
-  double surface0; ///< surface (volume) intérieure initial
-  bool close;      ///< flag pour dire si la cellule est fermée ou pas
-  vec2r center;    ///< "centre" de la cellule
-  double p_int;    ///< pression interieure (éventuelle) pour cellule fermée
+  double radius{0.0};   ///< un seul rayon pour toute la cellule
+  double surface{0.0};  ///< surface (volume) intérieure
+  double surface0{0.0}; ///< surface (volume) intérieure initial
+  bool close{false};    ///< flag pour dire si la cellule est fermée ou pas
+  vec2r center;         ///< "centre" de la cellule
+  double p_int{0.0};    ///< pression interieure (éventuelle) pour cellule fermée
 
   Cell();
 
@@ -69,4 +69,3 @@ public:
   void CellForce(vec2r &force);                // mesure la force axiale
   double getElasticNRJ(double compressFactor); // mesure la force NRJ
 };
-

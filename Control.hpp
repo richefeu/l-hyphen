@@ -40,10 +40,10 @@
  */
 class Control {
 public:
-  int xmode;
-  double xvalue;
-  int ymode;
-  double yvalue;
+  int xmode{FORCE_CONTROL};
+  double xvalue{0.0};
+  int ymode{FORCE_CONTROL};
+  double yvalue{0.0};
 
   // Ctor
   Control(int t_xmode, double t_xvalue, int t_ymode, double t_yvalue);

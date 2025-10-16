@@ -29,7 +29,6 @@
 //  knowledge of the CeCILL-B license and that you accept its terms.
 
 #include "Node.hpp"
-#include "null_size_t.hpp"
 
 Node::Node(double x, double y)
     : pos(x, y), vel(), acc(), force(), mass(1.0), ictrl(null_size_t), prevNode(null_size_t), nextNode(null_size_t),

@@ -38,13 +38,13 @@
  */
 class Bar {
 public:
-  size_t i, j; ///< le numéro des noeuds dans Cell::nodes
-  double l0;   ///< longueur initiale de la barre [m]
-  double kn;   ///< raideur suivant l'axe [N/m]
-  double fn;   ///< force axiale [N]
+  size_t i{0}, j{0}; ///< le numéro des noeuds dans Cell::nodes
+  double l0{0.0};    ///< longueur initiale de la barre [m]
+  double kn{0.0};    ///< raideur suivant l'axe [N/m]
+  double visc{0.0};  ///< viscosité suivant l'axe
+  double fn{0.0};    ///< force axiale [N]
 
   Bar(size_t t_i, size_t t_j);
 
   void init(double t_kn, vec2r &posi, vec2r &posj);
 };
-

@@ -149,7 +149,7 @@ void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellPropertie
   for (int i = 1; i <= n; i++) {
     C.nodes.emplace_back(h.xo + i * dx, h.yo + i * dy);
   }
-  
+
   C.connectOrderedNodes(h.barWidth, p.kn, p.kr, p.mz_max, 0.0, false);
 
   cells.push_back(C);
@@ -318,7 +318,6 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
       return false;
     }
   };
-  
 
   std::multiset<data> dataset;
 
@@ -376,6 +375,23 @@ void Lhyphen::setTimeStep(double t_dt) {
   dt = t_dt;
   dt_2 = 0.5 * dt;
   dt2_2 = dt_2 * dt;
+}
+
+// ne pas oublier de donner des masses et raideurs aux noeuds avant !!!!!
+void Lhyphen::setCellWallDampingRates(double alpha) {
+  for (size_t c = 0; c < cells.size(); c++) {
+    for (size_t b = 0; b < cells[c].bars.size(); b++) {
+
+      size_t in = cells[c].bars[b].i;
+      size_t jn = cells[c].bars[b].j;
+      double imass = cells[c].nodes[in].mass;
+      double jmass = cells[c].nodes[jn].mass;
+      double meff = imass * jmass / (imass + jmass);
+
+      cells[c].bars[b].visc = 2.0 * alpha * sqrt(meff * cells[c].bars[b].kn);
+      //std::cout << "cells[c].bars[b].visc = " << cells[c].bars[b].visc << std::endl;
+    }
+  }
 }
 
 /**
@@ -1676,6 +1692,11 @@ void Lhyphen::computeNodeForces() {
         double l = n.normalize();            // n est orienté de i vers j
         double dn = l - cells[c].bars[b].l0; // dn positif = allongement
         cells[c].bars[b].fn = -cells[c].bars[b].kn * dn;
+        
+        if (cells[c].bars[b].visc > 0.0) {
+          double vn = (cells[c].nodes[i].vel - cells[c].nodes[j].vel) * n;
+          cells[c].bars[b].fn += cells[c].bars[b].visc * vn;
+        }       
 
         // TODO: ajouter plasticité dans les barres (?)
 
@@ -2260,7 +2281,7 @@ void Lhyphen::loadCONF(const char *fname) {
       int n;
       file >> h.xo >> h.yo >> h.xe >> h.ye >> h.barWidth >> n;
       file >> p.kn >> p.kr >> p.mz_max;
-	  p.p_int = 0.0;	  
+      p.p_int = 0.0;
       addMultiLine(h, p, n);
     } else if (token == "addRegularPolygonalCell") {
       named_arg_RegularCellDataset h;
@@ -2291,6 +2312,10 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> dist;
       modelGc = 2;
       glue(dist, modelGc);
+    } else if (token == "setCellWallDampingRates") {
+      double alpha;
+      file >> alpha;
+      setCellWallDampingRates(alpha);
     } else if (token == "setCellMasses") {
       double mass;
       file >> mass;

@@ -30,6 +30,8 @@
 
 #pragma once
 
+#include "null_size_t.hpp"
+
 #include "vec2.hpp"
 
 /**
@@ -44,21 +46,19 @@ public:
 
   vec2r force; // force résultante
 
-  double mass; // masse
+  double mass{1.0}; // masse
 
-  size_t ictrl; // null_size_t si pas de control
+  size_t ictrl{null_size_t}; // null_size_t si pas de control
 
-  size_t prevNode; // numéro du noeud précédant
-  size_t nextNode; // numéro du noeud suivant (null_size_t si pas de barre)
+  size_t prevNode{null_size_t}; // numéro du noeud précédant
+  size_t nextNode{null_size_t}; // numéro du noeud suivant (null_size_t si pas de barre)
 
-  double kr;     // raideur angulaire [N.m(/radian)]
-  double mz;     // moment entre les barres connectées
-  double mz_max; // moment-seuil de plastification parfaite
+  double kr{0.0};     // raideur angulaire [N.m(/radian)]
+  double mz{0.0};     // moment entre les barres connectées
+  double mz_max{0.0}; // moment-seuil de plastification parfaite
 
   // Ctor
   Node(double x, double y);
 
   void init(double t_kr, double t_mz_max, size_t prev, size_t next);
 };
-
-

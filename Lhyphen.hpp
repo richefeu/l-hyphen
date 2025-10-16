@@ -150,51 +150,51 @@ public:
   int nbThreads{1};
 
   // Limites de dessin pour les sorties SVG
-  double xmin;
-  double xmax;
-  double ymin;
-  double ymax;
+  double xmin{0.0};
+  double xmax{0.0};
+  double ymin{0.0};
+  double ymax{0.0};
 
-  double t{0.0};          ///< temps courant
-  double cyclicVelPeriod; ///< durée d'un cycle (inversion de la vitesse de chargement)
+  double t{0.0};               ///< temps courant
+  double cyclicVelPeriod{0.0}; ///< durée d'un cycle (inversion de la vitesse de chargement)
 
-  double dt;    ///< pas de temps
-  double dt_2;  ///< pas de temps divisé par deux
-  double dt2_2; ///< pas de temps au carré divisé par deux
+  double dt{0.0};    ///< pas de temps
+  double dt_2{0.0};  ///< pas de temps divisé par deux
+  double dt2_2{0.0}; ///< pas de temps au carré divisé par deux
 
-  double globalViscosity;      ///< viscosité globale
-  double numericalDissipation; ///< coefficizent de dissipation numérique
+  double globalViscosity{0.0};      ///< viscosité globale
+  double numericalDissipation{0.0}; ///< coefficizent de dissipation numérique
 
   vec2r gravity; ///< gravité
 
-  double distVerlet; ///< distance de Verlet entre noeuds et barres
+  double distVerlet{0.0}; ///< distance de Verlet entre noeuds et barres
 
-  double linkCells_lx;
-  double linkCells_ly;
+  double linkCells_lx{0.0};
+  double linkCells_ly{0.0};
 
   int cellContent;
-  double compressFactor;
+  double compressFactor{0.0};
 
   // parametres mécaniques d'interactions (contact frottant avec ou sans adhésion) entre les cellules
-  double kn;                  ///< raideur normale de contact
-  double kt;                  ///< raideur tangentielle de contact
-  double mu;                  ///< coefficient de frottement (entre les cellules)
-  double fadh;                ///< force normale d'adhésion au contact
+  double kn{0.0};             ///< raideur normale de contact
+  double kt{0.0};             ///< raideur tangentielle de contact
+  double mu{0.0};             ///< coefficient de frottement (entre les cellules)
+  double fadh{0.0};           ///< force normale d'adhésion au contact
   int adaptativeStiffness{0}; ///< adaptativeStiffness
 
-  int nstep;             ///< nombre de pas
-  int nstepPeriodVerlet; ///< nombre de pas entre mise à jour des voisins
-  int nstepPeriodSVG;    ///< nombre de pas entre sauvegardes SVG
-  int nstepPeriodRecord; ///< nombre de pas entre chaque ligne d'enregistrement de données
-  int nstepPeriodConf;   ///< nombre de pas entre sauvegardes de configuration
-  int isvg;              ///< numéro actuel de sauvegarde SVG
-  int iconf;             ///< numéro actuel de sauvegarde de configuration
+  int nstep{0};             ///< nombre de pas
+  int nstepPeriodVerlet{0}; ///< nombre de pas entre mise à jour des voisins
+  int nstepPeriodSVG{0};    ///< nombre de pas entre sauvegardes SVG
+  int nstepPeriodRecord{0}; ///< nombre de pas entre chaque ligne d'enregistrement de données
+  int nstepPeriodConf{0};   ///< nombre de pas entre sauvegardes de configuration
+  int isvg{0};              ///< numéro actuel de sauvegarde SVG
+  int iconf{0};             ///< numéro actuel de sauvegarde de configuration
 
-  int SVG_colorCells; // 0=rien, 1=pressure, 2=NRJ elast
-  int SVG_colorTableRescale;
-  double SVG_colorTableMin;
-  double SVG_colorTableMax;
-  int SVG_cellForces; // 0=rien, 1=rouge/bleu
+  int SVG_colorCells{0}; // 0=rien, 1=pressure, 2=NRJ elast
+  int SVG_colorTableRescale{0};
+  double SVG_colorTableMin{0.0};
+  double SVG_colorTableMax{0.0};
+  int SVG_cellForces{0}; // 0=rien, 1=rouge/bleu
 
   ColorTable ctNeg, ctPos; // ??????? c'est pas le bon endroit pour mettre ça
 
@@ -220,9 +220,9 @@ public:
                                named_arg_CellProperties p);
   void addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                          named_arg_CellProperties p);
-						 
 
   void setTimeStep(double t_dt);
+  void setCellWallDampingRates(double alpha);
   void setCellWallDensities(double rho, double thickness = 1.0);
   void setCellDensities(double rho, double thickness = 1.0);
   void setCellMasses(double cellMass);
@@ -236,7 +236,6 @@ public:
   void addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds = 0.0);
   double getMinimumNodeDistance();
   void readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int);
-
 
   std::function<void()> updateNeighbors;
   void updateNeighbors_brute_force();
@@ -266,5 +265,3 @@ public:
   void InternalLiquidPressureForce();
   void setCellInternalPressure(size_t c, double p);
 };
-
-

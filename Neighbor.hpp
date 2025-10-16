@@ -45,11 +45,11 @@
  */
 class Neighbor {
 public:
-  size_t ic; // indice de la première cellule dans Sample::cells
-  size_t jc; // indice de la seconde cellule dans Sample::cells (ic <= jc)
+  size_t ic{0}; // indice de la première cellule dans Sample::cells
+  size_t jc{0}; // indice de la seconde cellule dans Sample::cells (ic <= jc)
 
-  size_t in; // indice du noeud de la première cellule dans Sample::cells[ic]
-  size_t jn; // indice du noeud de la seconde cellule dans Sample::cells[jc]
+  size_t in{0}; // indice du noeud de la première cellule dans Sample::cells[ic]
+  size_t jn{0}; // indice du noeud de la seconde cellule dans Sample::cells[jc]
   // jn code pour la barre qui commence par jn
 
   vec2r n; // vecteur normal (de j vers i)
@@ -58,23 +58,23 @@ public:
   Neighbor *brother{nullptr};
 
   // contact
-  int contactState;
-  double fn; // force normale de contact
-  double ft; // force de frottement
+  int contactState{-1};
+  double fn{0.0}; // force normale de contact
+  double ft{0.0}; // force de frottement
 
   // cohesion
-  int glueState; // 0 = pas de colle, 1 = colle, 2, colle Gc
-  double fn_coh; // force normale de cohésion solide
-  double ft_coh; // force tangentielle de cohésion solide
-  double kn_coh;
-  double kt_coh;
-  double fn_coh_max;
-  double ft_coh_max;
+  int glueState{0};   // 0 = pas de colle, 1 = colle, 2, colle Gc
+  double fn_coh{0.0}; // force normale de cohésion solide
+  double ft_coh{0.0}; // force tangentielle de cohésion solide
+  double kn_coh{0.0};
+  double kt_coh{0.0};
+  double fn_coh_max{0.0};
+  double ft_coh_max{0.0};
 
   // rupture avec critère en energie
-  double length;
-  double yieldPower;
-  double Gc;
+  double length{0.0};
+  double yieldPower{0.0};
+  double Gc{0.0};
 
   Neighbor(size_t t_ic, size_t t_jc, size_t t_in, size_t t_jn);
 };
@@ -96,4 +96,3 @@ template <> struct less<Neighbor> {
   }
 };
 } // namespace std
-
