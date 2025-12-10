@@ -379,6 +379,32 @@ void Lhyphen::setTimeStep(double t_dt) {
 
 // ne pas oublier de donner des masses et raideurs aux noeuds avant !!!!!
 void Lhyphen::setCellWallDampingRates(double alpha) {
+
+  // Précalcul Ieff moyen
+  double L = 0.0;
+  double m = 0.0;
+  size_t nbBars = 0;
+  size_t nbNodes = 0;
+  for (size_t c = 0; c < cells.size(); c++) {
+
+    for (size_t b = 0; b < cells[c].bars.size(); b++) {
+      L += cells[c].bars[b].l0;
+      nbBars++;
+    }
+
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      m += cells[c].nodes[n].mass;
+      nbNodes++;
+    }
+  }
+  if (nbBars > 0) {
+    L /= static_cast<double>(nbBars);
+  }
+  if (nbNodes > 0) {
+    m /= static_cast<double>(nbNodes);
+  }
+  double Ieff = (m * L * L) / 3.0;
+
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t b = 0; b < cells[c].bars.size(); b++) {
 
@@ -389,7 +415,10 @@ void Lhyphen::setCellWallDampingRates(double alpha) {
       double meff = imass * jmass / (imass + jmass);
 
       cells[c].bars[b].visc = 2.0 * alpha * sqrt(meff * cells[c].bars[b].kn);
-      //std::cout << "cells[c].bars[b].visc = " << cells[c].bars[b].visc << std::endl;
+    }
+
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      cells[c].nodes[n].visc = 2.0 * alpha * sqrt(Ieff * cells[c].nodes[n].kr);
     }
   }
 }
@@ -1155,7 +1184,8 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
       }
       W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
-      double G = W / (2.0 * Inter->length);
+      double G = 0.0;
+      if (Inter->length > 1.0e-12) G = W / (2.0 * Inter->length);
 
       if (G > Inter->Gc) {
         // breakage
@@ -1165,7 +1195,7 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
         Inter->brother->fn_coh = 0.0;
         Inter->brother->ft_coh = 0.0;
         Inter->brother->glueState = 0;
-        if (Inter->length > 1.0e-12) {
+        if (/*Inter->length > 1.0e-12*/ 1) {
           cumulatedG += G;
           cumulatedL += Inter->length;
         }
@@ -1357,7 +1387,8 @@ void Lhyphen::computeInteractionForces() {
                 }
                 W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
-                double G = W / (2.0 * Inter->length);
+                double G = 0.0;
+                if (Inter->length > 1.0e-12) G = W / (2.0 * Inter->length);
 
                 if (G > Inter->Gc) {
                   // breakage
@@ -1367,7 +1398,7 @@ void Lhyphen::computeInteractionForces() {
                   Inter->brother->fn_coh = 0.0;
                   Inter->brother->ft_coh = 0.0;
                   Inter->brother->glueState = 0;
-                  if (Inter->length > 1.0e-12) {
+                  if (/*Inter->length > 1.0e-12*/ 1) {
                     cumulatedG += G;
                     cumulatedL += Inter->length;
                   }
@@ -1478,7 +1509,8 @@ void Lhyphen::computeInteractionForces() {
                 }
                 W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
-                double G = W / (2.0 * Inter->length);
+                double G = 0.0;
+                if (Inter->length > 1.0e-12) G = W / (2.0 * Inter->length);
 
                 if (G > Inter->Gc) {
                   // cassage
@@ -1488,7 +1520,7 @@ void Lhyphen::computeInteractionForces() {
                   Inter->brother->fn_coh = 0.0;
                   Inter->brother->ft_coh = 0.0;
                   Inter->brother->glueState = 0;
-                  if (Inter->length > 1.0e-12) {
+                  if (/*Inter->length > 1.0e-12*/ 1) {
                     cumulatedG += G;
                     cumulatedL += Inter->length;
                   }
@@ -1626,7 +1658,8 @@ void Lhyphen::computeInteractionForces() {
                 }
                 W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
-                double G = W / (2.0 * Inter->length);
+                double G = 0.0;
+                if (Inter->length > 1.0e-12) G = W / (2.0 * Inter->length);
                 // std::cout << "G = " << G << ", Gc = " << Inter->Gc << std::endl;
 
                 if (G > Inter->Gc) {
@@ -1637,7 +1670,7 @@ void Lhyphen::computeInteractionForces() {
                   Inter->brother->fn_coh = 0.0;
                   Inter->brother->ft_coh = 0.0;
                   Inter->brother->glueState = 0;
-                  if (Inter->length > 1.0e-12) {
+                  if (/*Inter->length > 1.0e-12*/ 1) {
                     cumulatedG += G;
                     cumulatedL += Inter->length;
                   }
@@ -1692,11 +1725,12 @@ void Lhyphen::computeNodeForces() {
         double l = n.normalize();            // n est orienté de i vers j
         double dn = l - cells[c].bars[b].l0; // dn positif = allongement
         cells[c].bars[b].fn = -cells[c].bars[b].kn * dn;
-        
+
+        // viscosité linéaire
         if (cells[c].bars[b].visc > 0.0) {
           double vn = (cells[c].nodes[i].vel - cells[c].nodes[j].vel) * n;
           cells[c].bars[b].fn += cells[c].bars[b].visc * vn;
-        }       
+        }
 
         // TODO: ajouter plasticité dans les barres (?)
 
@@ -1738,6 +1772,12 @@ void Lhyphen::computeNodeForces() {
 
         cells[c].nodes[n].mz += -cells[c].nodes[n].kr * (omegaNext - omegaPrev) * dt;
 
+        // viscosité en rotation
+        if (cells[c].nodes[n].visc > 0.0) {
+          double vtheta = (omegaNext - omegaPrev);
+          cells[c].nodes[n].mz += -cells[c].nodes[n].visc * vtheta;
+        }
+            
         // TODO: ajouter la possibilité de désactiver la plasticité (?)
         if (cells[c].nodes[n].mz > cells[c].nodes[n].mz_max) {
           cells[c].nodes[n].mz = cells[c].nodes[n].mz_max;

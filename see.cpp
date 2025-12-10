@@ -567,7 +567,7 @@ void drawGluePoints() {
         int type = Conf.getPosition(ci, cj, in, jn, pos);
         if (type == 0) { // ne peut pas arriver normalement
           glColor3f(0.5f, 0.5f, 0.5f);
-          rnb = 12;
+          rnb = 22;
         } else if (type == 1) {
           glColor3f(1.f, 0.f, 0.f);
           rnb = 12;
@@ -576,7 +576,7 @@ void drawGluePoints() {
           rnb = 12;
         } else if (type == 3) {
           glColor3f(1.f, 0.6f, 0.f);
-          rnb = 4;
+          rnb = 12;
         }
 
         drawCircle(pos.x, pos.y, rp, rnb);

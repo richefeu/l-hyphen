@@ -54,6 +54,7 @@ public:
   size_t nextNode{null_size_t}; // numéro du noeud suivant (null_size_t si pas de barre)
 
   double kr{0.0};     // raideur angulaire [N.m(/radian)]
+  double visc{0.0};   // viscosité en rotation
   double mz{0.0};     // moment entre les barres connectées
   double mz_max{0.0}; // moment-seuil de plastification parfaite
 
