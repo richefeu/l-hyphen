@@ -2218,7 +2218,7 @@ void Lhyphen::loadCONF(const char *fname) {
       exprParser->getValue(file, gravity.x);
       exprParser->getValue(file, gravity.y);
       if (firstLoad)
-        std::cout << "> gravity = " << gravity << std::endl;
+        {std::cout << "> gravity = " << gravity << std::endl;}
     } else if (token == "numericalDissipation") {
       // file >> numericalDissipation;
       exprParser->getValue(file, numericalDissipation);
@@ -2227,83 +2227,104 @@ void Lhyphen::loadCONF(const char *fname) {
     } else if (token == "globalViscosity") {
       // file >> globalViscosity;
       exprParser->getValue(file, globalViscosity);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> globalViscosity = " << globalViscosity << std::endl;
+      }
     } else if (token == "linkCells") {
-      file >> linkCells_lx >> linkCells_ly;
+      // file >> linkCells_lx >> linkCells_ly;
+      exprParser->getValue(file, linkCells_lx);
+      exprParser->getValue(file, linkCells_ly);
+      if (firstLoad) {
+        std::cout << "* Update neighbors with linkCells: lx = " << linkCells_lx << ", ly = " << linkCells_ly
+                  << std::endl;
+      }
       updateNeighbors = [this]() { this->updateNeighbors_linkCells(); };
     } else if (token == "distVerlet") {
       // file >> distVerlet;
       exprParser->getValue(file, distVerlet);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> distVerlet = " << distVerlet << std::endl;
+      }
     } else if (token == "t") {
       // file >> t;
       exprParser->getValue(file, t);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> t = " << t << std::endl;
+      }
     } else if (token == "cyclicVelPeriod") {
       // file >> cyclicVelPeriod;
       exprParser->getValue(file, cyclicVelPeriod);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> cyclicVelPeriod = " << cyclicVelPeriod << std::endl;
+      }
     } else if (token == "dt") {
       double timestep;
       // file >> timestep;
       exprParser->getValue(file, timestep);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> dt = " << timestep << std::endl;
+      }
       setTimeStep(timestep);
     } else if (token == "nstep") {
       // file >> nstep;
       exprParser->getValue(file, nstep);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> nstep = " << nstep << std::endl;
+      }
     } else if (token == "nstepPeriodVerlet") {
       // file >> nstepPeriodVerlet;
       exprParser->getValue(file, nstepPeriodVerlet);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> nstepPeriodVerlet = " << nstepPeriodVerlet << std::endl;
+      }
     } else if (token == "nstepPeriodSVG") {
       // file >> nstepPeriodSVG;
       exprParser->getValue(file, nstepPeriodSVG);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> nstepPeriodSVG = " << nstepPeriodSVG << std::endl;
+      }
     } else if (token == "nstepPeriodRecord") {
       // file >> nstepPeriodRecord;
       exprParser->getValue(file, nstepPeriodRecord);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> nstepPeriodRecord = " << nstepPeriodRecord << std::endl;
+      }
     } else if (token == "nstepPeriodConf") {
       // file >> nstepPeriodConf;
       exprParser->getValue(file, nstepPeriodConf);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> nstepPeriodConf = " << nstepPeriodConf << std::endl;
+      }
     } else if (token == "isvg") {
       // file >> isvg;
       exprParser->getValue(file, isvg);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> isvg = " << isvg << std::endl;
+      }
     } else if (token == "iconf") {
       // file >> iconf;
       exprParser->getValue(file, iconf);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> iconf = " << iconf << std::endl;
+      }
     } else if (token == "kn") {
       // file >> kn;
       exprParser->getValue(file, kn);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> kn = " << kn << std::endl;
+      }
     } else if (token == "kt") {
       // file >> kt;
       exprParser->getValue(file, kt);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> kt = " << kt << std::endl;
+      }
     } else if (token == "viscn") {
       // file >> viscn;
       exprParser->getValue(file, viscn);
-      if (firstLoad)
+      if (firstLoad) {
         std::cout << "> viscn = " << viscn << std::endl;
+      }
     } else if (token == "define") {
       std::string name;
       file >> name;
@@ -2420,6 +2441,7 @@ void Lhyphen::loadCONF(const char *fname) {
       int n;
       file >> h.xo >> h.yo >> h.xe >> h.ye >> h.barWidth >> n;
       file >> p.kn >> p.kr >> p.mz_max;
+      // TODO: add exprParser ??
       p.p_int = 0.0;
       addMultiLine(h, p, n);
     } else if (token == "addRegularPolygonalCell") {
@@ -2427,6 +2449,7 @@ void Lhyphen::loadCONF(const char *fname) {
       named_arg_CellProperties p;
       file >> h.nbFaces >> h.x >> h.y >> h.rot >> h.Rext >> h.barWidth;
       file >> p.kn >> p.kr >> p.mz_max;
+      // TODO: add exprParser ??
       addRegularPolygonalCell(h, p);
     } else if (token == "addSquareBrickWallCells") {
       named_arg_CellProperties p;
@@ -2436,6 +2459,7 @@ void Lhyphen::loadCONF(const char *fname) {
       double barWidth;
       file >> nx >> ny >> hdist >> xleft >> ybottom >> barWidth;
       file >> p.kn >> p.kr >> p.mz_max;
+      // TODO: add exprParser ??
       addSquareBrickWallCells(nx, ny, hdist, xleft, ybottom, barWidth, p);
     } else if (token == "findDisplayArea") {
       double d;
@@ -2453,38 +2477,78 @@ void Lhyphen::loadCONF(const char *fname) {
       glue(dist, modelGc);
     } else if (token == "setCellWallDampingRates") {
       double alpha_s, alpha_b;
-      file >> alpha_s >> alpha_b;
+      //file >> alpha_s >> alpha_b;
+      exprParser->getValue(file, alpha_s);
+      exprParser->getValue(file, alpha_b);
+      if (firstLoad) {
+        std::cout << "* setCellWallDampingRates: " << std::endl;
+        std::cout << "    | alpha_s = " << alpha_s << std::endl;
+        std::cout << "    | alpha_b = " << alpha_b << std::endl;
+      }    
       setCellWallDampingRates(alpha_s, alpha_b);
     } else if (token == "setCellWallDampings") {
       double nu_s, nu_b;
-      file >> nu_s >> nu_b;
+      //file >> nu_s >> nu_b;
+      exprParser->getValue(file, nu_s);
+      exprParser->getValue(file, nu_b);
+      if (firstLoad) {
+        std::cout << "* setCellWallDampingRates: " << std::endl;
+        std::cout << "    | nu_s = " << nu_s << std::endl;
+        std::cout << "    | nu_b = " << nu_b << std::endl;
+      }    
       setCellWallDampings(nu_s, nu_b);
     } else if (token == "setCellMasses") {
       double mass;
-      file >> mass;
+      //file >> mass;
+      exprParser->getValue(file, mass);
+      if (firstLoad) {
+        std::cout << "* setCellMasses: " << std::endl;
+        std::cout << "    | mass = " << mass << std::endl;
+      }  
       setCellMasses(mass);
     } else if (token == "setNodeMasses") {
       double mass;
-      file >> mass;
+      //file >> mass;
+      exprParser->getValue(file, mass);
+      if (firstLoad) {
+        std::cout << "* setNodeMasses: " << std::endl;
+        std::cout << "    | mass = " << mass << std::endl;
+      }  
       setNodeMasses(mass);
     } else if (token == "setCellWallDensities") {
       double rho, thickness;
-      file >> rho >> thickness;
+      //file >> rho >> thickness;
+      exprParser->getValue(file, rho);
+      exprParser->getValue(file, thickness);
+      if (firstLoad) {
+        std::cout << "* setCellWallDensities: " << std::endl;
+        std::cout << "    |       rho = " << rho << std::endl;
+        std::cout << "    | thickness = " << thickness << std::endl;
+      } 
       setCellWallDensities(rho, thickness);
     } else if (token == "setCellDensities") {
       double rho, thickness;
-      file >> rho >> thickness;
+      //file >> rho >> thickness;
+      exprParser->getValue(file, rho);
+      exprParser->getValue(file, thickness);
+      if (firstLoad) {
+        std::cout << "* setCellDensities: " << std::endl;
+        std::cout << "    |       rho = " << rho << std::endl;
+        std::cout << "    | thickness = " << thickness << std::endl;
+      } 
       setCellDensities(rho, thickness);
     } else if (token == "setNodeControl") {
       double xvalue, yvalue;
       int xmode, ymode;
       size_t c, n;
       file >> c >> n >> xmode >> xvalue >> ymode >> yvalue;
+      // TODO: add exprParser ??
       setNodeControl(c, n, xmode, xvalue, ymode, yvalue);
     } else if (token == "setNodeControlInBox") {
       double xmin_, xmax_, ymin_, ymax_, xvalue, yvalue;
       int xmode, ymode;
       file >> xmin_ >> xmax_ >> ymin_ >> ymax_ >> xmode >> xvalue >> ymode >> yvalue;
+      // TODO: add exprParser ??
       setNodeControlInBox(xmin_, xmax_, ymin_, ymax_, xmode, xvalue, ymode, yvalue);
       controlBoxAreas.push_back(ControlBoxArea(xmin_, xmax_, ymin_, ymax_, xmode, xvalue, ymode, yvalue));
     } else if (token == "controlBoxAreas") {
@@ -2517,13 +2581,14 @@ void Lhyphen::loadCONF(const char *fname) {
       // file >> cid;
       exprParser->getValue(file, cid);
       if (firstLoad)
-        std::cout << "* followCell cell.id = " << cid << std::endl;
+        {std::cout << "* followCell cell.id = " << cid << std::endl;}
       followedCells.push_back(cid);
     } else if (token == "setCellControl") {
       size_t icell;
       int xmode, ymode;
       double xvalue, yvalue;
       file >> icell >> xmode >> xvalue >> ymode >> yvalue;
+      // TODO: add exprParser ??
       setCellControl(icell, xmode, xvalue, ymode, yvalue);
     } else if (token == "reorder") {
       file >> reorder;
@@ -2536,7 +2601,6 @@ void Lhyphen::loadCONF(const char *fname) {
       exprParser->getValue(file, Kr);
       exprParser->getValue(file, Mz_max);
       exprParser->getValue(file, p_int);
-
       if (firstLoad) {
         std::cout << "* readNodeFile " << fileName << ":" << std::endl;
         std::cout << "    | barWidth = " << barWidth << std::endl;
@@ -2550,6 +2614,7 @@ void Lhyphen::loadCONF(const char *fname) {
       double p_int;
       size_t c;
       file >> c >> p_int;
+      // TODO: add exprParser ??
       setCellInternalPressure(c, p_int);
     } else if (token == "enablePressures") {
       // enablePressures = 1;
