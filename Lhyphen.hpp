@@ -46,6 +46,8 @@
 #include "svgtools.hpp"
 #include "vec2.hpp"
 
+#include "expressionParser.hpp"
+
 #include "Bar.hpp"
 #include "Cell.hpp"
 #include "Control.hpp"
@@ -59,11 +61,9 @@
 #define LH_ENABLED 1
 #define LH_DISABLED 0
 
-/**
- *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
- *  lors de la définition de certaine cellules
- *
- */
+/// Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
+/// lors de la définition de certaine cellules
+///
 struct named_arg_RegularCellDataset {
   int nbFaces;
   double x;
@@ -73,11 +73,9 @@ struct named_arg_RegularCellDataset {
   double barWidth;
 };
 
-/**
- *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
- *  lors de la définition de certaine cellules
- *
- */
+/// Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
+/// lors de la définition de certaine cellules
+///
 struct named_arg_TwoPointsDataset {
   double xo;
   double yo;
@@ -86,11 +84,9 @@ struct named_arg_TwoPointsDataset {
   double barWidth;
 };
 
-/**
- *  Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
- *  lors de la définition de certaine cellules
- *
- */
+/// Cette structure sert simplement à obtenir des arguments només pour une interface plus compréhensible
+/// lors de la définition de certaine cellules
+///
 struct named_arg_CellProperties {
   double kn;
   double kr;
@@ -103,9 +99,8 @@ struct CellNodeID {
   CellNodeID(size_t t_c, size_t t_n) : c(t_c), n(t_n) {}
 };
 
-/**
- *  Une boite qui sert à capturer des sommets pour faire des sorties de post-traitement
- */
+/// Une boite qui sert à capturer des sommets pour faire des sorties de post-traitement
+///
 struct CapturedNodes {
   std::vector<CellNodeID> cellNodeIDs;
   std::string filename;
@@ -114,9 +109,8 @@ struct CapturedNodes {
       : filename(name), xmin(t_xmin), xmax(t_xmax), ymin(t_ymin), ymax(t_ymax) {}
 };
 
-/**
- *  Une boite qui sert à capturer des sommets pour imposer une force ou une vitesse suivant x et y
- */
+/// Une boite qui sert à capturer des sommets pour imposer une force ou une vitesse suivant x et y
+///
 struct ControlBoxArea {
   double xmin, xmax, ymin, ymax;
   int xmode;
@@ -133,10 +127,8 @@ struct ControlBoxArea {
 #define CELL_CONSTANT_PV 1
 #define CELL_ELASTIC_PV 2
 
-/**
- *  Le système entier
- *
- */
+/// Le système entier
+///
 class Lhyphen {
 public:
   std::vector<Cell> cells;       ///< cellules
@@ -175,9 +167,12 @@ public:
   int cellContent;
   double compressFactor{0.0};
 
+  ExpressionParser *exprParser{nullptr};
+
   // parametres mécaniques d'interactions (contact frottant avec ou sans adhésion) entre les cellules
   double kn{0.0};             ///< raideur normale de contact
   double kt{0.0};             ///< raideur tangentielle de contact
+  double viscn{0.0};          ///< viscosity used for contact and glue points in normal direction
   double mu{0.0};             ///< coefficient de frottement (entre les cellules)
   double fadh{0.0};           ///< force normale d'adhésion au contact
   int adaptativeStiffness{0}; ///< adaptativeStiffness
@@ -206,6 +201,7 @@ public:
   double cumulatedL{0.0};
 
   Lhyphen();
+  ~Lhyphen();
 
   void head(); ///< affiche un petit entete sympatique
 
@@ -222,7 +218,8 @@ public:
                          named_arg_CellProperties p);
 
   void setTimeStep(double t_dt);
-  void setCellWallDampingRates(double alpha);
+  void setCellWallDampingRates(double alpha_s, double alpha_b);
+  void setCellWallDampings(double nu_s, double nu_b);
   void setCellWallDensities(double rho, double thickness = 1.0);
   void setCellDensities(double rho, double thickness = 1.0);
   void setCellMasses(double cellMass);

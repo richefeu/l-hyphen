@@ -38,10 +38,8 @@
 #include <set>
 #include <vector>
 
-/**
- * Une cellule contenant une boucle (fermée ou non) de barres extensibles
- *
- */
+/// Une cellule contenant une boucle (fermée ou non) de barres extensibles
+/// 
 class Cell {
 public:
   std::vector<Node> nodes;               ///< les noeuds

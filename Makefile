@@ -37,11 +37,11 @@ ifeq ($(UNAME_S),Darwin)
   CXXFLAGS = -O3 -Wall -Wextra -pedantic -Wno-unknown-pragmas -std=c++17 -I ./toofus
   LDFLAGS = 
   GLLINK = `pkg-config --libs gl glu glut`
-	GLFLAGS = `pkg-config --cflags gl glu glut`	
-	# on apple, use brew to install freeglut and mesa-glu
+  GLFLAGS = `pkg-config --cflags gl glu glut`	
+  # on apple, use brew to install freeglut and mesa-glu
 else
   CXX = g++
-  CXXFLAGS = -fopenmp -O3 -Wall -std=c++17 -I ./toofus
+  CXXFLAGS = -g -fopenmp -O3 -Wall -std=c++17 -I ./toofus
   LDFLAGS = -lomp
   GLLINK = -lGLU -lGL -L/usr/X11R6/lib -lglut -lXmu -lXext -lX11 -lXi
 endif
@@ -52,7 +52,7 @@ $(info Cloning ToOfUs repository)
 $(shell git clone https://github.com/richefeu/toofus.git > /dev/null 2>&1)
 endif
 
-SOURCES = Neighbor.cpp Control.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
+SOURCES = expressionParser.cpp Neighbor.cpp Control.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
 OBJECTS = $(SOURCES:%.cpp=%.o)
 
 .PHONY: all clean clone_toofus

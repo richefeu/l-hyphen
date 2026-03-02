@@ -31,10 +31,8 @@
 #include "Lhyphen.hpp"
 #include "null_size_t.hpp"
 
-/**
- *  Construct a new Lhyphen object
- *
- */
+/// Construct a new Lhyphen object
+///
 Lhyphen::Lhyphen()
     : xmin(0.0), xmax(0.0), ymin(0.0), ymax(0.0), t(0.0), cyclicVelPeriod(0.0), dt(0.0), globalViscosity(0.0),
       numericalDissipation(0.0), gravity(), distVerlet(0.0), cellContent(CELL_EMPTY), compressFactor(0.0), kn(1000.0),
@@ -59,10 +57,14 @@ Lhyphen::Lhyphen()
   ctPos.rebuild_interp_rgba({0, 127}, {{204, 204, 230, 255}, {255, 0, 0, 255}});
 }
 
-/**
- *   Affiche un petit entete sympatique
- *
- */
+Lhyphen::~Lhyphen() {
+  if (exprParser != nullptr) {
+    delete exprParser;
+  }
+}
+
+///  Affiche d'un petit entete sympatique
+///
 void Lhyphen::head() {
   std::cout << "    L-HYPHEN\n";
   std::cout << "    _    _\n";
@@ -77,12 +79,11 @@ void Lhyphen::head() {
 // Adding cells (or packing of cells)
 // ======================================================================================================
 
-/**
- *  Ajoute une cellule de forme polygonale régulière
- *
- *  @param h les données pour définir un polyèdre régulier
- *  @param p les propriétés mécaniques
- */
+/// Ajoute une cellule de forme polygonale régulière
+///
+/// @param h les données pour définir un polyèdre régulier
+/// @param p les propriétés mécaniques
+///
 void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_CellProperties p) {
   Cell C;
   C.p_int = p.p_int;
@@ -97,12 +98,11 @@ void Lhyphen::addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_
   cells.push_back(C);
 }
 
-/**
- *  Ajoute une cellule-boite à partir de deux points
- *
- *  @param h  les deux points qui definissent les dimensions extérieures de la boite
- *  @param p  les propriétés mécaniques
- */
+/// Ajoute une cellule-boite à partir de deux points
+///
+/// @param h  les deux points qui definissent les dimensions extérieures de la boite
+/// @param p  les propriétés mécaniques
+///
 void Lhyphen::addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties p) {
   Cell C;
   C.p_int = p.p_int;
@@ -116,12 +116,11 @@ void Lhyphen::addBoxCell(named_arg_TwoPointsDataset h, named_arg_CellProperties 
   cells.push_back(C);
 }
 
-/**
- *   Ajoute une ligne (cellule non fermée) entre deux points
- *
- *   @param h  les deux points
- *   @param p  les propriétés mécaniques
- */
+///  Ajoute une ligne (cellule non fermée) entre deux points
+///
+///  @param h  les deux points
+///  @param p  les propriétés mécaniques
+///
 void Lhyphen::addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p) {
   Cell C;
   C.close = false;
@@ -131,13 +130,12 @@ void Lhyphen::addLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p) 
   cells.push_back(C);
 }
 
-/**
- *  Ajoute une ligne formée de plusieurs barres (cellule non fermée) entre deux points
- *
- *  @param h  les deux points
- *  @param p  les propriétés mécaniques
- *  @param n  nombre de barres
- */
+/// Ajoute une ligne formée de plusieurs barres (cellule non fermée) entre deux points
+///
+/// @param h  les deux points
+/// @param p  les propriétés mécaniques
+/// @param n  nombre de barres
+///
 void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellProperties p, int n) {
   double dx = (h.xe - h.xo) / (double)n;
   double dy = (h.ye - h.yo) / (double)n;
@@ -155,16 +153,15 @@ void Lhyphen::addMultiLine(named_arg_TwoPointsDataset h, named_arg_CellPropertie
   cells.push_back(C);
 }
 
-/**
- *   Adds regular polygonal cells on a triangular grid.
- *
- *   @param nx                  number of cells in the x-direction
- *   @param ny                  number of cells in the y-direction
- *   @param horizontalDistance  horizontal distance between cells
- *   @param verticalDistance    vertical distance between cells
- *   @param h                   regular cell dataset
- *   @param p                   cell properties
- */
+///  Adds regular polygonal cells on a triangular grid.
+///
+///  @param nx                  number of cells in the x-direction
+///  @param ny                  number of cells in the y-direction
+///  @param horizontalDistance  horizontal distance between cells
+///  @param verticalDistance    vertical distance between cells
+///  @param h                   regular cell dataset
+///  @param p                   cell properties
+///
 void Lhyphen::addRegularPolygonalCellsOnTriangularGrid(int nx, int ny, double horizontalDistance,
                                                        double verticalDistance, named_arg_RegularCellDataset h,
                                                        named_arg_CellProperties p) {
@@ -191,17 +188,16 @@ void Lhyphen::addRegularPolygonalCellsOnTriangularGrid(int nx, int ny, double ho
   }
 }
 
-/**
- *  Adds square brick wall cells to the given grid.
- *
- *  @param nx                  number of cells in the x direction
- *  @param ny                  number of cells in the y direction
- *  @param horizontalDistance  horizontal distance between cells
- *  @param xleft               x-coordinate of the leftmost cell
- *  @param ybottom             y-coordinate of the bottommost cell
- *  @param barWidth            width of the bar between cells
- *  @param p                   properties of the cells
- */
+/// Adds square brick wall cells to the given grid.
+///
+/// @param nx                  number of cells in the x direction
+/// @param ny                  number of cells in the y direction
+/// @param horizontalDistance  horizontal distance between cells
+/// @param xleft               x-coordinate of the leftmost cell
+/// @param ybottom             y-coordinate of the bottommost cell
+/// @param barWidth            width of the bar between cells
+/// @param p                   properties of the cells
+///
 void Lhyphen::addSquareBrickWallCells(int nx, int ny, double horizontalDistance, double xleft, double ybottom,
                                       double barWidth, named_arg_CellProperties p) {
   named_arg_RegularCellDataset h;
@@ -214,17 +210,16 @@ void Lhyphen::addSquareBrickWallCells(int nx, int ny, double horizontalDistance,
   addRegularPolygonalCellsOnTriangularGrid(nx, ny, horizontalDistance, horizontalDistance, h, p);
 }
 
-/**
- *   Crée une structure en nid d'abeille
- *
- *   @param nx               nombre de cellule suivant x
- *   @param ny               nombre de lignes
- *   @param CellExternWidth  largeur externe d'une cellule hexagonale
- *   @param xleft            position x la plus à gauche
- *   @param ybottom          position y la plus en bas
- *   @param barWidth         épaisseur des barres
- *   @param p                paramètres mécaniques de toutes les cellules
- */
+///  Crée une structure en nid d'abeille
+///
+///  @param nx               nombre de cellule suivant x
+///  @param ny               nombre de lignes
+///  @param CellExternWidth  largeur externe d'une cellule hexagonale
+///  @param xleft            position x la plus à gauche
+///  @param ybottom          position y la plus en bas
+///  @param barWidth         épaisseur des barres
+///  @param p                paramètres mécaniques de toutes les cellules
+///
 void Lhyphen::addHoneycombCells(int nx, int ny, double CellExternWidth, double xleft, double ybottom, double barWidth,
                                 named_arg_CellProperties p) {
   double verticalDistance = 1.5 * CellExternWidth / sqrt(3.0);
@@ -293,18 +288,17 @@ double Lhyphen::getMinimumNodeDistance() {
   return sqrt(d2min);
 }
 
-/**
- *   This function reads a file containing a list of x,y positions with cell numbers.
- *   The numbers don't matter as long as they are different for each cell.
- *   Pre-cleaning must be done so that there are at least 3 nodes per cell. All cells are closed.
- *
- *   @param name      name of the node file to read
- *   @param barWidth  width of the bar (negative for auto-evaluated value)
- *   @param Kn        value of Kn
- *   @param Kr        value of Kr
- *   @param Mz_max    maximum value of Mz
- *   @param p_int     value of p_int
- */
+///  This function reads a file containing a list of x,y positions with cell numbers.
+///  The numbers don't matter as long as they are different for each cell.
+///  Pre-cleaning must be done so that there are at least 3 nodes per cell. All cells are closed.
+///
+///  @param name      name of the node file to read
+///  @param barWidth  width of the bar (negative for auto-evaluated value)
+///  @param Kn        value of Kn
+///  @param Kr        value of Kr
+///  @param Mz_max    maximum value of Mz
+///  @param p_int     value of p_int
+///
 void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int) {
   std::ifstream file(name);
 
@@ -330,7 +324,7 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
     dataset.insert(D);
   }
 
-  size_t i0 = cells.size();
+  size_t i0 = cells.size(); // in case some cells have already been added
   int cellId = -1;
   Cell C;
   for (auto i : dataset) {
@@ -366,11 +360,10 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
 // Setting parameters
 // ======================================================================================================
 
-/**
- *   Utiliser cette méthode pour definir le pas de temps (comme ça dt/2 et dt^2/2 seront pré-calculées)
- *
- *   @param t_dt  pas de temps
- */
+///  Utiliser cette méthode pour definir le pas de temps (comme ça dt/2 et dt^2/2 seront pré-calculées)
+///
+///  @param t_dt  time step
+///
 void Lhyphen::setTimeStep(double t_dt) {
   dt = t_dt;
   dt_2 = 0.5 * dt;
@@ -378,7 +371,7 @@ void Lhyphen::setTimeStep(double t_dt) {
 }
 
 // ne pas oublier de donner des masses et raideurs aux noeuds avant !!!!!
-void Lhyphen::setCellWallDampingRates(double alpha) {
+void Lhyphen::setCellWallDampingRates(double alpha_s, double alpha_b) {
 
   // Précalcul Ieff moyen
   double L = 0.0;
@@ -414,23 +407,34 @@ void Lhyphen::setCellWallDampingRates(double alpha) {
       double jmass = cells[c].nodes[jn].mass;
       double meff = imass * jmass / (imass + jmass);
 
-      cells[c].bars[b].visc = 2.0 * alpha * sqrt(meff * cells[c].bars[b].kn);
+      cells[c].bars[b].visc = 2.0 * alpha_s * sqrt(meff * cells[c].bars[b].kn);
     }
 
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
-      cells[c].nodes[n].visc = 2.0 * alpha * sqrt(Ieff * cells[c].nodes[n].kr);
+      cells[c].nodes[n].visc = 2.0 * alpha_b * sqrt(Ieff * cells[c].nodes[n].kr);
     }
   }
 }
 
-/**
- * Sets the cell wall densities for all cells in the Lhyphen.
- *
- * @param rho The density of the cell walls.
- * @param thickness The thickness of the cell walls.
- *
- * @throws None.
- */
+void Lhyphen::setCellWallDampings(double nu_s, double nu_b) {
+  for (size_t c = 0; c < cells.size(); c++) {
+    for (size_t b = 0; b < cells[c].bars.size(); b++) {
+      cells[c].bars[b].visc = nu_s;
+    }
+
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      cells[c].nodes[n].visc = nu_b;
+    }
+  }
+}
+
+/// Sets the cell wall densities for all cells in the Lhyphen.
+///
+/// @param rho The density of the cell walls.
+/// @param thickness The thickness of the cell walls.
+///
+/// @throws None.
+///
 void Lhyphen::setCellWallDensities(double rho, double thickness) {
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
@@ -447,12 +451,11 @@ void Lhyphen::setCellWallDensities(double rho, double thickness) {
   }
 }
 
-/**
- *   Sets the cell densities for the Lhyphen class.
- *
- *   @param rho        density of the cells
- *   @param thickness  thickness of the cells
- */
+///  Sets the cell densities for the Lhyphen class.
+///
+///  @param rho        density of the cells
+///  @param thickness  thickness of the cells
+///
 void Lhyphen::setCellDensities(double rho, double thickness) {
   setCellWallDensities(rho, thickness);
   for (size_t c = 0; c < cells.size(); c++) {
@@ -469,11 +472,10 @@ void Lhyphen::setCellDensities(double rho, double thickness) {
   }
 }
 
-/**
- *   Sets the masses of all cells in the Lhyphen object. Mass of each node is cellMass / nbNodes
- *
- *   @param cellMass  mass value to be set for each cell
- */
+///  Sets the masses of all cells in the Lhyphen object. Mass of each node is cellMass / nbNodes
+///
+///  @param cellMass  mass value to be set for each cell
+///
 void Lhyphen::setCellMasses(double cellMass) {
   for (size_t c = 0; c < cells.size(); c++) {
     double nodeMass = cellMass / (double)cells[c].nodes.size();
@@ -483,11 +485,10 @@ void Lhyphen::setCellMasses(double cellMass) {
   }
 }
 
-/**
- *   Set the same mass to all nodes in the Lhyphen object.
- *
- *   @param nodeMass  mass to set for all nodes
- */
+///  Set the same mass to all nodes in the Lhyphen object.
+///
+///  @param nodeMass  mass to set for all nodes
+///
 void Lhyphen::setNodeMasses(double nodeMass) {
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
@@ -496,15 +497,14 @@ void Lhyphen::setNodeMasses(double nodeMass) {
   }
 }
 
-/**
- *   Set the same 'force' glue properties for all interactions.
- *
- *   @param kn_coh      cohesion normal stiffness
- *   @param kt_coh      cohesion tangential stiffness
- *   @param fn_coh_max  maximum cohesion normal force
- *   @param ft_coh_max  maximum cohesion tangential force
- *   @param yieldPower  yield power
- */
+///  Set the same 'force' glue properties for all interactions.
+///
+///  @param kn_coh      cohesion normal stiffness
+///  @param kt_coh      cohesion tangential stiffness
+///  @param fn_coh_max  maximum cohesion normal force
+///  @param ft_coh_max  maximum cohesion tangential force
+///  @param yieldPower  yield power
+///
 void Lhyphen::setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_max, double ft_coh_max,
                                     double yieldPower) {
 
@@ -524,13 +524,12 @@ void Lhyphen::setGlueSameProperties(double kn_coh, double kt_coh, double fn_coh_
   }
 }
 
-/**
- *   Set the same 'Gc' glue properties for all interactions.
- *
- *   @param kn_coh      cohesion normal stiffness
- *   @param kt_coh      cohesion tangential stiffness
- *   @param Gc          fracture energy (by unit length)
- */
+///  Set the same 'Gc' glue properties for all interactions.
+///
+///  @param kn_coh      cohesion normal stiffness
+///  @param kt_coh      cohesion tangential stiffness
+///  @param Gc          fracture energy (by unit length)
+///
 void Lhyphen::setGcGlueSameProperties(double kn_coh, double kt_coh, double Gc) {
   for (size_t ci = 0; ci < cells.size(); ci++) {
     for (std::set<Neighbor>::iterator InterIt = cells[ci].neighbors.begin(); InterIt != cells[ci].neighbors.end();
@@ -546,31 +545,29 @@ void Lhyphen::setGcGlueSameProperties(double kn_coh, double kt_coh, double Gc) {
   }
 }
 
-/**
- *   Ajoute un control au noeud n de la cellule c
- *
- *   @param c       numéro de la cellule
- *   @param n       numéro du noeud au sein de la cellule c
- *   @param xmode   VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
- *   @param xvalue  valeur suivant x (une force ou une vitesse selon xmode)
- *   @param ymode   VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
- *   @param yvalue  valeur suivant y (une force ou une vitesse selon ymode)
- */
+///  Ajoute un control au noeud n de la cellule c
+///
+///  @param c       numéro de la cellule
+///  @param n       numéro du noeud au sein de la cellule c
+///  @param xmode   VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
+///  @param xvalue  valeur suivant x (une force ou une vitesse selon xmode)
+///  @param ymode   VELOCITY_CONTROL (1) ou FORCE_CONTROL (0)
+///  @param yvalue  valeur suivant y (une force ou une vitesse selon ymode)
+///
 void Lhyphen::setNodeControl(size_t c, size_t n, int xmode, double xvalue, int ymode, double yvalue) {
   Control C(xmode, xvalue, ymode, yvalue);
   controls.push_back(C);
   cells[c].nodes[n].ictrl = controls.size() - 1;
 }
 
-/**
- *   Ajoute un control à tous les noeuds de la cellule c
- *
- *   @param c       numéro de la cellule
- *   @param xmode   VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
- *   @param xvalue  valeur suivant x (une force ou une vitesse selon xmode)
- *   @param ymode   VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
- *   @param yvalue  valeur suivant y (une force ou une vitesse selon ymode)
- */
+///  Ajoute un control à tous les noeuds de la cellule c
+///
+///  @param c       numéro de la cellule
+///  @param xmode   VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
+///  @param xvalue  valeur suivant x (une force ou une vitesse selon xmode)
+///  @param ymode   VELOCITY_CONTROL (0) ou FORCE_CONTROL (1)
+///  @param yvalue  valeur suivant y (une force ou une vitesse selon ymode)
+///
 void Lhyphen::setCellControl(size_t c, int xmode, double xvalue, int ymode, double yvalue) {
   Control C(xmode, xvalue, ymode, yvalue);
   controls.push_back(C);
@@ -580,51 +577,51 @@ void Lhyphen::setCellControl(size_t c, int xmode, double xvalue, int ymode, doub
   }
 }
 
-/**
- *   Définir un même control à tous les noeuds qui se trouvent dans une zone rectangulaire
- *
- *   @param t_xmin  left limit of the box
- *   @param t_xmax  right limit of the box
- *   @param t_ymin  bottom limit of the box
- *   @param t_ymax  top limit of the box
- *   @param xmode   imposed mode in the x-direction (VELOCITY_CONTROL or FORCE_CONTROL)
- *   @param xvalue  imposed value in the x-direction
- *   @param ymode   imposed mode in the y-direction (VELOCITY_CONTROL or FORCE_CONTROL)
- *   @param yvalue  imposed value in the y-direction
- */
+///  Définir un même control à tous les noeuds qui se trouvent dans une zone rectangulaire
+///
+///  @param t_xmin  left limit of the box
+///  @param t_xmax  right limit of the box
+///  @param t_ymin  bottom limit of the box
+///  @param t_ymax  top limit of the box
+///  @param xmode   imposed mode in the x-direction (VELOCITY_CONTROL or FORCE_CONTROL)
+///  @param xvalue  imposed value in the x-direction
+///  @param ymode   imposed mode in the y-direction (VELOCITY_CONTROL or FORCE_CONTROL)
+///  @param yvalue  imposed value in the y-direction
+///
 void Lhyphen::setNodeControlInBox(double t_xmin, double t_xmax, double t_ymin, double t_ymax, int xmode, double xvalue,
                                   int ymode, double yvalue) {
   Control C(xmode, xvalue, ymode, yvalue);
 
   controls.push_back(C);
   size_t ictrl = controls.size() - 1;
+  int nbAdded = 0;
   for (size_t c = 0; c < cells.size(); c++) {
     for (size_t n = 0; n < cells[c].nodes.size(); n++) {
       vec2r pos = cells[c].nodes[n].pos;
       if (pos.x >= t_xmin && pos.x <= t_xmax && pos.y >= t_ymin && pos.y <= t_ymax) {
         cells[c].nodes[n].ictrl = ictrl;
-        std::cout << "@Lhyphen::setNodeControlInBox, node pos = " << pos << "\n";
+        nbAdded++;
+        // std::cout << "@Lhyphen::setNodeControlInBox, node pos = " << pos << "\n";
       }
     }
   }
+  std::cout << "@Lhyphen::setNodeControlInBox, nb Added nodes = " << nbAdded << std::endl;
 }
 
-/**
- *   Sets the internal pressure of a cell.
- *
- *   @param c  number of the cell
- *   @param p  new internal pressure of the cell
- */
+///  Sets the internal pressure of a cell.
+///
+///  @param c  number of the cell
+///  @param p  new internal pressure of the cell
+///
 void Lhyphen::setCellInternalPressure(size_t c, double p) { cells[c].p_int = p; }
 
 // ======================================================================================================
 // Updating the neighbor list
 // ======================================================================================================
 
-/**
- *   Function to copy the neighbors set of each cell into a vector of neighbor pointers
- *
- */
+///  Function to copy the neighbors set of each cell into a vector of neighbor pointers
+///
+///
 void Lhyphen::copy_neighbors_set_to_vec() {
   for (auto &cell : cells) {
     size_t nbv = cell.neighbors.size();
@@ -638,16 +635,15 @@ void Lhyphen::copy_neighbors_set_to_vec() {
   }
 }
 
-/**
- *   Checks whether a node (cell ci, node in) and a bar (cell cj, bar starting with node jn) are close.
- *   Depending on the case, the pair in the list of neighbours is either added or removed.
- *
- *   @param ci           cell i
- *   @param cj           cell j
- *   @param in           node number in cell ci
- *   @param jn           node number at the start of a bar in cell cj
- *   @param epsilonEnds  length to be ignored at the ends of the bar
- */
+///  Checks whether a node (cell ci, node in) and a bar (cell cj, bar starting with node jn) are close.
+///  Depending on the case, the pair in the list of neighbours is either added or removed.
+///
+///  @param ci           cell i
+///  @param cj           cell j
+///  @param in           node number in cell ci
+///  @param jn           node number at the start of a bar in cell cj
+///  @param epsilonEnds  length to be ignored at the ends of the bar
+///
 void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds) {
   // jn is seen here as the index of a bar (start node in fact)
 
@@ -692,10 +688,9 @@ void Lhyphen::addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, d
   }
 }
 
-/**
- *  Updates the list of neighbours
- *
- */
+/// Updates the list of neighbours
+///
+///
 void Lhyphen::updateNeighbors_brute_force() {
   START_TIMER("updateNeighbors_brute_force");
 
@@ -902,11 +897,10 @@ void Lhyphen::updateNeighbors_linkCells() {
 // Gluing the cells
 // ======================================================================================================
 
-/**
- *   Put a dot of glue where the distance is close enough
- *
- *   @param epsilonDist  maximum distance
- */
+///  Put a glued link where the distance is close enough
+///
+///  @param epsilonDist  maximum distance
+///
 void Lhyphen::glue(double epsilonDist, int modelGc) {
   updateNeighbors();
 
@@ -979,26 +973,25 @@ void Lhyphen::glue(double epsilonDist, int modelGc) {
   associateGlue(modelGc);
 }
 
-/**
- *   Given a cell-cell interaction, compute the "position" of interaction.
- *   This is a point such that the distance between this point and the
- *   node in (ci,in) is equal to the radius of node in (ci,in).
- *   This point is either on the bar (cj,jn) or one of the disks at its
- *   extremities (cj,jn) or (cj,jnext).
- *   This is used to compute the force in the modelGc.
- *
- *   @param ci      cell i
- *   @param cj      cell j
- *   @param in      node number in cell ci
- *   @param jn      node number at the start of a bar in cell cj
- *   @param pos     output position
- *   @return        code indicating which case was used:
- *                  0: no bar in cj
- *                  1: interaction with disk j
- *                  2: interaction with disk jnext
- *                  3: interaction with bar
- *
- */
+///  Given a cell-cell interaction, compute the "position" of interaction.
+///  This is a point such that the distance between this point and the
+///  node in (ci,in) is equal to the radius of node in (ci,in).
+///  This point is either on the bar (cj,jn) or one of the disks at its
+///  extremities (cj,jn) or (cj,jnext).
+///  This is used to compute the force in the modelGc.
+///
+///  @param ci      cell i
+///  @param cj      cell j
+///  @param in      node number in cell ci
+///  @param jn      node number at the start of a bar in cell cj
+///  @param pos     output position
+///  @return        code indicating which case was used:
+///                 0: no bar in cj
+///                 1: interaction with disk j
+///                 2: interaction with disk jnext
+///                 3: interaction with bar
+///
+///
 int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos) {
   if (cells[cj].nodes[jn].nextNode == null_size_t) { // This is the case where the bar in cj does not exist.
 
@@ -1039,11 +1032,10 @@ int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos)
   }
 }
 
-/**
- *   Associate a model of glue to all the neighbors between cells having a positive glueState.
- *
- *   @param modelGc the model of glue to associate
- */
+///  Associate a model of glue to all the neighbors between cells having a positive glueState.
+///
+///  @param modelGc the model of glue to associate
+///
 void Lhyphen::associateGlue(int modelGc, double activationLength) {
 
   struct Connect {
@@ -1141,6 +1133,8 @@ void Lhyphen::associateGlue(int modelGc, double activationLength) {
 // Computing
 // ======================================================================================================
 
+// Il faudra plus tard utiliser cette fonction pour éviter les duplications dans la fonction qui calcul les forces
+// de contact
 void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext, double wbeg,
                             double wend) {
 
@@ -1185,7 +1179,9 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
       W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
       double G = 0.0;
-      if (Inter->length > 1.0e-12) G = W / (2.0 * Inter->length);
+      if (Inter->length > 1.0e-12) {
+        G = W / (2.0 * Inter->length);
+      }
 
       if (G > Inter->Gc) {
         // breakage
@@ -1195,10 +1191,9 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
         Inter->brother->fn_coh = 0.0;
         Inter->brother->ft_coh = 0.0;
         Inter->brother->glueState = 0;
-        if (/*Inter->length > 1.0e-12*/ 1) {
-          cumulatedG += G;
-          cumulatedL += Inter->length;
-        }
+
+        cumulatedG += G;
+        cumulatedL += Inter->length;
       } else {
         // transfert des force vers les noeuds concernés
         vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
@@ -1221,10 +1216,13 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
   }
 }
 
-/**
- *  Calculation of interaction forces (between cell-elements)
- *
- */
+/// Calculation of interaction forces (between cell-elements)
+///
+/// !!!!!!!!!!!
+/// Cette fonction est extrêmement longue et imbriquée
+/// Il faudrait trouver une solution pour la rendre moins compliquée
+/// !!!!!!!!!!!
+///
 void Lhyphen::computeInteractionForces() {
   START_TIMER("computeInteractionForces");
 
@@ -1244,6 +1242,10 @@ void Lhyphen::computeInteractionForces() {
         // This is the case where the bar in cj does not exist.
         // In other words, it's an interaction between a disk of ci and a disc of cj
         // (which corresponds to the end of a bar)
+        // =============================================================================
+
+        // FIXME: Ce cas n'est pas correctement traité mais n'est pas utiliser en fait avec
+        //        les cellules fermées
 
         vec2r branch = cells[cj].nodes[jn].pos - cells[ci].nodes[in].pos;
         double sqrDist = norm2(branch);
@@ -1257,7 +1259,7 @@ void Lhyphen::computeInteractionForces() {
           if (adaptativeStiffness == 1) {
             Inter->fn *= sumR / (sumR + dn);
           }
-          if (Inter->glueState == 0) {
+          if (Inter->glueState == GLUE_NONE) {
             Inter->fn -= fadh;
           }
         } else {
@@ -1300,7 +1302,7 @@ void Lhyphen::computeInteractionForces() {
         //   cas 2 / disque (ci, in)   ---   disque (cj, jnext) fin de la barre
         //   cas 3 / disque (ci, in)   ---   barre (cj, jn--jnext)
 
-        if (proj <= 0.0) { // cas 1 / ====================== disque j du début
+        if (proj <= 0.0) { // ** cas 1 / ====================================================== disque j du début
 
           double sqrDist = norm2(b);
           double sumR = cells[ci].radius + cells[cj].radius;
@@ -1309,7 +1311,7 @@ void Lhyphen::computeInteractionForces() {
             double b_lenght = sqrt(sqrDist);
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
-            Inter->fn = -kn * dn;
+            Inter->fn = -kn * dn; // +- visc * vrel;
             if (adaptativeStiffness == LH_ENABLED) {
               Inter->fn *= sumR / (sumR + dn);
             }
@@ -1324,7 +1326,7 @@ void Lhyphen::computeInteractionForces() {
               Inter->ft = -threshold;
             }
 
-            if (Inter->glueState == 0) {
+            if (Inter->glueState == GLUE_NONE) {
               Inter->fn -= fadh; // cette adhesion ne peut agir que si il n'y a pas de cohésion solide
             }
 
@@ -1388,7 +1390,9 @@ void Lhyphen::computeInteractionForces() {
                 W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
                 double G = 0.0;
-                if (Inter->length > 1.0e-12) G = W / (2.0 * Inter->length);
+                if (Inter->length > 1.0e-12) {
+                  G = W / (2.0 * Inter->length);
+                }
 
                 if (G > Inter->Gc) {
                   // breakage
@@ -1398,10 +1402,9 @@ void Lhyphen::computeInteractionForces() {
                   Inter->brother->fn_coh = 0.0;
                   Inter->brother->ft_coh = 0.0;
                   Inter->brother->glueState = 0;
-                  if (/*Inter->length > 1.0e-12*/ 1) {
-                    cumulatedG += G;
-                    cumulatedL += Inter->length;
-                  }
+
+                  cumulatedG += G;
+                  cumulatedL += Inter->length;
                 } else {
                   // transfert des force vers les noeuds concernés
                   vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
@@ -1420,17 +1423,19 @@ void Lhyphen::computeInteractionForces() {
           } // if glueState == 1 ou 2
 
         } // fin de (disque j du début)
-        else if (proj >= u_length) { // cas 2 / ====================== disque jnext (de fin)
+        else if (proj >= u_length) { // ** cas 2 / ============================================ disque jnext (de fin)
 
           b = cells[ci].nodes[in].pos - cells[cj].nodes[jnext].pos;
           double sqrDist = norm2(b);
           double sumR = cells[ci].radius + cells[cj].radius;
+
           if (sqrDist - sumR * sumR < 0.0) {
             Inter->contactState = TOUCHING;
             double b_lenght = sqrt(sqrDist);
             double dn = b_lenght - sumR;
             Inter->n = b / b_lenght;
             Inter->fn = -kn * dn;
+
             if (adaptativeStiffness == LH_ENABLED) {
               Inter->fn *= sumR / (sumR + dn);
             }
@@ -1510,7 +1515,9 @@ void Lhyphen::computeInteractionForces() {
                 W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
                 double G = 0.0;
-                if (Inter->length > 1.0e-12) G = W / (2.0 * Inter->length);
+                if (Inter->length > 1.0e-12) {
+                  G = W / (2.0 * Inter->length);
+                }
 
                 if (G > Inter->Gc) {
                   // cassage
@@ -1520,10 +1527,9 @@ void Lhyphen::computeInteractionForces() {
                   Inter->brother->fn_coh = 0.0;
                   Inter->brother->ft_coh = 0.0;
                   Inter->brother->glueState = 0;
-                  if (/*Inter->length > 1.0e-12*/ 1) {
-                    cumulatedG += G;
-                    cumulatedL += Inter->length;
-                  }
+
+                  cumulatedG += G;
+                  cumulatedL += Inter->length;
                 } else {
                   // transfert des force vers les noeuds concernés
                   vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
@@ -1542,13 +1548,13 @@ void Lhyphen::computeInteractionForces() {
           } // if glueState == 1 ou 2
 
         } // fin "disque jnext (de fin)"
-        else { // cas 3 / ====================== sur la barre
+        else { // ** cas 3 / ====================================================== sur la barre
 
           vec2r urot(-u.y, u.x); // turn 90°
           double wend = 0.0;
           double wbeg = 0.0;
           double sumR = cells[ci].radius + cells[cj].radius;
-          double dist = b * urot; // dot product
+          double dist = b * urot;
           double dn = fabs(dist) - sumR;
 
           if (dn < 0.0) { // overlap
@@ -1659,8 +1665,9 @@ void Lhyphen::computeInteractionForces() {
                 W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
                 double G = 0.0;
-                if (Inter->length > 1.0e-12) G = W / (2.0 * Inter->length);
-                // std::cout << "G = " << G << ", Gc = " << Inter->Gc << std::endl;
+                if (Inter->length > 1.0e-12) {
+                  G = W / (2.0 * Inter->length);
+                }
 
                 if (G > Inter->Gc) {
                   // cassage
@@ -1670,10 +1677,9 @@ void Lhyphen::computeInteractionForces() {
                   Inter->brother->fn_coh = 0.0;
                   Inter->brother->ft_coh = 0.0;
                   Inter->brother->glueState = 0;
-                  if (/*Inter->length > 1.0e-12*/ 1) {
-                    cumulatedG += G;
-                    cumulatedL += Inter->length;
-                  }
+
+                  cumulatedG += G;
+                  cumulatedL += Inter->length;
                 } else {
                   // transfert des force vers les noeuds concernés
                   vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
@@ -1698,9 +1704,8 @@ void Lhyphen::computeInteractionForces() {
   } // boucle sur les cellules ci
 }
 
-/**
- *   Calculation of internal cell forces
- */
+///  Calculation of internal cell forces
+///
 void Lhyphen::computeNodeForces() {
   START_TIMER("computeNodeForces");
 
@@ -1777,7 +1782,7 @@ void Lhyphen::computeNodeForces() {
           double vtheta = (omegaNext - omegaPrev);
           cells[c].nodes[n].mz += -cells[c].nodes[n].visc * vtheta;
         }
-            
+
         // TODO: ajouter la possibilité de désactiver la plasticité (?)
         if (cells[c].nodes[n].mz > cells[c].nodes[n].mz_max) {
           cells[c].nodes[n].mz = cells[c].nodes[n].mz_max;
@@ -1814,10 +1819,9 @@ void Lhyphen::computeNodeForces() {
   }
 }
 
-/**
- *  Compute the node accelerations
- *
- */
+/// Compute the node accelerations
+///
+///
 void Lhyphen::nodeAccelerations() {
   START_TIMER("nodeAccelerations");
 
@@ -1857,10 +1861,9 @@ void Lhyphen::nodeAccelerations() {
   }
 }
 
-/**
- *  One step (velocity verlet scheme)
- *
- */
+/// One step (velocity verlet scheme)
+///
+///
 void Lhyphen::SingleStep() {
   START_TIMER("SingleStep");
 
@@ -1932,10 +1935,8 @@ void Lhyphen::SingleStep() {
   }
 }
 
-/**
- *   Run the simulation!
- *
- */
+///  Run the simulation!
+///
 void Lhyphen::integrate() {
   START_TIMER("integrate");
 
@@ -2073,11 +2074,10 @@ void Lhyphen::InternalLiquidPressureForce() {
 // Dumping (conf-files)
 // ======================================================================================================
 
-/**
- *   Save the current configuration in a file
- *
- *   @param fname  name of the file
- */
+///  Save the current configuration in a file
+///
+///  @param fname  name of the file
+///
 void Lhyphen::saveCONF(const char *fname) {
   START_TIMER("saveCONF");
 
@@ -2169,11 +2169,10 @@ void Lhyphen::saveCONF(const char *fname) {
   }
 }
 
-/**
- *   Saves the CONF file.
- *
- *   @param ifile  the file number to save
- */
+///  Saves the CONF file.
+///
+///  @param ifile  the file number to save
+///
 void Lhyphen::saveCONF(int ifile) {
   char fname[256];
   snprintf(fname, 256, "conf%d", ifile);
@@ -2181,13 +2180,18 @@ void Lhyphen::saveCONF(int ifile) {
   saveCONF(fname);
 }
 
-/**
- *   Load a configuration that has been saved in a file
- *
- *   @param fname The name of the file
- */
+///  Load a configuration that has been saved in a file
+///
+///  @param fname The name of the file
+///
 void Lhyphen::loadCONF(const char *fname) {
+  static bool firstLoad = true;
+
   std::ifstream file(fname);
+
+  if (exprParser == nullptr) {
+    exprParser = new ExpressionParser();
+  }
 
   int modelGc = 0;
   controlBoxAreas.clear();
@@ -2211,64 +2215,159 @@ void Lhyphen::loadCONF(const char *fname) {
       nbThreads = 1;
 #endif
     } else if (token == "gravity") {
-      file >> gravity;
+      exprParser->getValue(file, gravity.x);
+      exprParser->getValue(file, gravity.y);
+      if (firstLoad)
+        std::cout << "> gravity = " << gravity << std::endl;
     } else if (token == "numericalDissipation") {
-      file >> numericalDissipation;
+      // file >> numericalDissipation;
+      exprParser->getValue(file, numericalDissipation);
+      if (firstLoad)
+        std::cout << "> numericalDissipation = " << numericalDissipation << std::endl;
     } else if (token == "globalViscosity") {
-      file >> globalViscosity;
+      // file >> globalViscosity;
+      exprParser->getValue(file, globalViscosity);
+      if (firstLoad)
+        std::cout << "> globalViscosity = " << globalViscosity << std::endl;
     } else if (token == "linkCells") {
       file >> linkCells_lx >> linkCells_ly;
       updateNeighbors = [this]() { this->updateNeighbors_linkCells(); };
     } else if (token == "distVerlet") {
-      file >> distVerlet;
+      // file >> distVerlet;
+      exprParser->getValue(file, distVerlet);
+      if (firstLoad)
+        std::cout << "> distVerlet = " << distVerlet << std::endl;
     } else if (token == "t") {
-      file >> t;
+      // file >> t;
+      exprParser->getValue(file, t);
+      if (firstLoad)
+        std::cout << "> t = " << t << std::endl;
     } else if (token == "cyclicVelPeriod") {
-      file >> cyclicVelPeriod;
+      // file >> cyclicVelPeriod;
+      exprParser->getValue(file, cyclicVelPeriod);
+      if (firstLoad)
+        std::cout << "> cyclicVelPeriod = " << cyclicVelPeriod << std::endl;
     } else if (token == "dt") {
       double timestep;
-      file >> timestep;
+      // file >> timestep;
+      exprParser->getValue(file, timestep);
+      if (firstLoad)
+        std::cout << "> dt = " << timestep << std::endl;
       setTimeStep(timestep);
     } else if (token == "nstep") {
-      file >> nstep;
+      // file >> nstep;
+      exprParser->getValue(file, nstep);
+      if (firstLoad)
+        std::cout << "> nstep = " << nstep << std::endl;
     } else if (token == "nstepPeriodVerlet") {
-      file >> nstepPeriodVerlet;
+      // file >> nstepPeriodVerlet;
+      exprParser->getValue(file, nstepPeriodVerlet);
+      if (firstLoad)
+        std::cout << "> nstepPeriodVerlet = " << nstepPeriodVerlet << std::endl;
     } else if (token == "nstepPeriodSVG") {
-      file >> nstepPeriodSVG;
+      // file >> nstepPeriodSVG;
+      exprParser->getValue(file, nstepPeriodSVG);
+      if (firstLoad)
+        std::cout << "> nstepPeriodSVG = " << nstepPeriodSVG << std::endl;
     } else if (token == "nstepPeriodRecord") {
-      file >> nstepPeriodRecord;
+      // file >> nstepPeriodRecord;
+      exprParser->getValue(file, nstepPeriodRecord);
+      if (firstLoad)
+        std::cout << "> nstepPeriodRecord = " << nstepPeriodRecord << std::endl;
     } else if (token == "nstepPeriodConf") {
-      file >> nstepPeriodConf;
+      // file >> nstepPeriodConf;
+      exprParser->getValue(file, nstepPeriodConf);
+      if (firstLoad)
+        std::cout << "> nstepPeriodConf = " << nstepPeriodConf << std::endl;
     } else if (token == "isvg") {
-      file >> isvg;
+      // file >> isvg;
+      exprParser->getValue(file, isvg);
+      if (firstLoad)
+        std::cout << "> isvg = " << isvg << std::endl;
     } else if (token == "iconf") {
-      file >> iconf;
+      // file >> iconf;
+      exprParser->getValue(file, iconf);
+      if (firstLoad)
+        std::cout << "> iconf = " << iconf << std::endl;
     } else if (token == "kn") {
-      file >> kn;
+      // file >> kn;
+      exprParser->getValue(file, kn);
+      if (firstLoad)
+        std::cout << "> kn = " << kn << std::endl;
     } else if (token == "kt") {
-      file >> kt;
+      // file >> kt;
+      exprParser->getValue(file, kt);
+      if (firstLoad)
+        std::cout << "> kt = " << kt << std::endl;
+    } else if (token == "viscn") {
+      // file >> viscn;
+      exprParser->getValue(file, viscn);
+      if (firstLoad)
+        std::cout << "> viscn = " << viscn << std::endl;
+    } else if (token == "define") {
+      std::string name;
+      file >> name;
+      double value = 0.0;
+      exprParser->getValue(file, value);
+      exprParser->addConstant(name, value);
+      if (firstLoad)
+        std::cout << "* Parameter defined as a constant: " << name << " " << value << std::endl;
     } else if (token == "adaptativeStiffness") {
-      file >> adaptativeStiffness;
+      // file >> adaptativeStiffness;
+      exprParser->getValue(file, adaptativeStiffness);
+      if (firstLoad)
+        std::cout << "> adaptativeStiffness = " << adaptativeStiffness << std::endl;
     } else if (token == "compressFactor") {
-      file >> compressFactor;
+      // file >> compressFactor;
+      exprParser->getValue(file, compressFactor);
+      if (firstLoad)
+        std::cout << "> compressFactor = " << compressFactor << std::endl;
     } else if (token == "setGlueSameProperties") {
       double kn_coh;
       double kt_coh;
       double fn_coh_max;
       double ft_coh_max;
       double yieldPower;
-      file >> kn_coh >> kt_coh >> fn_coh_max >> ft_coh_max >> yieldPower;
+      // file >> kn_coh >> kt_coh >> fn_coh_max >> ft_coh_max >> yieldPower;
+      exprParser->getValue(file, kn_coh);
+      exprParser->getValue(file, kt_coh);
+      exprParser->getValue(file, fn_coh_max);
+      exprParser->getValue(file, ft_coh_max);
+      exprParser->getValue(file, yieldPower);
+      if (firstLoad) {
+        std::cout << "* setGlueSameProperties: " << std::endl;
+        std::cout << "    |     kn_coh = " << kn_coh << std::endl;
+        std::cout << "    |     kt_coh = " << kt_coh << std::endl;
+        std::cout << "    | fn_coh_max = " << fn_coh_max << std::endl;
+        std::cout << "    | ft_coh_max = " << ft_coh_max << std::endl;
+        std::cout << "    | yieldPower = " << yieldPower << std::endl;
+      }
       setGlueSameProperties(kn_coh, kt_coh, fn_coh_max, ft_coh_max, yieldPower);
     } else if (token == "setGcGlueSameProperties") {
       double kn_coh;
       double kt_coh;
       double Gc;
-      file >> kn_coh >> kt_coh >> Gc;
+      // file >> kn_coh >> kt_coh >> Gc;
+      exprParser->getValue(file, kn_coh);
+      exprParser->getValue(file, kt_coh);
+      exprParser->getValue(file, Gc);
+      if (firstLoad) {
+        std::cout << "* setGcGlueSameProperties: " << std::endl;
+        std::cout << "    | kn_coh = " << kn_coh << std::endl;
+        std::cout << "    | kt_coh = " << kt_coh << std::endl;
+        std::cout << "    |     Gc = " << Gc << std::endl;
+      }
       setGcGlueSameProperties(kn_coh, kt_coh, Gc);
     } else if (token == "mu") {
-      file >> mu;
+      // file >> mu;
+      exprParser->getValue(file, mu);
+      if (firstLoad)
+        std::cout << "> mu = " << mu << std::endl;
     } else if (token == "fadh") {
-      file >> fadh;
+      // file >> fadh;
+      exprParser->getValue(file, fadh);
+      if (firstLoad)
+        std::cout << "> fadh = " << fadh << std::endl;
     } else if (token == "limits") {
       file >> xmin >> xmax >> ymin >> ymax;
     } else if (token == "cells") {
@@ -2353,9 +2452,13 @@ void Lhyphen::loadCONF(const char *fname) {
       modelGc = 2;
       glue(dist, modelGc);
     } else if (token == "setCellWallDampingRates") {
-      double alpha;
-      file >> alpha;
-      setCellWallDampingRates(alpha);
+      double alpha_s, alpha_b;
+      file >> alpha_s >> alpha_b;
+      setCellWallDampingRates(alpha_s, alpha_b);
+    } else if (token == "setCellWallDampings") {
+      double nu_s, nu_b;
+      file >> nu_s >> nu_b;
+      setCellWallDampings(nu_s, nu_b);
     } else if (token == "setCellMasses") {
       double mass;
       file >> mass;
@@ -2411,7 +2514,10 @@ void Lhyphen::loadCONF(const char *fname) {
       capturedNodes.push_back(CN);
     } else if (token == "followCell") {
       size_t cid;
-      file >> cid;
+      // file >> cid;
+      exprParser->getValue(file, cid);
+      if (firstLoad)
+        std::cout << "* followCell cell.id = " << cid << std::endl;
       followedCells.push_back(cid);
     } else if (token == "setCellControl") {
       size_t icell;
@@ -2424,7 +2530,21 @@ void Lhyphen::loadCONF(const char *fname) {
     } else if (token == "readNodeFile") {
       std::string fileName;
       double barWidth, Kn, Kr, Mz_max, p_int;
-      file >> fileName >> barWidth >> Kn >> Kr >> Mz_max >> p_int;
+      file >> fileName; // >> barWidth >> Kn >> Kr >> Mz_max >> p_int;
+      exprParser->getValue(file, barWidth);
+      exprParser->getValue(file, Kn);
+      exprParser->getValue(file, Kr);
+      exprParser->getValue(file, Mz_max);
+      exprParser->getValue(file, p_int);
+
+      if (firstLoad) {
+        std::cout << "* readNodeFile " << fileName << ":" << std::endl;
+        std::cout << "    | barWidth = " << barWidth << std::endl;
+        std::cout << "    |       Kn = " << Kn << std::endl;
+        std::cout << "    |       Kr = " << Kr << std::endl;
+        std::cout << "    |   Mz_max = " << Mz_max << std::endl;
+        std::cout << "    |    p_int = " << p_int << std::endl;
+      }
       readNodeFile(fileName.c_str(), barWidth, Kn, Kr, Mz_max, p_int);
     } else if (token == "setCellInternalPressure") {
       double p_int;
@@ -2433,18 +2553,22 @@ void Lhyphen::loadCONF(const char *fname) {
       setCellInternalPressure(c, p_int);
     } else if (token == "enablePressures") {
       // enablePressures = 1;
-      std::cout << "enablePressures has been replaced by cellContent\n";
+      std::cout << "!!!! enablePressures has been replaced by cellContent" << std::endl;
     } else if (token == "disablePressures") {
       // enablePressures = 0;
-      std::cout << "disablePressures has been replaced by cellContent\n";
+      std::cout << "!!!! disablePressures has been replaced by cellContent" << std::endl;
     } else if (token == "cellContent") {
       file >> cellContent;
-      if (cellContent == CELL_EMPTY)
-        std::cout << "cellContent = CELL_EMPTY\n";
-      else if (cellContent == CELL_CONSTANT_PV)
-        std::cout << "cellContent = CELL_CONSTANT_PV\n";
-      else if (cellContent == CELL_ELASTIC_PV)
-        std::cout << "cellContent = CELL_ELASTIC_PV\n";
+      if (firstLoad) {
+        if (cellContent == CELL_EMPTY) {
+          std::cout << "> cellContent = CELL_EMPTY" << std::endl;
+        } else if (cellContent == CELL_CONSTANT_PV) {
+          std::cout << "> cellContent = CELL_CONSTANT_PV" << std::endl;
+        } else if (cellContent == CELL_ELASTIC_PV) {
+          std::cout << "> cellContent = CELL_ELASTIC_PV" << std::endl;
+        }
+      }
+
     } else if (token == "setCellAsOpen") {
       size_t c;
       file >> c;
@@ -2454,7 +2578,8 @@ void Lhyphen::loadCONF(const char *fname) {
       file >> c;
       cells[c].close = true;
     } else {
-      std::cout << "@Lhyphen::loadCONF, this token is not known: " << token << '\n';
+      if (firstLoad)
+        std::cout << "@Lhyphen::loadCONF, this token is not known: " << token << std::endl;
     }
 
     file >> token;
@@ -2466,6 +2591,8 @@ void Lhyphen::loadCONF(const char *fname) {
   if (modelGc > 0) {
     associateGlue(modelGc);
   }
+
+  firstLoad = false;
 }
 
 void Lhyphen::loadCONF(int ifile) {
@@ -2487,11 +2614,10 @@ void Lhyphen::computeCellInitialSurfaces() {
 // Saving SVG
 // ======================================================================================================
 
-/**
- *  Find the boundaries of the area drawn in the svg files
- *
- *  @param factor multiplying size-factor
- */
+/// Find the boundaries of the area drawn in the svg files
+///
+/// @param factor multiplying size-factor
+///
 void Lhyphen::findDisplayArea(double factor) {
   if (cells.empty()) {
     std::cout << "@Lhyphen::findDisplayArea, cannot find the scene limits because no cell has been set!\n";
@@ -2534,16 +2660,15 @@ void Lhyphen::findDisplayArea(double factor) {
   ymax = y0 + factor * halfH;
 }
 
-/**
- *   Very basic function for drawing cells with blue lines,
- *   Remarque: pour d'autre sorties graphiques, il vaut mieux le faire en post-traitement à partir des fichiers conf :)
- *
- *   @param num         numero du fichier
- *   @param nameBase    nom de base (dans lequel sera inséré le numéro)
- *   @param Canvaswidth largeur de canvas (par affichae rapide)
- *
- * @see https://bestofcpp.com/repo/tomkwok-svgasm
- */
+///   Very basic function for drawing cells with blue lines,
+///   Remarque: pour d'autre sorties graphiques, il vaut mieux le faire en post-traitement à partir des fichiers conf :)
+///
+///   @param num         numero du fichier
+///   @param nameBase    nom de base (dans lequel sera inséré le numéro)
+///   @param Canvaswidth largeur de canvas (par affichae rapide)
+///
+///   @see https://bestofcpp.com/repo/tomkwok-svgasm
+///
 void Lhyphen::saveSVG(int num, const char *nameBase, int CanvasWidth) {
   char name[256];
   snprintf(name, 256, nameBase, num);

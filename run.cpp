@@ -32,7 +32,7 @@
 #include <iostream>
 
 // This is the command line interface (CLI) for using l-hyphen
-int main(int argc, char const *argv[]) {
+int main(int argc, const char *argv[]) {
   INIT_TIMERS();
 
   if (argc != 2) {

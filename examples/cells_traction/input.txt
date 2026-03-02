@@ -12,8 +12,10 @@ globalViscosity      0.0
 # volume forces
 gravity 0 0
 
-# proximity 
-distVerlet 0.01
+# proximity
+define bwidth 0.01
+define secur 1.1  
+distVerlet $ bwidth * secur$
 nstepPeriodVerlet 100
 
 # outputs

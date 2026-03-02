@@ -32,9 +32,8 @@
 
 Cell::Cell() : radius(0.0), surface(0.0), surface0(0.0), close(false) {}
 
-/**
- *  Reorders the position of the nodes in the cell based on their angle.
- */
+/// Reorders the position of the nodes in the cell based on their angle.
+///
 void Cell::reorderNodes() {
   if (nodes.empty()) {
     std::cout << "@Cell::reorderNodes, no node in the cell\n";
@@ -78,17 +77,16 @@ void Cell::reorderNodes() {
   }
 }
 
-/**
- *   Ajoute ou supprime un voisin. isNear doit être fourni et la methode déterminera si il faut ajouter ou
- *   bien supprimer (c'est basé sur le fait que la 'liste' de voisin est un std::set, et donc ordonnée et le
- *   'find' est rapide)
- *
- *   @param ci      cellule i
- *   @param cj      cellule j
- *   @param in      noeud n dans la cellule i
- *   @param jn      noeud n dans la cellule j
- *   @param isNEAR  à tester avant l'appel
- */
+///  Ajoute ou supprime un voisin. isNear doit être fourni et la methode déterminera si il faut ajouter ou
+///  bien supprimer (c'est basé sur le fait que la 'liste' de voisin est un std::set, et donc ordonnée et le
+///  'find' est rapide)
+///
+///  @param ci      cellule i
+///  @param cj      cellule j
+///  @param in      noeud n dans la cellule i
+///  @param jn      noeud n dans la cellule j
+///  @param isNEAR  à tester avant l'appel
+///
 void Cell::insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEAR) {
   Neighbor toFind(ci, cj, in, jn);
 
@@ -102,18 +100,17 @@ void Cell::insertOrRemove(size_t ci, size_t cj, size_t in, size_t jn, bool isNEA
   }
 }
 
-/**
- *  Ajoute des barres entre les noeuds et défini leurs longueurs initiales
- *  ainsi que les angles initaux entre les barres adjacentes.
- *  on suppose que les noeuds sont numérotés suivant un sens de rotation quelconque
- *  mais qu'ils se suivent.
- *
- *  @param width     épaisseur des barres
- *  @param t_kn      raideur axiale des barres
- *  @param t_kr      raideur angulaire entre les barres adjacentes
- *  @param t_mz_max  moment seuil plastique
- *  @param t_closed  spécifie si les barres forment une boucle (true par defaut)
- */
+/// Ajoute des barres entre les noeuds et défini leurs longueurs initiales
+/// ainsi que les angles initaux entre les barres adjacentes.
+/// on suppose que les noeuds sont numérotés suivant un sens de rotation quelconque
+/// mais qu'ils se suivent.
+///
+/// @param width     épaisseur des barres
+/// @param t_kn      raideur axiale des barres
+/// @param t_kr      raideur angulaire entre les barres adjacentes
+/// @param t_mz_max  moment seuil plastique
+/// @param t_closed  spécifie si les barres forment une boucle (true par defaut)
+///
 void Cell::connectOrderedNodes(double width, double t_kn, double t_kr, double t_mz_max, double t_p_int, bool t_closed) {
   if (nodes.empty()) {
     std::cout << "@Cell::connectOrderedNodes, Cannot connect the nodes because there's no node!\n";
@@ -157,10 +154,8 @@ void Cell::connectOrderedNodes(double width, double t_kn, double t_kr, double t_
   }
 }
 
-/**
- *  Calcul la surface exposée à la pression par la méthode des produits vectoriels
- *
- */
+/// Calcul la surface exposée à la pression par la méthode des produits vectoriels
+///
 void Cell::CellSurface() {
   surface = 0.0;
   if (close == false) {
@@ -173,10 +168,8 @@ void Cell::CellSurface() {
   surface = fabs(surface);
 }
 
-/**
- *  Calculates the center of a closed cell.
- *
- */
+/// Calculates the center of a closed cell.
+///
 void Cell::CellCenter() {
   center.reset();
   for (size_t i = 0; i < nodes.size(); i++) {
@@ -185,12 +178,10 @@ void Cell::CellCenter() {
   center /= double(nodes.size());
 }
 
-/**
- *  Calculates the total force acting on the Cell.
- *
- *  @param force  reference to the vec2r object to store the calculated force
- *
- */
+/// Calculates the total force acting on the Cell.
+///
+/// @param force  reference to the vec2r object to store the calculated force
+///
 void Cell::CellForce(vec2r &force) {
   force.reset();
   for (size_t i = 0; i < nodes.size(); i++) {
@@ -198,13 +189,12 @@ void Cell::CellForce(vec2r &force) {
   }
 }
 
-/**
- *  Calculates the elastic energy of the cell.
- *
- *  @param compressFactor  the compression factor
- *
- *  @return the elastic energy of the cell
- */
+/// Calculates the elastic energy of the cell.
+///
+/// @param compressFactor  the compression factor
+///
+/// @return the elastic energy of the cell
+///
 double Cell::getElasticNRJ(double compressFactor) {
   if (close == false) {
     return 0.0;

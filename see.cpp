@@ -180,7 +180,6 @@ void keyboardSpecial(int Key, int /*x*/, int /*y*/) {
   case GLUT_KEY_DOWN: {
     textZone.decrease_nbLine();
   } break;
-  
   };
 
   glutPostRedisplay();
@@ -748,7 +747,7 @@ void try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
 // =====================================================================
 
 int main(int argc, char *argv[]) {
-
+  
   if (argc == 1) {
     confNum = 0;
     try_to_readConf(confNum, Conf, confNum);

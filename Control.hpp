@@ -33,11 +33,9 @@
 #define VELOCITY_CONTROL 0
 #define FORCE_CONTROL 1
 
-/**
- *  Un control contient des flags pour dire si une force ou une vitesse est
- *  imposée selon les direction x et y. Il concerne uniquement les noeuds
- *
- */
+/// Un control contient des flags pour dire si une force ou une vitesse est
+/// imposée selon les direction x et y. Il concerne uniquement les noeuds
+///
 class Control {
 public:
   int xmode{FORCE_CONTROL};

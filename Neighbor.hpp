@@ -39,10 +39,8 @@
 #define GLUE_FORCE_THRESHOLD 1
 #define GLUE_GC 2
 
-/**
- * Contact potentiel (voisin ou interaction)
- *
- */
+/// Contact potentiel (voisin ou interaction)
+///
 class Neighbor {
 public:
   size_t ic{0}; // indice de la première cellule dans Sample::cells
@@ -50,7 +48,7 @@ public:
 
   size_t in{0}; // indice du noeud de la première cellule dans Sample::cells[ic]
   size_t jn{0}; // indice du noeud de la seconde cellule dans Sample::cells[jc]
-  // jn code pour la barre qui commence par jn
+                // jn code pour la barre qui commence par jn
 
   vec2r n; // vecteur normal (de j vers i)
   vec2r T;
@@ -72,7 +70,7 @@ public:
   double ft_coh_max{0.0};
 
   // rupture avec critère en energie
-  double length{0.0};
+  double length{0.0}; // longueur d'interface collée
   double yieldPower{0.0};
   double Gc{0.0};
 

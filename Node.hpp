@@ -33,11 +33,10 @@
 #include "null_size_t.hpp"
 
 #include "vec2.hpp"
-
-/**
- * @brief un point ayant une masse (et d'autre propriétés)
- *
- */
+ 
+/// @brief un point ayant une masse (et d'autre propriétés)
+/// 
+/// 
 class Node {
 public:
   vec2r pos; // position
