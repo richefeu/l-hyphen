@@ -2,7 +2,11 @@
 
 # time flow
 t 0
-dt 1e-4 
+
+define dtcrit 1e-3
+define ratio $1/10$
+
+dt $ dtcrit * ratio $ 
 nstep  2000000
 
 # dissipation
@@ -13,9 +17,9 @@ globalViscosity      0.0
 gravity 0 0
 
 # proximity
-define bwidth 0.01
-define secur 1.1  
-distVerlet $ bwidth * secur$
+define bwidth $0.01 * sqrt(1)$
+define secur 1.5  
+distVerlet $bwidth * secur$
 nstepPeriodVerlet 100
 
 # outputs
@@ -25,8 +29,9 @@ iconf             0
 nstepPeriodConf   10000
 
 # contact adhésif frottant entre les cellules
-kn 1e6
-kt 1e6
+define Kn 1e6
+kn $Kn$
+kt $Kn$
 mu 0.3
 #fadh 1e5
 

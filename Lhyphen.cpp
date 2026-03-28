@@ -72,7 +72,7 @@ void Lhyphen::head() {
   std::cout << "  |  o  <  |\n";
   std::cout << "   \\_\\ _/_/\n";
   std::cout << "     /_/\n";
-  std::cout << "    /_/\n\n";
+  std::cout << "    /_/\n" << std::endl;
 }
 
 // ======================================================================================================
@@ -2217,8 +2217,9 @@ void Lhyphen::loadCONF(const char *fname) {
     } else if (token == "gravity") {
       exprParser->getValue(file, gravity.x);
       exprParser->getValue(file, gravity.y);
-      if (firstLoad)
-        {std::cout << "> gravity = " << gravity << std::endl;}
+      if (firstLoad) {
+        std::cout << "> gravity = " << gravity << std::endl;
+      }
     } else if (token == "numericalDissipation") {
       // file >> numericalDissipation;
       exprParser->getValue(file, numericalDissipation);
@@ -2477,65 +2478,65 @@ void Lhyphen::loadCONF(const char *fname) {
       glue(dist, modelGc);
     } else if (token == "setCellWallDampingRates") {
       double alpha_s, alpha_b;
-      //file >> alpha_s >> alpha_b;
+      // file >> alpha_s >> alpha_b;
       exprParser->getValue(file, alpha_s);
       exprParser->getValue(file, alpha_b);
       if (firstLoad) {
         std::cout << "* setCellWallDampingRates: " << std::endl;
         std::cout << "    | alpha_s = " << alpha_s << std::endl;
         std::cout << "    | alpha_b = " << alpha_b << std::endl;
-      }    
+      }
       setCellWallDampingRates(alpha_s, alpha_b);
     } else if (token == "setCellWallDampings") {
       double nu_s, nu_b;
-      //file >> nu_s >> nu_b;
+      // file >> nu_s >> nu_b;
       exprParser->getValue(file, nu_s);
       exprParser->getValue(file, nu_b);
       if (firstLoad) {
         std::cout << "* setCellWallDampingRates: " << std::endl;
         std::cout << "    | nu_s = " << nu_s << std::endl;
         std::cout << "    | nu_b = " << nu_b << std::endl;
-      }    
+      }
       setCellWallDampings(nu_s, nu_b);
     } else if (token == "setCellMasses") {
       double mass;
-      //file >> mass;
+      // file >> mass;
       exprParser->getValue(file, mass);
       if (firstLoad) {
         std::cout << "* setCellMasses: " << std::endl;
         std::cout << "    | mass = " << mass << std::endl;
-      }  
+      }
       setCellMasses(mass);
     } else if (token == "setNodeMasses") {
       double mass;
-      //file >> mass;
+      // file >> mass;
       exprParser->getValue(file, mass);
       if (firstLoad) {
         std::cout << "* setNodeMasses: " << std::endl;
         std::cout << "    | mass = " << mass << std::endl;
-      }  
+      }
       setNodeMasses(mass);
     } else if (token == "setCellWallDensities") {
       double rho, thickness;
-      //file >> rho >> thickness;
+      // file >> rho >> thickness;
       exprParser->getValue(file, rho);
       exprParser->getValue(file, thickness);
       if (firstLoad) {
         std::cout << "* setCellWallDensities: " << std::endl;
         std::cout << "    |       rho = " << rho << std::endl;
         std::cout << "    | thickness = " << thickness << std::endl;
-      } 
+      }
       setCellWallDensities(rho, thickness);
     } else if (token == "setCellDensities") {
       double rho, thickness;
-      //file >> rho >> thickness;
+      // file >> rho >> thickness;
       exprParser->getValue(file, rho);
       exprParser->getValue(file, thickness);
       if (firstLoad) {
         std::cout << "* setCellDensities: " << std::endl;
         std::cout << "    |       rho = " << rho << std::endl;
         std::cout << "    | thickness = " << thickness << std::endl;
-      } 
+      }
       setCellDensities(rho, thickness);
     } else if (token == "setNodeControl") {
       double xvalue, yvalue;
@@ -2580,8 +2581,9 @@ void Lhyphen::loadCONF(const char *fname) {
       size_t cid;
       // file >> cid;
       exprParser->getValue(file, cid);
-      if (firstLoad)
-        {std::cout << "* followCell cell.id = " << cid << std::endl;}
+      if (firstLoad) {
+        std::cout << "* followCell cell.id = " << cid << std::endl;
+      }
       followedCells.push_back(cid);
     } else if (token == "setCellControl") {
       size_t icell;

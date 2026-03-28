@@ -39,6 +39,9 @@ ifeq ($(UNAME_S),Darwin)
   GLLINK = `pkg-config --libs gl glu glut`
   GLFLAGS = `pkg-config --cflags gl glu glut`	
   # on apple, use brew to install freeglut and mesa-glu
+	
+	GLFWLINK = `pkg-config --libs glfw3`
+	GLFWFLAGS = `pkg-config --cflags glfw3`
 else
   CXX = g++
   CXXFLAGS = -g -fopenmp -O3 -Wall -std=c++17 -I ./toofus
@@ -57,7 +60,7 @@ OBJECTS = $(SOURCES:%.cpp=%.o)
 
 .PHONY: all clean clone_toofus
 
-all: run see
+all: run see2
 
 clean:
 	@echo "\033[0;32m-> Remove object files\033[0m"
@@ -94,5 +97,10 @@ see: see.cpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
 	$(CXX) $(CXXFLAGS) -c $< -o see.o $(GLFLAGS)
 	$(CXX) $(LDFLAGS) -o $@ see.o liblhyphen.a $(GLLINK)
+	
+see2: see2.cpp liblhyphen.a
+	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
+	$(CXX) $(CXXFLAGS) -c $< -o see2.o $(GLFWFLAGS) -Wno-missing-field-initializers
+	$(CXX) $(LDFLAGS) -o $@ see2.o liblhyphen.a $(GLFWLINK) -framework OpenGL
 	
 
