@@ -69,7 +69,7 @@ int show_bar_colors = 0;
 int show_inter_cells_forces = 0;
 int show_pressure = 0;
 int show_nodes = 1;
-int show_control_boxes = 0;
+int show_control_boxes = 1;
 
 // arrow sizes
 double arrowSize = 0.15;

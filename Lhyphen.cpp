@@ -31,6 +31,11 @@
 #include "Lhyphen.hpp"
 #include "null_size_t.hpp"
 
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <limits>
+
 /// Construct a new Lhyphen object
 ///
 Lhyphen::Lhyphen()
@@ -73,6 +78,240 @@ void Lhyphen::head() {
   std::cout << "   \\_\\ _/_/\n";
   std::cout << "     /_/\n";
   std::cout << "    /_/\n" << std::endl;
+}
+
+/// Affiche un diagnostic des paramètres de simulation avant l'intégration.
+///
+/// Calcule et affiche les rapports dt_critique/dt pour chaque source de raideur
+/// (barres, flexion, contact, cohésion), ainsi qu'une analyse des paramètres
+/// de la recherche de voisins de Verlet.
+///
+void Lhyphen::diagnostics() {
+  const double INF = std::numeric_limits<double>::max();
+
+  // ---- Comptages ----
+  size_t totalNodes = 0, totalBars = 0, totalNeighbors = 0;
+  for (auto& c : cells) {
+    totalNodes     += c.nodes.size();
+    totalBars      += c.bars.size();
+    totalNeighbors += c.neighbors.size();
+  }
+
+  // ---- Masses ----
+  double mMin = INF, mMax = 0.0;
+  for (auto& c : cells)
+    for (auto& n : c.nodes)
+      if (n.mass > 0.0) { mMin = std::min(mMin, n.mass); mMax = std::max(mMax, n.mass); }
+
+  // ---- Raideurs des barres ----
+  double knBarMin = INF, knBarMax = 0.0;
+  for (auto& c : cells)
+    for (auto& b : c.bars)
+      if (b.kn > 0.0) { knBarMin = std::min(knBarMin, b.kn); knBarMax = std::max(knBarMax, b.kn); }
+
+  // ---- Rayons des cellules ----
+  double rMin = INF, rMax = 0.0, rMean = 0.0;
+  size_t nRad = 0;
+  for (auto& c : cells)
+    if (c.radius > 0.0) { rMin = std::min(rMin, c.radius); rMax = std::max(rMax, c.radius); rMean += c.radius; ++nRad; }
+  if (nRad > 0) rMean /= (double)nRad;
+
+  // ---- dt critique barres : dt_crit = 2 * sqrt(m_eff / kn_barre) ----
+  // avec m_eff = m_i * m_j / (m_i + m_j) (masse réduite entre les deux noeuds)
+  double dtCritBars = INF;
+  for (auto& c : cells) {
+    for (auto& b : c.bars) {
+      double mi = c.nodes[b.i].mass, mj = c.nodes[b.j].mass;
+      if (mi <= 0.0 || mj <= 0.0 || b.kn <= 0.0) continue;
+      double meff = mi * mj / (mi + mj);
+      dtCritBars = std::min(dtCritBars, 2.0 * std::sqrt(meff / b.kn));
+    }
+  }
+
+  // ---- dt critique flexion : dt_crit = 2 * l * sqrt(m_eff / kr) ----
+  // La raideur transverse effective vaut kr/l^2 ; le dt critique en découle.
+  double dtCritBend = INF;
+  for (auto& c : cells) {
+    for (size_t in = 0; in < c.nodes.size(); ++in) {
+      double kr = c.nodes[in].kr;
+      if (kr <= 0.0) continue;
+      double mn = c.nodes[in].mass;
+      size_t nx = c.nodes[in].nextNode;
+      size_t pv = c.nodes[in].prevNode;
+      if (nx != null_size_t && mn > 0.0 && c.nodes[nx].mass > 0.0) {
+        double l    = norm(c.nodes[nx].pos - c.nodes[in].pos);
+        double meff = mn * c.nodes[nx].mass / (mn + c.nodes[nx].mass);
+        if (l > 0.0) dtCritBend = std::min(dtCritBend, 2.0 * l * std::sqrt(meff / kr));
+      }
+      if (pv != null_size_t && mn > 0.0 && c.nodes[pv].mass > 0.0) {
+        double l    = norm(c.nodes[pv].pos - c.nodes[in].pos);
+        double meff = mn * c.nodes[pv].mass / (mn + c.nodes[pv].mass);
+        if (l > 0.0) dtCritBend = std::min(dtCritBend, 2.0 * l * std::sqrt(meff / kr));
+      }
+    }
+  }
+
+  // ---- dt critique contact : dt_crit = sqrt(2 * m_min / kn_contact) ----
+  // Cas le plus défavorable : deux noeuds de masse minimale en contact.
+  double dtCritContact = INF;
+  if (kn > 0.0 && mMin < INF)
+    dtCritContact = std::sqrt(2.0 * mMin / kn);
+
+  // ---- dt critique cohésion ----
+  double knCohMax = 0.0;
+  for (auto& c : cells)
+    for (auto& inter : c.neighbors)
+      knCohMax = std::max(knCohMax, inter.kn_coh);
+  double dtCritCoh = INF;
+  if (knCohMax > 0.0 && mMin < INF)
+    dtCritCoh = std::sqrt(2.0 * mMin / knCohMax);
+
+  // ---- Longueur moyenne des barres ----
+  double lBarMean = 0.0;
+  size_t nBarCount = 0;
+  for (auto& c : cells)
+    for (auto& b : c.bars)
+      if (b.l0 > 0.0) { lBarMean += b.l0; ++nBarCount; }
+  if (nBarCount > 0) lBarMean /= (double)nBarCount;
+
+  // ---- Période d'oscillation la plus rapide des barres ----
+  // T_osc = 2*pi / omega_max  avec omega_max = 2/dt_crit_barres
+  double TOscBars = INF;
+  if (dtCritBars < INF)
+    TOscBars = M_PI * dtCritBars; // 2*pi * sqrt(m_eff/kn)
+
+  // ====================================================================
+  // Affichage
+  // ====================================================================
+
+  // Affiche dt_crit/dt avec qualificatif :
+  //   >= 50  : dt peut etre augmente
+  //   >= 20  : OK
+  //   >= 10  : proche de la limite
+  //   >= 1   : tres proche de la limite (instabilite imminente)
+  //   <  1   : INSTABLE
+  auto printDtLine = [&](const char* label, double dtCrit) {
+    if (dtCrit >= INF * 0.5) return;
+    double ratio = (dt > 0.0) ? dtCrit / dt : 0.0;
+    std::cout << "    " << std::left << std::setw(10) << label
+              << " : dt_crit = " << std::scientific << std::setprecision(3) << dtCrit
+              << "   dt_crit/dt = " << std::fixed << std::setprecision(1)
+              << std::right << std::setw(8) << ratio;
+    if      (ratio <  1.0)  std::cout << "  <<< INSTABLE !!";
+    else if (ratio < 10.0)  std::cout << "  << tres proche de la limite";
+    else if (ratio < 20.0)  std::cout << "  < proche de la limite";
+    else if (ratio >= 50.0) std::cout << "     (dt peut etre augmente)";
+    std::cout << "\n";
+  };
+
+  std::cout << "\n=== DIAGNOSTIC ============================================================\n";
+  std::cout << "  " << cells.size() << " cellule(s) | "
+            << totalNodes << " noeuds | "
+            << totalBars  << " barres | "
+            << totalNeighbors / 2 << " paires de voisins\n";
+  if (mMin < INF)
+    std::cout << "  masse noeuds : min = " << std::scientific << std::setprecision(3)
+              << mMin << "   max = " << mMax << "\n";
+  if (knBarMin < INF)
+    std::cout << "  kn barres    : min = " << std::scientific << std::setprecision(3)
+              << knBarMin << "   max = " << knBarMax << "\n";
+
+  // --- Pas de temps ---
+  std::cout << "\n--- Pas de temps ----------------------------------------------------------\n";
+  std::cout << "  dt = " << std::scientific << std::setprecision(3) << dt
+            << "   nstep = " << nstep
+            << "   duree totale = " << (double)nstep * dt << " s\n";
+  std::cout << "\n  Stabilite (dt_crit/dt >= 20 recommande, < 10 critique) :\n";
+  printDtLine("barres",  dtCritBars);
+  printDtLine("flexion", dtCritBend);
+  if (cells.size() > 1 && kn > 0.0)       printDtLine("contact",  dtCritContact);
+  if (cells.size() > 1 && knCohMax > 0.0) printDtLine("cohesion", dtCritCoh);
+
+  // --- Sorties ---
+  std::cout << "\n--- Sorties ---------------------------------------------------------------\n";
+  if (nstepPeriodConf > 0)
+    std::cout << "  conf : toutes les " << std::setw(8) << nstepPeriodConf << " pas  ->  "
+              << std::setw(5) << (nstep / nstepPeriodConf) << " fichiers"
+              << "  (dt_physique = " << std::scientific << std::setprecision(3)
+              << nstepPeriodConf * dt << " s)\n";
+  else
+    std::cout << "  conf : desactivees\n";
+  if (nstepPeriodSVG > 0)
+    std::cout << "  SVG  : toutes les " << std::setw(8) << nstepPeriodSVG  << " pas  ->  "
+              << std::setw(5) << (nstep / nstepPeriodSVG)  << " fichiers"
+              << "  (dt_physique = " << std::scientific << std::setprecision(3)
+              << nstepPeriodSVG * dt << " s)\n";
+  else
+    std::cout << "  SVG  : desactivees\n";
+
+  // --- Voisins Verlet ---
+  // La section est toujours affichée, les checks de contact sont conditionnels.
+  std::cout << "\n--- Voisins (Verlet) ------------------------------------------------------\n";
+  std::cout << "  Principe : la liste regroupe toutes les paires dans un rayon de contact\n"
+            << "  elargi de distVerlet (peau de Verlet). Elle reste valide tant que le\n"
+            << "  deplacement relatif entre deux reconstructions est inferieur a distVerlet.\n";
+
+  double Trecon = (dt > 0.0 && nstepPeriodVerlet > 0)
+                  ? (double)nstepPeriodVerlet * dt : 0.0;
+
+  std::cout << "\n  distVerlet        = " << std::fixed << std::setprecision(6) << distVerlet << "\n";
+  std::cout << "  nstepPeriodVerlet = " << nstepPeriodVerlet << "\n";
+  if (Trecon > 0.0) {
+    std::cout << "  T_recon           = nstepPeriodVerlet x dt = "
+              << std::scientific << std::setprecision(3) << Trecon << " s\n";
+    std::cout << "\n  Budget de deplacement relatif admis entre deux reconstructions :\n";
+    std::cout << "    v_rel_max = distVerlet / T_recon = "
+              << std::scientific << std::setprecision(3) << distVerlet / Trecon << "\n";
+  }
+
+  if (lBarMean > 0.0)
+    std::cout << "\n  Longueur de barre (moy.) = " << std::fixed << std::setprecision(6) << lBarMean << "\n";
+  if (rMax > 0.0)
+    std::cout << "  r_barre (demi-largeur)   = " << std::fixed << std::setprecision(6)
+              << rMin << " (min)   " << rMax << " (max)\n";
+
+  // Checks pertinents uniquement en présence de contacts inter-cellules
+  if (cells.size() > 1 && kn > 0.0) {
+    // Fréquence de reconstruction vs oscillation la plus rapide
+    if (TOscBars < INF && Trecon > 0.0) {
+      double ratioTO = Trecon / TOscBars;
+      std::cout << "\n  Frequence de reconstruction vs oscillation la plus rapide des barres :\n";
+      std::cout << "    T_recon / T_osc_barre = "
+                << std::scientific << std::setprecision(3) << Trecon
+                << " / " << TOscBars << " = "
+                << std::fixed << std::setprecision(4) << ratioTO;
+      if      (ratioTO >= 1.0) std::cout << "  <<< ATTENTION: contacts possiblement rates";
+      else if (ratioTO >= 0.5) std::cout << "  << reduire nstepPeriodVerlet ?";
+      else if (ratioTO >= 0.1) std::cout << "  < acceptable";
+      else                     std::cout << "  OK";
+      std::cout << "\n";
+    }
+
+    // Algorithme de recherche
+    std::cout << "\n  Algorithme de recherche : ";
+    if (linkCells_lx > 0.0) {
+      // Link-cells activé
+      double minSz = 2.0 * rMax + distVerlet;
+      std::cout << "link-cells\n";
+      std::cout << "    lx = " << std::fixed << std::setprecision(6) << linkCells_lx
+                << "   ly = " << linkCells_ly << "\n";
+      std::cout << "    Condition de validite : lx (et ly) >= 2 * r_max + distVerlet\n";
+      std::cout << "      2 * r_max + distVerlet = 2 * "
+                << std::fixed << std::setprecision(6) << rMax
+                << " + " << distVerlet << " = " << minSz << "\n";
+      bool lxOK = (linkCells_lx >= minSz);
+      bool lyOK = (linkCells_ly >= minSz);
+      std::cout << "      lx = " << linkCells_lx << (lxOK ? "  OK" : "  <<< ATTENTION: paires possiblement manquees") << "\n";
+      std::cout << "      ly = " << linkCells_ly << (lyOK ? "  OK" : "  <<< ATTENTION: paires possiblement manquees") << "\n";
+    } else {
+      // Brute-force O(N²)
+      std::cout << "recherche brute O(N^2)\n";
+      if (totalNodes > 500)
+        std::cout << "    (" << totalNodes << " noeuds : envisager linkCells pour accelerer)\n";
+    }
+  }
+
+  std::cout << "===========================================================================\n\n";
 }
 
 // ======================================================================================================
@@ -996,8 +1235,8 @@ int Lhyphen::getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos)
   if (cells[cj].nodes[jn].nextNode == null_size_t) { // This is the case where the bar in cj does not exist.
 
     vec2r b = cells[cj].nodes[jn].pos - cells[ci].nodes[in].pos;
-    b *= (cells[ci].radius / cells[ci].radius + cells[cj].radius);
-    pos = cells[cj].nodes[jn].pos + b;
+    b *= cells[ci].radius / (cells[ci].radius + cells[cj].radius);
+    pos = cells[ci].nodes[in].pos + b;
     return 0;
 
   } else { // a disk (ci,in) interacts with a bar (cj, jn -> jnext)
@@ -1957,6 +2196,10 @@ void Lhyphen::integrate() {
 
   breakEvol.open("breakEvol.txt");
   breakEvol << "#time cumulated_breakage_NRJ cumulated_breaked_length" << std::endl;
+
+  // Première construction de la liste de voisins, puis diagnostic avant de démarrer
+  updateNeighbors();
+  diagnostics();
 
   // === START THE LOOP ===
   for (int step = 0; step < nstep; step++) {

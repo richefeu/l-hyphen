@@ -33,20 +33,26 @@
 void printHelp() {
   std::cout << std::endl;
   std::cout << "Commandes:" << std::endl;
-  std::cout << "a         show/hide control area boxes" << std::endl;
-  std::cout << "b         colorize the cell bars" << std::endl;
-  std::cout << "c         show/hide the cells" << std::endl;
-  std::cout << "f         show/hide the forces" << std::endl;
-  std::cout << "g         show/hide the glue points" << std::endl;
-  std::cout << "h         show/hide this help" << std::endl;
-  std::cout << "n         show/hide nodes and cell boundaries" << std::endl;
-  std::cout << "p         show/hide pressure" << std::endl;
-  std::cout << "q         quit" << std::endl;
-  std::cout << "s/S       scale the force length" << std::endl;
-  std::cout << "z/Z       zoom in or out" << std::endl;
-  std::cout << "->        load next configuration file" << std::endl;
-  std::cout << "<-        load previous configuration file" << std::endl;
-  std::cout << "=         fit the view" << std::endl;
+  std::cout << "a           show/hide control area boxes" << std::endl;
+  std::cout << "b           colorize the cell bars" << std::endl;
+  std::cout << "c           show/hide the cells" << std::endl;
+  std::cout << "f           show/hide the forces" << std::endl;
+  std::cout << "g           show/hide the glue points" << std::endl;
+  std::cout << "h           print this help" << std::endl;
+  std::cout << "n           show/hide cell contours" << std::endl;
+  std::cout << "v           show/hide nodes (points)" << std::endl;
+  std::cout << "p           show/hide pressure" << std::endl;
+  std::cout << "q           quit" << std::endl;
+  std::cout << "s/S         scale forces down/up" << std::endl;
+  std::cout << "z/Z         zoom in/out" << std::endl;
+  std::cout << "->          load next configuration file" << std::endl;
+  std::cout << "<-          load previous configuration file" << std::endl;
+  std::cout << "Shift+<-    jump to conf 0" << std::endl;
+  std::cout << "=           fit the view" << std::endl;
+  std::cout << "x           save screenshot.png" << std::endl;
+  std::cout << "Shift+x     batch screenshots of all confs" << std::endl;
+  std::cout << "space       save options to see2-options.toml" << std::endl;
+  std::cout << "Shift+space reload options from see2-options.toml" << std::endl;
   std::cout << std::endl;
 }
 
@@ -58,48 +64,73 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
 
   case GLFW_KEY_Q: { // a
     show_control_boxes = 1 - show_control_boxes;
+    textZone.addLine("show_control_boxes = %d", show_control_boxes);
   } break;
 
   case GLFW_KEY_B: {
     show_bar_colors = 1 - show_bar_colors;
+    textZone.addLine("show_bar_colors = %d", show_bar_colors);
   } break;
 
   case GLFW_KEY_C: {
     show_cells = 1 - show_cells;
+    textZone.addLine("show_cells = %d", show_cells);
   } break;
 
   case GLFW_KEY_F: {
     show_inter_cells_forces = 1 - show_inter_cells_forces;
+    textZone.addLine("show_forces = %d", show_inter_cells_forces);
   } break;
 
   case GLFW_KEY_G: {
     show_glue_points = 1 - show_glue_points;
+    textZone.addLine("show_glue = %d", show_glue_points);
   } break;
 
   case GLFW_KEY_H: {
     printHelp();
   } break;
 
+  case GLFW_KEY_SPACE: {
+    if (mods == GLFW_MOD_SHIFT) {
+      readTomlOptions();
+      glfwSetWindowSize(window, width, height);
+      reshape(window, width, height);
+      std::cout << "Loaded 'see2-options.toml'" << std::endl;
+      textZone.addLine("Loaded 'see2-options.toml'");
+    } else {
+      saveTomlOptions();
+      std::cout << "Saved 'see2-options.toml'" << std::endl;
+      textZone.addLine("Saved 'see2-options.toml'");
+    }
+  } break;
+
   case GLFW_KEY_N: {
+    show_contours = 1 - show_contours;
+    textZone.addLine("show_contours = %d", show_contours);
+  } break;
+
+  case GLFW_KEY_V: {
     show_nodes = 1 - show_nodes;
+    textZone.addLine("show_nodes = %d", show_nodes);
   } break;
 
   case GLFW_KEY_P: {
     show_pressure = 1 - show_pressure;
+    textZone.addLine("show_pressure = %d", show_pressure);
   } break;
 
   case GLFW_KEY_A: { // q
-    exit(0);
+    glfwSetWindowShouldClose(window, GLFW_TRUE);
   } break;
 
   case GLFW_KEY_S: {
     if (mods == GLFW_MOD_SHIFT) {
       vScale *= 1.1;
-      textZone.addLine("vScale = %g", vScale);
     } else {
       vScale *= 0.9;
-      textZone.addLine("vScale = %g", vScale);
     }
+    textZone.addLine("vScale = %g", vScale);
   } break;
 
   case GLFW_KEY_W: { // z
@@ -111,7 +142,6 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
       worldBox.max.x += ddx;
       worldBox.min.y -= ddy;
       worldBox.max.y += ddy;
-      reshape(window, width, height);
     } else {
       double dy = worldBox.max.y - worldBox.min.y;
       double ddy = 0.2 * dy;
@@ -120,15 +150,37 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
       worldBox.max.x += ddx;
       worldBox.min.y -= ddy;
       worldBox.max.y += ddy;
-      reshape(window, width, height);
+    }
+    reshape(window, width, height);
+  } break;
+
+  case GLFW_KEY_X: {
+    if (mods == GLFW_MOD_SHIFT) {
+      do {
+        char filename[256];
+        snprintf(filename, 256, "screenshot%d.png", confNum);
+        display(window);
+        captureScreenshot(filename);
+        std::cout << filename << " saved" << std::endl;
+        updateTextLine();
+      } while (try_to_readConf(confNum + 1, Conf, confNum));
+    } else {
+      display(window);
+      char filename[256];
+      snprintf(filename, 256, "screenshot%d.png", confNum);
+      captureScreenshot(filename);
+      std::cout << filename << " saved" << std::endl;
+      textZone.addLine("%s saved", filename);
     }
   } break;
 
   case GLFW_KEY_LEFT: {
-    if (confNum > 0) {
+    if (mods == GLFW_MOD_SHIFT) {
+      try_to_readConf(0, Conf, confNum);
+    } else if (confNum > 0) {
       try_to_readConf(confNum - 1, Conf, confNum);
-      updateTextLine();
     }
+    updateTextLine();
   } break;
 
   case GLFW_KEY_RIGHT: {
@@ -138,7 +190,6 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
 
   case GLFW_KEY_SLASH: { // '='
     fit_view(window);
-    // reshape(window, width, height);
   } break;
 
   case GLFW_KEY_UP: {
@@ -149,9 +200,18 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
     textZone.decrease_nbLine();
   } break;
   };
+
+  needsRedraw = true;
 }
 
-void updateTextLine() { textZone.addLine("Conf%d, time = %g", confNum, Conf.t); }
+void updateTextLine() {
+  textZone.addLine("Conf%d, time = %g", confNum, Conf.t);
+  if (g_window) {
+    char title[256];
+    snprintf(title, 256, "see2 — conf%d  t = %g", confNum, Conf.t);
+    glfwSetWindowTitle(g_window, title);
+  }
+}
 
 void mouse_button(GLFWwindow *window, int button, int action, int mods) {
   double x, y;
@@ -173,6 +233,8 @@ void mouse_button(GLFWwindow *window, int button, int action, int mods) {
       mouse_mode = MouseMode::ZOOM;
     }
   }
+
+  needsRedraw = true;
 }
 
 void cursor_pos(GLFWwindow *window, double xpos, double ypos) {
@@ -213,10 +275,11 @@ void cursor_pos(GLFWwindow *window, double xpos, double ypos) {
   mouse_start[1] = static_cast<int>(ypos);
 
   reshape(window, width, height);
+  needsRedraw = true;
 }
 
 void display(GLFWwindow *window) {
-  glTools::clearBackground(show_background);
+  glTools::clearBackground(show_background, bottom_r, bottom_g, bottom_b, top_r, top_g, top_b);
 
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
@@ -463,20 +526,109 @@ void drawCells() {
       drawBar(i, in, jn, Conf.cells[i].radius, BarColor, NodeColor);
     }
 
-    if (show_nodes) {
+    if (show_contours) {
       glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
-      for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
-        // drawCircle(Conf.cells[i].nodes[n].pos.x, Conf.cells[i].nodes[n].pos.y, 0.5*Conf.cells[i].radius,  8);
 
-        glBegin(GL_LINE_LOOP);
-        double da = 2.0 * M_PI / 18.0;
-        for (double a = 0.0; a < 2.0 * M_PI; a += da) {
-          glVertex2d(Conf.cells[i].nodes[n].pos.x + Conf.cells[i].radius * cos(a),
-                     Conf.cells[i].nodes[n].pos.y + Conf.cells[i].radius * sin(a));
+      // Draw a CCW arc from a_start to a_end (sweeping CCW, expanding range if needed)
+      auto drawArcCCW = [&](double xn, double yn, double r, double a_start, double a_end) {
+        while (a_end < a_start) a_end += 2.0 * M_PI;
+        int nSteps = std::max(2, (int)std::ceil((a_end - a_start) / (M_PI / 18.0)));
+        double da = (a_end - a_start) / nSteps;
+        glBegin(GL_LINE_STRIP);
+        for (int k = 0; k <= nSteps; k++) {
+          double a = a_start + k * da;
+          glVertex2d(xn + r * std::cos(a), yn + r * std::sin(a));
         }
         glEnd();
+      };
+
+      bool isClosed = Conf.cells[i].close;
+
+      for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
+        size_t pv = Conf.cells[i].nodes[n].prevNode;
+        size_t nx = Conf.cells[i].nodes[n].nextNode;
+
+        double xn = Conf.cells[i].nodes[n].pos.x;
+        double yn = Conf.cells[i].nodes[n].pos.y;
+        double r  = Conf.cells[i].radius;
+
+        if (isClosed) {
+          // Exterior contour only (both prev and next must exist)
+          if (pv == null_size_t || nx == null_size_t) continue;
+
+          double d1x = xn - Conf.cells[i].nodes[pv].pos.x;
+          double d1y = yn - Conf.cells[i].nodes[pv].pos.y;
+          double theta1 = std::atan2(d1y, d1x);
+
+          double d2x = Conf.cells[i].nodes[nx].pos.x - xn;
+          double d2y = Conf.cells[i].nodes[nx].pos.y - yn;
+          double theta2 = std::atan2(d2y, d2x);
+
+          double delta = theta2 - theta1;
+          while (delta >  M_PI) delta -= 2.0 * M_PI;
+          while (delta < -M_PI) delta += 2.0 * M_PI;
+
+          if (delta >= 0.0) {
+            // Convex node: exterior arc (right side, CCW)
+            drawArcCCW(xn, yn, r, theta1 - M_PI * 0.5, theta2 - M_PI * 0.5);
+          } else {
+            // Concave node: straight segment connecting exterior tangent endpoints
+            glBegin(GL_LINES);
+            glVertex2d(xn + r * std::cos(theta1 - M_PI * 0.5), yn + r * std::sin(theta1 - M_PI * 0.5));
+            glVertex2d(xn + r * std::cos(theta2 - M_PI * 0.5), yn + r * std::sin(theta2 - M_PI * 0.5));
+            glEnd();
+          }
+        } else {
+          // Open cell: draw both sides of the bar chain
+          if (pv != null_size_t && nx != null_size_t) {
+            // Interior node
+            double d1x = xn - Conf.cells[i].nodes[pv].pos.x;
+            double d1y = yn - Conf.cells[i].nodes[pv].pos.y;
+            double theta1 = std::atan2(d1y, d1x);
+
+            double d2x = Conf.cells[i].nodes[nx].pos.x - xn;
+            double d2y = Conf.cells[i].nodes[nx].pos.y - yn;
+            double theta2 = std::atan2(d2y, d2x);
+
+            double delta = theta2 - theta1;
+            while (delta >  M_PI) delta -= 2.0 * M_PI;
+            while (delta < -M_PI) delta += 2.0 * M_PI;
+
+            if (delta > 0.0) {
+              // CCW (left) turn: exterior arc on right side, straight segment on concave left side
+              drawArcCCW(xn, yn, r, theta1 - M_PI * 0.5, theta2 - M_PI * 0.5);
+              glBegin(GL_LINES);
+              glVertex2d(xn + r * std::cos(theta1 + M_PI * 0.5), yn + r * std::sin(theta1 + M_PI * 0.5));
+              glVertex2d(xn + r * std::cos(theta2 + M_PI * 0.5), yn + r * std::sin(theta2 + M_PI * 0.5));
+              glEnd();
+            } else if (delta < 0.0) {
+              // CW (right) turn: exterior arc on left side, straight segment on concave right side
+              drawArcCCW(xn, yn, r, theta2 + M_PI * 0.5, theta1 + M_PI * 0.5);
+              glBegin(GL_LINES);
+              glVertex2d(xn + r * std::cos(theta1 - M_PI * 0.5), yn + r * std::sin(theta1 - M_PI * 0.5));
+              glVertex2d(xn + r * std::cos(theta2 - M_PI * 0.5), yn + r * std::sin(theta2 - M_PI * 0.5));
+              glEnd();
+            }
+            // delta == 0: straight, tangent lines meet, nothing to close
+          } else if (pv == null_size_t && nx != null_size_t) {
+            // Start node: semicircle cap (back end)
+            double d2x = Conf.cells[i].nodes[nx].pos.x - xn;
+            double d2y = Conf.cells[i].nodes[nx].pos.y - yn;
+            double theta2 = std::atan2(d2y, d2x);
+            // Cap sweeps from left side (+pi/2) CCW by pi to opposite left (-pi/2 = theta2-pi/2+pi)
+            drawArcCCW(xn, yn, r, theta2 + M_PI * 0.5, theta2 + M_PI * 1.5);
+          } else if (nx == null_size_t && pv != null_size_t) {
+            // End node: semicircle cap (front end)
+            double d1x = xn - Conf.cells[i].nodes[pv].pos.x;
+            double d1y = yn - Conf.cells[i].nodes[pv].pos.y;
+            double theta1 = std::atan2(d1y, d1x);
+            // Cap sweeps from right side (-pi/2) CCW by pi to left side (+pi/2)
+            drawArcCCW(xn, yn, r, theta1 - M_PI * 0.5, theta1 + M_PI * 0.5);
+          }
+        }
       }
 
+      // Tangent lines along bars
       glBegin(GL_LINES);
       for (size_t b = 0; b < Conf.cells[i].bars.size(); ++b) {
         double xi = Conf.cells[i].nodes[Conf.cells[i].bars[b].i].pos.x;
@@ -491,9 +643,27 @@ void drawCells() {
         nyij /= nij;
         double txij = -nyij;
         double tyij = nxij;
+        double rad = Conf.cells[i].radius;
 
-        glVertex2d(xj - Conf.cells[i].radius * txij, yj - Conf.cells[i].radius * tyij);
-        glVertex2d(xi - Conf.cells[i].radius * txij, yi - Conf.cells[i].radius * tyij);
+        // Right side (exterior for closed cells)
+        glVertex2d(xj - rad * txij, yj - rad * tyij);
+        glVertex2d(xi - rad * txij, yi - rad * tyij);
+
+        if (!isClosed) {
+          // Left side for open cells
+          glVertex2d(xj + rad * txij, yj + rad * tyij);
+          glVertex2d(xi + rad * txij, yi + rad * tyij);
+        }
+      }
+      glEnd();
+    }
+
+    if (show_nodes) {
+      glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+      glPointSize(4.0f);
+      glBegin(GL_POINTS);
+      for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
+        glVertex2d(Conf.cells[i].nodes[n].pos.x, Conf.cells[i].nodes[n].pos.y);
       }
       glEnd();
     }
@@ -598,74 +768,50 @@ void arrow(double x0, double y0, double x1, double y1) {
 }
 
 /**
- * Draws the force, action, and reaction on a given position.
- *
- * @param InterIt  Neighbor object representing the interaction
- * @param pos      position where the force, action, and reaction will be drawn
- */
-void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos) {
-  vec2r T(-InterIt.n.y, InterIt.n.x);
-  vec2r vf = InterIt.n * InterIt.fn + T * InterIt.ft;
-  vf *= vScale;
-  if (InterIt.fn > 0.0) {
-    arrow(pos.x - vf.x, pos.y - vf.y, pos.x, pos.y);
-    arrow(pos.x + vf.x, pos.y + vf.y, pos.x, pos.y);
-  } else {
-    arrow(pos.x, pos.y, pos.x - vf.x, pos.y - vf.y);
-    arrow(pos.x, pos.y, pos.x + vf.x, pos.y + vf.y);
-  }
-}
-
-/**
  * Draws the forces between cells.
+ * At each contact point: a segment along n colored by sign of fn (blue=compression, red=traction)
+ * and a segment along T colored green for the tangential component.
  */
 void drawForces() {
-  glLineWidth(2.0f);
-  glShadeModel(GL_SMOOTH);
-
-  glBegin(GL_LINES);
-  glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
-
+  // Precompute average bar l0 (initial lengths, stable across deformation)
+  double sum_l0 = 0.0;
+  size_t num_bars = 0;
   for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
-    for (std::set<Neighbor>::iterator InterIt = Conf.cells[ci].neighbors.begin();
-         InterIt != Conf.cells[ci].neighbors.end(); ++InterIt) {
-
-      size_t cj = InterIt->jc;
-      size_t in = InterIt->in;
-      size_t jn = InterIt->jn;
-
-      if (Conf.cells[cj].nodes[jn].nextNode == null_size_t) {
-        vec2r b = Conf.cells[cj].nodes[jn].pos - Conf.cells[ci].nodes[in].pos;
-        b *= (Conf.cells[ci].radius / Conf.cells[ci].radius + Conf.cells[cj].radius);
-        vec2r pos = Conf.cells[cj].nodes[jn].pos + b;
-        drawForceActionReaction(*InterIt, pos);
-      } else {
-        size_t jnext = Conf.cells[cj].nodes[jn].nextNode;
-        // jnext est le numéro du noeud à la fin de la barre dans la cellule cj (jn c'est le début)
-        vec2r b = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
-        vec2r u = Conf.cells[cj].nodes[jnext].pos - Conf.cells[cj].nodes[jn].pos;
-        double u_length = u.normalize();
-        double proj = b * u;
-
-        double fact = Conf.cells[cj].radius / (Conf.cells[ci].radius + Conf.cells[cj].radius);
-        if (proj <= 0.0) {
-          vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jn].pos;
-          vec2r pos = Conf.cells[cj].nodes[jn].pos + fact * ut;
-          drawForceActionReaction(*InterIt, pos);
-        } else if (proj >= u_length) {
-          vec2r ut = Conf.cells[ci].nodes[in].pos - Conf.cells[cj].nodes[jnext].pos;
-          vec2r pos = Conf.cells[cj].nodes[jn].pos + u_length * u + fact * ut;
-          drawForceActionReaction(*InterIt, pos);
-        } else {
-          vec2r pos = Conf.cells[cj].nodes[jn].pos + proj * u;
-          vec2r ut = Conf.cells[ci].nodes[in].pos - (Conf.cells[cj].nodes[jn].pos + proj * u);
-          pos += fact * ut;
-          drawForceActionReaction(*InterIt, pos);
-        }
-      }
+    for (const Bar &b : Conf.cells[ci].bars) {
+      sum_l0 += b.l0;
+      num_bars++;
     }
   }
-  glEnd();
+  double avg_l0 = (num_bars > 0) ? (sum_l0 / num_bars) : 1.0;
+  double fn_ref = avg_l0 * fnWidthFactor; // force reference for line width
+  const float max_lw = 8.0f;
+  const float min_lw = 0.5f;
+
+  for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
+    for (const Neighbor &Inter : Conf.cells[ci].neighbors) {
+      double fn_total = Inter.fn + Inter.fn_coh;
+      if (fn_total == 0.0) continue;
+
+      vec2r pos;
+      Conf.getPosition(ci, Inter.jc, Inter.in, Inter.jn, pos);
+
+      // Red: compression (fn > 0), Blue: traction (fn < 0)
+      if (fn_total > 0.0) glColor4f(1.0f, 0.2f, 0.2f, 1.0f);
+      else                 glColor4f(0.2f, 0.4f, 1.0f, 1.0f);
+
+      float lw = std::max(min_lw, std::min(max_lw, (float)(max_lw * std::fabs(fn_total) / fn_ref)));
+      glLineWidth(lw);
+
+      double half = 0.5 * std::fabs(fn_total) * vScale;
+      const vec2r &n = Inter.n;
+      glBegin(GL_LINES);
+      glVertex2d(pos.x - half * n.x, pos.y - half * n.y);
+      glVertex2d(pos.x + half * n.x, pos.y + half * n.y);
+      glEnd();
+    }
+  }
+
+  glLineWidth(1.0f);
 }
 
 void drawControlBoxes() {
@@ -689,21 +835,128 @@ void drawControlBoxes() {
   }
 }
 
-void try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
+bool try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
   char file_name[256];
   snprintf(file_name, 256, "conf%d", num);
   if (fileTool::fileExists(file_name)) {
     std::cout << "Read " << file_name << std::endl;
     OKNum = num;
     CF.loadCONF(file_name);
-  } else {
-    std::cout << file_name << " does not exist" << std::endl;
+    return true;
   }
+  std::cout << file_name << " does not exist" << std::endl;
+  return false;
+}
+
+void captureScreenshot(const char *filename) {
+  unsigned char *pixels  = new unsigned char[width * height * 3];
+  unsigned char *flipped = new unsigned char[width * height * 3];
+  glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+  for (int y = 0; y < height; y++) {
+    memcpy(flipped + (height - 1 - y) * width * 3, pixels + y * width * 3, width * 3);
+  }
+  stbi_write_png(filename, width, height, 3, flipped, width * 3);
+  delete[] pixels;
+  delete[] flipped;
 }
 
 // =====================================================================
 // Main function
 // =====================================================================
+
+void readTomlOptions() {
+  if (!fileTool::fileExists("see2-options.toml")) {
+    saveTomlOptions();
+    return;
+  }
+
+  toml::table tbl = toml::parse_file("see2-options.toml");
+
+  if (tbl.contains("display")) {
+    show_cells              = tbl["display"]["show_cells"].value_or(show_cells);
+    show_glue_points        = tbl["display"]["show_glue_points"].value_or(show_glue_points);
+    show_bar_colors         = tbl["display"]["show_bar_colors"].value_or(show_bar_colors);
+    show_inter_cells_forces = tbl["display"]["show_inter_cells_forces"].value_or(show_inter_cells_forces);
+    show_pressure           = tbl["display"]["show_pressure"].value_or(show_pressure);
+    show_contours           = tbl["display"]["show_contours"].value_or(show_contours);
+    show_nodes              = tbl["display"]["show_nodes"].value_or(show_nodes);
+    show_control_boxes      = tbl["display"]["show_control_boxes"].value_or(show_control_boxes);
+    show_background         = tbl["display"]["show_background"].value_or(show_background);
+
+    if (tbl["display"].as_table()->contains("bottom_color")) {
+      auto arr = tbl["display"]["bottom_color"].as_array();
+      if (arr && arr->size() >= 3) {
+        bottom_r = (*arr)[0].value_or(bottom_r);
+        bottom_g = (*arr)[1].value_or(bottom_g);
+        bottom_b = (*arr)[2].value_or(bottom_b);
+      }
+    }
+    if (tbl["display"].as_table()->contains("top_color")) {
+      auto arr = tbl["display"]["top_color"].as_array();
+      if (arr && arr->size() >= 3) {
+        top_r = (*arr)[0].value_or(top_r);
+        top_g = (*arr)[1].value_or(top_g);
+        top_b = (*arr)[2].value_or(top_b);
+      }
+    }
+  }
+
+  if (tbl.contains("window")) {
+    width  = tbl["window"]["width"].value_or(width);
+    height = tbl["window"]["height"].value_or(height);
+  }
+
+  if (tbl.contains("view")) {
+    fit_at_loading = tbl["view"]["fit_at_loading"].value_or(fit_at_loading);
+    worldBox.min.x = tbl["view"]["xmin"].value_or(worldBox.min.x);
+    worldBox.max.x = tbl["view"]["xmax"].value_or(worldBox.max.x);
+    worldBox.min.y = tbl["view"]["ymin"].value_or(worldBox.min.y);
+    worldBox.max.y = tbl["view"]["ymax"].value_or(worldBox.max.y);
+  }
+
+  if (tbl.contains("arrows")) {
+    vScale         = tbl["arrows"]["vScale"].value_or(vScale);
+    fnWidthFactor  = tbl["arrows"]["fnWidthFactor"].value_or(fnWidthFactor);
+  }
+}
+
+void saveTomlOptions() {
+  // clang-format off
+  auto tbl = toml::table{
+    {"display", toml::table{
+      {"show_cells",              show_cells},
+      {"show_glue_points",        show_glue_points},
+      {"show_bar_colors",         show_bar_colors},
+      {"show_inter_cells_forces", show_inter_cells_forces},
+      {"show_pressure",           show_pressure},
+      {"show_contours",           show_contours},
+      {"show_nodes",              show_nodes},
+      {"show_control_boxes",      show_control_boxes},
+      {"show_background",         show_background},
+      {"bottom_color", toml::array{bottom_r, bottom_g, bottom_b}},
+      {"top_color",    toml::array{top_r,    top_g,    top_b}},
+    }},
+    {"window", toml::table{
+      {"width",  width},
+      {"height", height},
+    }},
+    {"view", toml::table{
+      {"fit_at_loading", fit_at_loading},
+      {"xmin", worldBox.min.x},
+      {"xmax", worldBox.max.x},
+      {"ymin", worldBox.min.y},
+      {"ymax", worldBox.max.y},
+    }},
+    {"arrows", toml::table{
+      {"vScale",        vScale},
+      {"fnWidthFactor", fnWidthFactor},
+    }},
+  };
+  // clang-format on
+
+  std::ofstream file("see2-options.toml");
+  file << tbl << "\n";
+}
 
 int main(int argc, char *argv[]) {
 
@@ -721,6 +974,8 @@ int main(int argc, char *argv[]) {
   }
 
   Conf.findDisplayArea(1.15);
+
+  readTomlOptions();
 
   // init color tables
   BarRedTable.setSize(128);
@@ -744,12 +999,13 @@ int main(int argc, char *argv[]) {
   // Désactive le support Retina (force une fenêtre en résolution 1x)
   glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_FALSE);
 
-  GLFWwindow *window = glfwCreateWindow(width, height, "CONF VISUALIZER (GLFW)", NULL, NULL);
+  GLFWwindow *window = glfwCreateWindow(width, height, "see2", NULL, NULL);
   if (!window) {
     fprintf(stderr, "Failed to create GLFW window\n");
     glfwTerminate();
     return -1;
   }
+  g_window = window;
 
   // ==== Register callbacks
   glfwMakeContextCurrent(window);
@@ -770,12 +1026,16 @@ int main(int argc, char *argv[]) {
   updateTextLine();
 
   // ==== mainloop
-  fit_view(window);
+  if (fit_at_loading) fit_view(window);
+  updateTextLine();
 
   while (!glfwWindowShouldClose(window)) {
-    reshape(window, width, height);
-    display(window);
-    glfwPollEvents();
+    glfwWaitEvents();
+    if (needsRedraw) {
+      reshape(window, width, height);
+      display(window);
+      needsRedraw = false;
+    }
   }
 
   glfwTerminate();

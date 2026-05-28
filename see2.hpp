@@ -55,6 +55,11 @@
 #include "message.hpp"
 #include "triangulatePolygon.hpp"
 
+#include "toofus/toofus-gate/toml++/toml.hpp"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "toofus/toofus-gate/stb/stb_image_write.h"
+
 Lhyphen Conf;
 int confNum = 1;
 
@@ -67,26 +72,39 @@ ColorTable NodeBlueTable;
 
 int main_window;
 
+// global window pointer (for updateTextLine title update)
+GLFWwindow *g_window{nullptr};
+
+// redraw flag (avoids busy-loop CPU waste)
+bool needsRedraw{true};
+
 // flags
 int show_cells = 1;
 int show_glue_points = 0;
 int show_bar_colors = 0;
 int show_inter_cells_forces = 0;
 int show_pressure = 0;
-int show_nodes = 1;
+int show_contours = 1;
+int show_nodes = 0;
 int show_control_boxes = 0;
 int show_background = 1;
 
-// arrow sizes
+// arrow/force sizes
 double arrowSize = 0.15;
 double arrowAngle = 0.35;
 double vScale = 0.05;
+double fnWidthFactor = 1.0; // fn_ref = avg_bar_l0 * fnWidthFactor (controls line width normalization)
 
 // window sizes
 int width = 800;
 int height = 600;
 float wh_ratio = (float)width / (float)height;
 glTextZone textZone(1, &width, &height);
+int fit_at_loading{1};
+
+// background gradient colors (RGB 0-255)
+int bottom_r{135}, bottom_g{206}, bottom_b{250};
+int top_r{255}, top_g{255}, top_b{255};
 
 // Miscellaneous global variables
 enum class MouseMode { NOTHING, ROTATION, ZOOM, PAN };
@@ -101,7 +119,7 @@ void drawBar(size_t ci, size_t in, size_t jn, double radius, color4f &BarColor, 
 void drawCells();
 void drawGluePoints();
 void arrow(double x0, double y0, double x1, double y1);
-void drawForceActionReaction(const Neighbor &InterIt, vec2r &pos);
+
 void drawForces();
 void drawPressure();
 void drawControlBoxes();
@@ -115,7 +133,14 @@ void cursor_pos(GLFWwindow *window, double xpos, double ypos);
 void display(GLFWwindow *window);
 void reshape(GLFWwindow *window, int width, int height);
 
+// Screenshot
+void captureScreenshot(const char *filename);
+
+// Option file
+void readTomlOptions();
+void saveTomlOptions();
+
 // Helper functions
 void printHelp();
 void fit_view(GLFWwindow *window);
-void try_to_readConf(int num, Lhyphen &conf, int &OKNum);
+bool try_to_readConf(int num, Lhyphen &conf, int &OKNum);

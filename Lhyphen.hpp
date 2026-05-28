@@ -203,7 +203,8 @@ public:
   Lhyphen();
   ~Lhyphen();
 
-  void head(); ///< affiche un petit entete sympatique
+  void head();        ///< affiche un petit entete sympatique
+  void diagnostics(); ///< affiche un diagnostic des paramètres avant la simulation
 
   // pre-processing functions
   void addRegularPolygonalCell(named_arg_RegularCellDataset h, named_arg_CellProperties p);

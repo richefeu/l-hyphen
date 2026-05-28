@@ -36,9 +36,12 @@ ifeq ($(UNAME_S),Darwin)
   
   CXXFLAGS = -O3 -Wall -Wextra -pedantic -Wno-unknown-pragmas -std=c++17 -I ./toofus
   LDFLAGS = 
-  GLLINK = `pkg-config --libs gl glu glut`
-  GLFLAGS = `pkg-config --cflags gl glu glut`	
+  #GLLINK = `pkg-config --libs gl glu glut`
+  #GLFLAGS = `pkg-config --cflags gl glu glut`	
   # on apple, use brew to install freeglut and mesa-glu
+	
+  #GLLINK = `pkg-config --libs gl glu`
+  #GLFLAGS = `pkg-config --cflags gl glu` -I/usr/local/include
 	
 	GLFWLINK = `pkg-config --libs glfw3`
 	GLFWFLAGS = `pkg-config --cflags glfw3`
@@ -95,8 +98,8 @@ run: run.cpp liblhyphen.a
 	
 see: see.cpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
-	$(CXX) $(CXXFLAGS) -c $< -o see.o $(GLFLAGS)
-	$(CXX) $(LDFLAGS) -o $@ see.o liblhyphen.a $(GLLINK)
+	$(CXX) $(CXXFLAGS) -c $< -o see.o -I/usr/local/include
+	$(CXX) $(LDFLAGS) -o $@ see.o liblhyphen.a /usr/local/lib/libglut.a -framework Cocoa -framework CoreVideo -framework OpenGL -framework IOKit
 	
 see2: see2.cpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
