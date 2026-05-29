@@ -1,11 +1,15 @@
-Quick-start guid
-================
+Quick-start guide
+=================
 
 What is L-hyphen ?
 ------------------
 
-``l-hyphen`` is a code written in C++. It uses a approach similar to the discrete element method, 
-but it allows for the deformation of the elements: **core-shells**.
+``l-hyphen`` is a code written in C++17. It uses an approach similar to the discrete element method (DEM),
+but it allows for the deformation of the elements: **core-shells** (or deformable polygons).
+
+The code simulates the mechanical behavior of plant tissues modeled as aggregations of deformable cells.
+Each cell is represented as a polygon with nodes connected by elastic bars. Cells interact through
+contact forces and can be glued together with cohesive links that break under certain conditions.
 
 
 Compilation
@@ -109,9 +113,46 @@ To run a simulation, a configuration file has to be written. The format of such 
 
    findDisplayArea 1.0
    
-To run the simulation with this input file, you have to write this command : 
+To run the simulation with this input file, you have to write this command :
 
 .. code-block:: sh
 
-   path/to/l-hyphen input.txt
+   ./run input.txt
+
+The simulation generates output files:
+
+- **conf0, conf1, …** : Binary configuration files (snapshots of the system state)
+- **sample0000.svg, …** : SVG visualizations of the system
+- **diagnostic.txt** : A report with simulation parameters and stability analysis
+
+
+Visualizing results with see2
+-----------------------------
+
+After a simulation, you can visualize the configurations using the ``see2`` viewer:
+
+.. code-block:: sh
+
+   ./see2              # Load conf0 by default
+   ./see2 5            # Load conf5
+   ./see2 myconf.txt   # Load a specific configuration file
+
+The viewer supports keyboard shortcuts for interactive visualization:
+
+- **Arrow keys** : Navigate between configurations
+- **z / Z** : Zoom in / out
+- **c** : Toggle cell display
+- **v** : Toggle node (vertex) display
+- **n** : Toggle cell outlines
+- **b** : Colorize bars by axial stress
+- **f** : Display contact forces
+- **g** : Display glued zones
+- **p** : Display internal pressure
+- **q** : Quit
+- **h** : Display help
+
+Mouse controls:
+- Left click + drag : Rotate/pan view
+- Shift + left click + drag : Pan view
+- Middle click + drag : Zoom
 

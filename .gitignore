@@ -16,6 +16,7 @@ conf*
 movies
 
 # Répertoires de travail et expérimentations
+prepro/
 old
 work_sessions
 Franck2/
@@ -63,9 +64,10 @@ cellPrepro/delaunator-cpp-master
 
 # Documentation
 sphinxdoc/build
+cheatsheets/lhyphen_cheatsheet.pdf
 
 # Fichiers système
 .DS_Store
 */.DS_Store
-Icon\r
+Icon*
 *.zip

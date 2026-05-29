@@ -142,5 +142,29 @@ repair_cell <0 ou 1> : Parfois dans la construction des cellules, nous avons un 
 On voit clairement que les noeuds proviennent de l'intersection des parois de la tesselation que nous avons shifted parallèlement. Malheureusement, parfois, certaines cellules trop petites ou allongées donc les barres se coupent. La stratégie de reconstruction revient à prendre l'intersection de ces barres à la place comme noeuds et enlever les deux qui posaient problème
 
 
-create_lhyphen_input 1.0 2.0 : 
+create_lhyphen_input <barWidth> <Kn> <Kr> <Mz_max> :
+  Generates the final l-hyphen input file from the processed cell dataset. The output file contains
+  the node information in a format readable by l-hyphen's ``readNodeFile`` command.
+  **barWidth** : thickness of bars connecting cells. **Kn** : normal stiffness of bars.
+  **Kr** : angular stiffness (bending). **Mz_max** : maximum plastic moment.
 
+Overview of cellPrepro workflow
+-------------------------------
+
+The typical preprocessing workflow is:
+
+1. Convert image to PGM format using ImageMagick
+2. Load the image: ``read_pgm``
+3. Generate histogram: ``make_histo``
+4. Segment by grey level: ``segmentation <threshold>``
+5. Fill cells: ``fill_cells``
+6. Write colorized image: ``write_pgm``
+7. Extract cell dataset: ``create_cell_dataset``
+8. Clean small cells: ``clean_cell_data <minPixels>``
+9. Save cell data: ``save_cell_dataset``
+10. Find neighbors: ``neighbor_strategy <method>``
+11. Build cell geometry: ``build_cells``
+12. Repair cell overlaps: ``repair_cell <0|1>``
+13. Create l-hyphen input: ``create_lhyphen_input <barWidth> <Kn> <Kr> <Mz_max>``
+
+The output is a node file that can be read by l-hyphen using ``readNodeFile``.
