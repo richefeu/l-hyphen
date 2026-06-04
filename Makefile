@@ -58,7 +58,7 @@ $(info Cloning ToOfUs repository)
 $(shell git clone https://github.com/richefeu/toofus.git > /dev/null 2>&1)
 endif
 
-SOURCES = expressionParser.cpp Neighbor.cpp Control.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
+SOURCES = Neighbor.cpp Control.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
 OBJECTS = $(SOURCES:%.cpp=%.o)
 
 .PHONY: all clean clone_toofus

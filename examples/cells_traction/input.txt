@@ -7,7 +7,7 @@ define dtcrit 1e-3
 define ratio $1/20$
 
 dt $ dtcrit * ratio $ 
-nstep  100000
+nstep  200000
 
 # dissipation
 numericalDissipation 1e-4

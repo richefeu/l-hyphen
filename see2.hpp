@@ -44,6 +44,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
+#include <sstream>
 
 #include "Lhyphen.hpp"
 #include "null_size_t.hpp"
@@ -64,6 +65,20 @@ Lhyphen Conf;
 int confNum = 1;
 
 AABB worldBox;
+
+/// Un évènement de rupture lu depuis breakHistory.txt.
+/// On ne stocke que les références topologiques des deux côtés de l'interface (côté A = le contact,
+/// côté B = son frère). L'interface rompue est reconstruite à l'affichage (cf. drawCrackPath) via
+/// Conf.getPosition pour chaque côté, puis tracée comme un trait épais entre les deux points de
+/// contact — comme le mode 'g' le fait pour les interfaces encore collées. Les positions étant lues
+/// dans le conf affiché, le trait suit les cellules même si elles se sont déplacées depuis la rupture.
+struct BreakEvent {
+  double time;
+  size_t a_ci, a_cj, a_in, a_jn; // côté A (ce contact)
+  size_t b_ci, b_cj, b_in, b_jn; // côté B (le frère ; = côté A s'il n'y a pas de frère)
+  double nrj;
+};
+std::vector<BreakEvent> breakEvents; ///< chargé une fois à l'ouverture du premier conf
 
 ColorTable BarRedTable;
 ColorTable BarBlueTable;
@@ -88,12 +103,14 @@ int show_contours = 1;
 int show_nodes = 0;
 int show_control_boxes = 0;
 int show_background = 1;
+int show_crack_path = 0; // trace les liens rompus jusqu'au temps du conf affiché
 
 // arrow/force sizes
 double arrowSize = 0.15;
 double arrowAngle = 0.35;
 double vScale = 0.05;
-double fnWidthFactor = 1.0; // fn_ref = avg_bar_l0 * fnWidthFactor (controls line width normalization)
+double fnWidthFactor = 1.0; // multiplicateur d'épaisseur des chaînes de force ('s'/'S')
+double forceFilter = 1.0;   // seuil du filtre = forceFilter * |fn|_moyen : ne montre que les chaînes porteuses ('t'/'T')
 
 // window sizes
 int width = 800;
@@ -118,6 +135,8 @@ void drawCircle(double xc, double yc, double radius, int nbDiv = 18);
 void drawBar(size_t ci, size_t in, size_t jn, double radius, color4f &BarColor, color4f &NodeColor);
 void drawCells();
 void drawGluePoints();
+void drawCrackPath();
+void readBreakHistory(const char *fname = "breakHistory.txt");
 void arrow(double x0, double y0, double x1, double y1);
 
 void drawForces();

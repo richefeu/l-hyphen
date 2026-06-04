@@ -46,7 +46,13 @@
 #include "svgtools.hpp"
 #include "vec2.hpp"
 
-#include "expressionParser.hpp"
+#include "exprParser.hpp"
+
+/// Parseur d'expressions du préprocesseur (constantes nommées + expressions entre $...$).
+/// On s'appuie sur le parseur léger de toofus (exprParser.hpp) au lieu de exprtk : même
+/// fonctionnalité pour nos besoins, mais compilation nettement plus rapide.
+/// L'alias évite la collision avec la variable membre `exprParser`.
+using ExpressionParser = exprParser<double>;
 
 #include "Bar.hpp"
 #include "Cell.hpp"
@@ -244,6 +250,7 @@ public:
   void associateGlue(int modelGc = 1, double activationLength = 0.0);
   void glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext, double wbeg,
                      double wend, double fn_visc = 0.0);
+  void recordBreakEvent(Neighbor *Inter, double releasedNRJ);
   void handleDiskDiskContact(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn);
   void handleDiskEndContact(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jcontact, size_t jn,
                             size_t jnext, double wbeg, double wend);

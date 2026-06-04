@@ -1367,6 +1367,32 @@ void Lhyphen::associateGlue(int modelGc, double activationLength) {
 // Computing
 // ======================================================================================================
 
+// Enregistre un évènement de rupture de colle dans breakHistory.txt pour post-traitement (voir see2).
+//
+// On ne sauvegarde PAS les positions absolues (figées au moment de la rupture) mais les références
+// topologiques des DEUX côtés de l'interface (le contact courant et son "frère"), permettant de
+// reconstruire le segment de fissure à n'importe quel instant via Lhyphen::getPosition à partir des
+// positions courantes des noeuds. see2 trace alors un trait épais entre les deux points de contact,
+// exactement comme le mode 'g' (drawGluePoints) le fait pour les interfaces encore collées.
+//
+// Côté A = ce contact (Inter) ; côté B = son frère (Inter->brother). Sans frère (cas d'extrémité de
+// barre / cellule ouverte), on duplique le côté A : le trait dégénère en un point (invisible).
+void Lhyphen::recordBreakEvent(Neighbor *Inter, double releasedNRJ) {
+  if (!breakHistory.is_open()) {
+    return;
+  }
+  size_t a_ci = Inter->ic, a_cj = Inter->jc, a_in = Inter->in, a_jn = Inter->jn;
+  size_t b_ci = a_ci, b_cj = a_cj, b_in = a_in, b_jn = a_jn;
+  if (Inter->brother != nullptr) {
+    b_ci = Inter->brother->ic;
+    b_cj = Inter->brother->jc;
+    b_in = Inter->brother->in;
+    b_jn = Inter->brother->jn;
+  }
+  breakHistory << t << ' ' << a_ci << ' ' << a_cj << ' ' << a_in << ' ' << a_jn << ' ' << b_ci << ' ' << b_cj << ' '
+               << b_in << ' ' << b_jn << ' ' << releasedNRJ << '\n';
+}
+
 // Il faudra plus tard utiliser cette fonction pour éviter les duplications dans la fonction qui calcul les forces
 // de contact
 // fn_visc: instantaneous viscous normal force (does NOT enter breakage criterion, only force application)
@@ -1379,6 +1405,11 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
     double zeta =
         -Inter->fn_coh / Inter->fn_coh_max + pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
     if (zeta > 0.0) {
+      // énergie élastique relâchée stockée dans les ressorts de cohésion (cohérente avec le modèle Gc)
+      double Wbreak = 0.0;
+      if (Inter->fn_coh < 0.0 && Inter->kn_coh > 0.0) Wbreak += Inter->fn_coh * Inter->fn_coh / Inter->kn_coh;
+      if (Inter->kt_coh > 0.0) Wbreak += Inter->ft_coh * Inter->ft_coh / Inter->kt_coh;
+      recordBreakEvent(Inter, Wbreak);
       Inter->fn_coh = 0.0;
       Inter->ft_coh = 0.0;
       Inter->glueState = 0;
@@ -1408,6 +1439,7 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
       double G = (Inter->length > 1.0e-12) ? W / (2.0 * Inter->length) : 0.0;
 
       if (G > Inter->Gc) {
+        recordBreakEvent(Inter, W);
         Inter->fn_coh = 0.0;
         Inter->ft_coh = 0.0;
         Inter->glueState = 0;
@@ -1425,6 +1457,7 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
 
     } else {
       // no brother: break immediately
+      recordBreakEvent(Inter, W);
       Inter->fn_coh = 0.0;
       Inter->ft_coh = 0.0;
       Inter->glueState = 0;
@@ -2377,7 +2410,7 @@ void Lhyphen::integrate() {
   }
 
   breakHistory.open("breakHistory.txt");
-  breakHistory << "#ci cj xdeb ydeb xend yend released_NRJ" << std::endl;
+  breakHistory << "#time a_ci a_cj a_in a_jn b_ci b_cj b_in b_jn released_NRJ" << std::endl;
 
   breakEvol.open("breakEvol.txt");
   breakEvol << "#time cumulated_breakage_NRJ cumulated_breaked_length" << std::endl;

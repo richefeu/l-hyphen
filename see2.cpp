@@ -38,12 +38,14 @@ void printHelp() {
   std::cout << "c           show/hide the cells" << std::endl;
   std::cout << "f           show/hide the forces" << std::endl;
   std::cout << "g           show/hide the glue points" << std::endl;
+  std::cout << "r           show/hide the crack path (broken links up to current time)" << std::endl;
   std::cout << "h           print this help" << std::endl;
   std::cout << "n           show/hide cell contours" << std::endl;
   std::cout << "v           show/hide nodes (points)" << std::endl;
   std::cout << "p           show/hide pressure" << std::endl;
   std::cout << "q           quit" << std::endl;
-  std::cout << "s/S         scale forces down/up" << std::endl;
+  std::cout << "s/S         force-chain lines thinner/thicker" << std::endl;
+  std::cout << "t/T         force filter lower/higher (show more/fewer chains)" << std::endl;
   std::cout << "z/Z         zoom in/out" << std::endl;
   std::cout << "->          load next configuration file" << std::endl;
   std::cout << "<-          load previous configuration file" << std::endl;
@@ -87,6 +89,11 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
     textZone.addLine("show_glue = %d", show_glue_points);
   } break;
 
+  case GLFW_KEY_R: {
+    show_crack_path = 1 - show_crack_path;
+    textZone.addLine("show_crack_path = %d (%zu events)", show_crack_path, breakEvents.size());
+  } break;
+
   case GLFW_KEY_H: {
     printHelp();
   } break;
@@ -126,11 +133,21 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
 
   case GLFW_KEY_S: {
     if (mods == GLFW_MOD_SHIFT) {
-      vScale *= 1.1;
+      fnWidthFactor *= 1.1;
     } else {
-      vScale *= 0.9;
+      fnWidthFactor *= 0.9;
     }
-    textZone.addLine("vScale = %g", vScale);
+    textZone.addLine("fnWidthFactor = %g", fnWidthFactor);
+  } break;
+
+  case GLFW_KEY_T: {
+    if (mods == GLFW_MOD_SHIFT) {
+      forceFilter *= 1.2; // seuil plus haut -> ne garde que les chaînes les plus fortes
+    } else {
+      forceFilter *= 0.8; // seuil plus bas -> montre plus de contacts
+    }
+    if (forceFilter < 0.0) forceFilter = 0.0;
+    textZone.addLine("forceFilter = %g x mean|fn|", forceFilter);
   } break;
 
   case GLFW_KEY_W: { // z
@@ -292,6 +309,9 @@ void display(GLFWwindow *window) {
   }
   if (show_glue_points) {
     drawGluePoints();
+  }
+  if (show_crack_path) {
+    drawCrackPath();
   }
   if (show_inter_cells_forces) {
     drawForces();
@@ -732,6 +752,75 @@ void drawGluePoints() {
   glEnd();
 }
 
+// Charge les évènements de rupture depuis breakHistory.txt (si présent), une seule fois.
+// Les lignes de commentaire (#) sont ignorées. Format attendu (cf. Lhyphen::recordBreakEvent) :
+//   time a_ci a_cj a_in a_jn b_ci b_cj b_in b_jn released_NRJ
+void readBreakHistory(const char *fname) {
+  breakEvents.clear();
+  if (!fileTool::fileExists(fname)) {
+    return;
+  }
+  std::ifstream file(fname);
+  std::string line;
+  while (std::getline(file, line)) {
+    if (line.empty() || line[0] == '#') {
+      continue;
+    }
+    std::istringstream iss(line);
+    BreakEvent ev;
+    if (iss >> ev.time >> ev.a_ci >> ev.a_cj >> ev.a_in >> ev.a_jn >> ev.b_ci >> ev.b_cj >> ev.b_in >> ev.b_jn >>
+        ev.nrj) {
+      breakEvents.push_back(ev);
+    }
+  }
+  std::cout << "Read " << fname << " : " << breakEvents.size() << " break events" << std::endl;
+}
+
+// Renvoie true et remplit pos si (ci, cj, in, jn) est indexable dans le conf courant (garde-fou au cas
+// où breakHistory.txt ne correspondrait pas au jeu de conf chargé), puis délègue à Conf.getPosition.
+static bool crackContactPos(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos) {
+  if (ci >= Conf.cells.size() || cj >= Conf.cells.size()) {
+    return false;
+  }
+  if (in >= Conf.cells[ci].nodes.size() || jn >= Conf.cells[cj].nodes.size()) {
+    return false;
+  }
+  Conf.getPosition(ci, cj, in, jn, pos);
+  return true;
+}
+
+// Trace les interfaces rompues entre l'instant initial et le temps du conf affiché (Conf.t), comme le
+// mode 'g' (drawGluePoints) le fait pour les interfaces encore collées : un trait épais entre les deux
+// points de contact (côté A et son frère côté B). Les points sont reconstruits à partir des positions
+// COURANTES, donc les traits suivent les cellules même si elles se sont déplacées depuis la rupture.
+void drawCrackPath() {
+  if (breakEvents.empty()) {
+    return;
+  }
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glLineWidth(6.0f);
+  glColor3f(0.85f, 0.0f, 0.0f);
+
+  glBegin(GL_LINES);
+  vec2r pos1, pos2;
+  for (const BreakEvent &ev : breakEvents) {
+    if (ev.time > Conf.t) {
+      continue; // rupture postérieure au conf affiché
+    }
+    if (!crackContactPos(ev.a_ci, ev.a_cj, ev.a_in, ev.a_jn, pos1)) {
+      continue;
+    }
+    if (!crackContactPos(ev.b_ci, ev.b_cj, ev.b_in, ev.b_jn, pos2)) {
+      continue;
+    }
+    glVertex2d(pos1.x, pos1.y);
+    glVertex2d(pos2.x, pos2.y);
+  }
+  glEnd();
+}
+
 /**
  * Draws an arrow from point (x0, y0) to point (x1, y1) using OpenGL.
  *
@@ -768,45 +857,71 @@ void arrow(double x0, double y0, double x1, double y1) {
 }
 
 /**
- * Draws the forces between cells.
- * At each contact point: a segment along n colored by sign of fn (blue=compression, red=traction)
- * and a segment along T colored green for the tangential component.
+ * Draws the inter-cell force network ("force chains").
+ *
+ * For each contact between cells ci and cj, a poly-line center_i -> contact point -> center_j is
+ * drawn, with thickness proportional to |fn| (normalized by the mean contact force, so the scaling
+ * adapts to the absolute force units) and colored by sign: red = compression, blue = traction
+ * (cohesion included). Magnitude is encoded ONLY by thickness; the length is geometric. This reveals
+ * the load-bearing skeleton of the assembly, the standard granular force-chain picture.
+ *
+ * 's'/'S' tune the live thickness factor fnWidthFactor.
  */
 void drawForces() {
-  // Precompute average bar l0 (initial lengths, stable across deformation)
-  double sum_l0 = 0.0;
-  size_t num_bars = 0;
+  if (Conf.cells.empty()) return;
+
+  // centres de cellules à jour (positions courantes du conf affiché)
   for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
-    for (const Bar &b : Conf.cells[ci].bars) {
-      sum_l0 += b.l0;
-      num_bars++;
+    Conf.cells[ci].CellCenter();
+  }
+
+  // Statistiques sur les contacts actifs : moyenne (référence du filtre) et max (échelle d'épaisseur).
+  double sum_f = 0.0, max_f = 0.0;
+  size_t n_f = 0;
+  for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
+    for (const Neighbor &Inter : Conf.cells[ci].neighbors) {
+      double f = std::fabs(Inter.fn + Inter.fn_coh);
+      if (f > 0.0) {
+        sum_f += f;
+        if (f > max_f) max_f = f;
+        n_f++;
+      }
     }
   }
-  double avg_l0 = (num_bars > 0) ? (sum_l0 / num_bars) : 1.0;
-  double fn_ref = avg_l0 * fnWidthFactor; // force reference for line width
-  const float max_lw = 8.0f;
-  const float min_lw = 0.5f;
+  if (n_f == 0 || max_f == 0.0) return;
+  double mean_f = sum_f / (double)n_f;
+  double threshold = forceFilter * mean_f; // ne garde que les chaînes porteuses (|fn| >= seuil)
 
+  const float max_lw = 10.0f;
+  const float min_lw = 0.4f;
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  vec2r pc;
   for (size_t ci = 0; ci < Conf.cells.size(); ci++) {
     for (const Neighbor &Inter : Conf.cells[ci].neighbors) {
       double fn_total = Inter.fn + Inter.fn_coh;
-      if (fn_total == 0.0) continue;
+      if (std::fabs(fn_total) < threshold) continue; // filtre des forces faibles
+      size_t cj = Inter.jc;
+      if (cj >= Conf.cells.size()) continue;
 
-      vec2r pos;
-      Conf.getPosition(ci, Inter.jc, Inter.in, Inter.jn, pos);
+      // point de contact sur l'interface (reconstruit depuis les positions courantes)
+      Conf.getPosition(ci, cj, Inter.in, Inter.jn, pc);
 
-      // Red: compression (fn > 0), Blue: traction (fn < 0)
-      if (fn_total > 0.0) glColor4f(1.0f, 0.2f, 0.2f, 1.0f);
-      else                 glColor4f(0.2f, 0.4f, 1.0f, 1.0f);
+      // rouge = compression (fn > 0), bleu = traction (fn < 0, cohésion comprise)
+      if (fn_total > 0.0) glColor4f(0.85f, 0.15f, 0.15f, 0.9f);
+      else                glColor4f(0.15f, 0.35f, 0.95f, 0.9f);
 
-      float lw = std::max(min_lw, std::min(max_lw, (float)(max_lw * std::fabs(fn_total) / fn_ref)));
+      float lw = (float)(max_lw * std::fabs(fn_total) / max_f * fnWidthFactor);
+      lw = std::max(min_lw, std::min(max_lw, lw));
       glLineWidth(lw);
 
-      double half = 0.5 * std::fabs(fn_total) * vScale;
-      const vec2r &n = Inter.n;
-      glBegin(GL_LINES);
-      glVertex2d(pos.x - half * n.x, pos.y - half * n.y);
-      glVertex2d(pos.x + half * n.x, pos.y + half * n.y);
+      // chaîne de force : centre_i -> contact -> centre_j
+      glBegin(GL_LINE_STRIP);
+      glVertex2d(Conf.cells[ci].center.x, Conf.cells[ci].center.y);
+      glVertex2d(pc.x, pc.y);
+      glVertex2d(Conf.cells[cj].center.x, Conf.cells[cj].center.y);
       glEnd();
     }
   }
@@ -882,6 +997,7 @@ void readTomlOptions() {
     show_nodes              = tbl["display"]["show_nodes"].value_or(show_nodes);
     show_control_boxes      = tbl["display"]["show_control_boxes"].value_or(show_control_boxes);
     show_background         = tbl["display"]["show_background"].value_or(show_background);
+    show_crack_path         = tbl["display"]["show_crack_path"].value_or(show_crack_path);
 
     if (tbl["display"].as_table()->contains("bottom_color")) {
       auto arr = tbl["display"]["bottom_color"].as_array();
@@ -917,6 +1033,7 @@ void readTomlOptions() {
   if (tbl.contains("arrows")) {
     vScale         = tbl["arrows"]["vScale"].value_or(vScale);
     fnWidthFactor  = tbl["arrows"]["fnWidthFactor"].value_or(fnWidthFactor);
+    forceFilter    = tbl["arrows"]["forceFilter"].value_or(forceFilter);
   }
 }
 
@@ -933,6 +1050,7 @@ void saveTomlOptions() {
       {"show_nodes",              show_nodes},
       {"show_control_boxes",      show_control_boxes},
       {"show_background",         show_background},
+      {"show_crack_path",         show_crack_path},
       {"bottom_color", toml::array{bottom_r, bottom_g, bottom_b}},
       {"top_color",    toml::array{top_r,    top_g,    top_b}},
     }},
@@ -950,6 +1068,7 @@ void saveTomlOptions() {
     {"arrows", toml::table{
       {"vScale",        vScale},
       {"fnWidthFactor", fnWidthFactor},
+      {"forceFilter",   forceFilter},
     }},
   };
   // clang-format on
@@ -974,6 +1093,10 @@ int main(int argc, char *argv[]) {
   }
 
   Conf.findDisplayArea(1.15);
+
+  // breakHistory.txt est lu une seule fois ici (à l'ouverture du premier conf) ; les évènements
+  // sont ensuite filtrés par le temps du conf affiché dans drawCrackPath().
+  readBreakHistory();
 
   readTomlOptions();
 
