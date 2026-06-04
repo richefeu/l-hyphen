@@ -7,7 +7,7 @@ define dtcrit 1e-3
 define ratio $1/20$
 
 dt $ dtcrit * ratio $ 
-nstep  2000000
+nstep  100000
 
 # dissipation
 numericalDissipation 1e-4
@@ -24,7 +24,7 @@ nstepPeriodVerlet 100
 
 # outputs
 isvg              0
-nstepPeriodSVG    10000
+nstepPeriodSVG    0
 iconf             0
 nstepPeriodConf   10000
 
@@ -51,7 +51,7 @@ readNodeFile  nodeFile.txt   0.010     3.66782   305.652    4.401e-04   0
 setNodeMasses 1.00
 
 setCellInternalPressure 0 0.0
-setCellAsOpen 0
+#setCellAsOpen 0
 cellContent 0
 compressFactor 1e10
 
@@ -72,6 +72,6 @@ GcGlue 0.005
 #setGlueSameProperties 1e5 1e5 5000 5000 5
 
 #setGlueSameProperties 36.678  3056.524  0.0432  0.0432  2
-setGcGlueSameProperties 1e3 1e3 1e9
+setGcGlueSameProperties 1e3 1e3 5e-4
 
 findDisplayArea 1.5 

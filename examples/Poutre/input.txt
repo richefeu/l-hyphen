@@ -26,11 +26,12 @@ nstepPeriodConf   10000
 kn 100000
 kt 100000
 mu 0.4
+viscnrate 0.9
 fadh 0.0
 
 # SAMPLE ===================================================
-#             xo    yo xe ye bw   n     Kb      Kv     mz_max
-addMultiLine  -0.01  0  1  0  0.04 101   800000000   2000    1e12
+#             xo     yo  xe  ye  bw    n     Kb    Kv     mz_max
+addMultiLine  -0.01  0   1   0   0.04  101   8e9   2e5    1e12
 
 #E = 1e10
 #h = 0.02
@@ -42,8 +43,8 @@ addMultiLine  -0.01  0  1  0  0.04 101   800000000   2000    1e12
 # Kv = 1/14 * 53333 = 475
 
 # IMPOSED CONTROLS (mode 0 = V, 1 = F)
-#                    xmin     xmax   ymin    ymax   xmode  xvalue  ymode  yvalue      
-setNodeControlInBox  -1.11   0.0001  -0.001  0.001   0      0       0      0 
+#                    xmin      xmax    ymin    ymax    xmode  xvalue  ymode  yvalue      
+setNodeControlInBox  -1.11     0.0001  -0.001  0.001   0      0       0      0 
 setNodeControlInBox  0.9999    1.0001  -0.001  0.001   1      0       1      -100
 
 

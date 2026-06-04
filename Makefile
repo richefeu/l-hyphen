@@ -34,7 +34,7 @@ ifeq ($(UNAME_S),Darwin)
   GNU_GPP := $(shell ls /usr/local/bin/g++-* /opt/homebrew/bin/g++-* 2>/dev/null | grep -Eo 'g\+\+-([0-9]+)' | sort -V | tail -1)
   CXX := $(if $(GNU_GPP),$(GNU_GPP),g++)
   
-  CXXFLAGS = -O3 -Wall -Wextra -pedantic -Wno-unknown-pragmas -std=c++17 -I ./toofus
+  CXXFLAGS = -O3 -Wall -Wextra -pedantic -Wno-unknown-pragmas -std=c++17 -I ./toofus -DENABLE_PROFILING
   LDFLAGS = 
   #GLLINK = `pkg-config --libs gl glu glut`
   #GLFLAGS = `pkg-config --cflags gl glu glut`	
@@ -69,7 +69,7 @@ clean:
 	@echo "\033[0;32m-> Remove object files\033[0m"
 	rm -f *.o
 	@echo "\033[0;32m-> Remove compiled applications\033[0m"
-	rm -f run see 
+	rm -f run see see2
 	@echo "\033[0;32m-> Remove liblhyphen.a\033[0m"
 	rm -f liblhyphen.a
 

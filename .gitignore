@@ -16,36 +16,10 @@ conf*
 movies
 
 # Répertoires de travail et expérimentations
+debug_tests/
 prepro/
 old
 work_sessions
-Franck2/
-Franck3/
-HEXAGON_TSEMO/
-Result/
-angular_visco/
-autre_see_pour_mapleflow/
-barre_visco/
-cellVoro/
-cell_1000/
-dambreak/
-desConfs/
-hertz/
-hexa/
-hexa2/
-ks-kb-keff-no-pressure/
-newTestGc/
-relVel/
-simu_Frank*/
-test*/
-examples/BigcompressCells/
-examples/Poutre/
-examples/cells_traction/
-examples/compressCells/
-examples/perf_log_Neighbors/
-examples/pressure/
-examples/Reorder_Test/
-examples/testGc/
 
 # Dépendances externes
 toofus/
@@ -53,6 +27,7 @@ toofus/
 # IDE et éditeurs
 .vscode
 l-hyphen.code-workspace
+CLAUDE.local.md
 
 # Préprocesseur de cellules
 cellPrepro/example1

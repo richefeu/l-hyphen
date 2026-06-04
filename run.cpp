@@ -29,12 +29,52 @@
 //  knowledge of the CeCILL-B license and that you accept its terms.
 
 #include "Lhyphen.hpp"
+#include <filesystem>
 #include <iostream>
+#include <regex>
+#include <stdexcept>
+
+#include "toofus-gate/tclap/CmdLine.h"
+
+void cleanSimulationFolder() {
+  std::vector<std::string> filesToDelete = {"breakEvol.txt", "breakHistory.txt", "diagnostic.txt",
+                                            "perflog_l-hyphen.txt"};
+  std::regex patternToDelete("(conf.*|sample.*\\.svg)");
+
+  std::vector<std::filesystem::path> filesToRemove;
+  size_t nbConfSVGDeleted = 0;
+
+  for (const auto &entry : std::filesystem::directory_iterator(".")) {
+    const std::string &filename = entry.path().filename().string();
+
+    // Collect files matching the pattern "conf*" or "sample*.svg"
+    if (std::filesystem::is_regular_file(entry) && std::regex_match(filename, patternToDelete)) {
+      filesToRemove.push_back(entry.path());
+      nbConfSVGDeleted++;
+    }
+  }
+
+  // Delete files matching the pattern "conf*" or "sample*.svg"
+  for (const auto &fileToRemove : filesToRemove) {
+    std::filesystem::remove(fileToRemove);
+  }
+  std::cout << "Number of conf or svg files deleted: " << nbConfSVGDeleted << std::endl;
+
+  // Delete specific files
+  for (const auto &fileToDelete : filesToDelete) {
+    std::filesystem::path filePath(fileToDelete);
+    if (std::filesystem::exists(filePath)) {
+      std::filesystem::remove(filePath);
+      std::cout << "File deleted: " << fileToDelete << std::endl;
+    }
+  }
+}
 
 // This is the command line interface (CLI) for using l-hyphen
 int main(int argc, const char *argv[]) {
   INIT_TIMERS();
 
+  /*
   if (argc != 2) {
     std::cout << "usage: " << argv[0] << " <input_file>\n";
     return 0;
@@ -47,11 +87,64 @@ int main(int argc, const char *argv[]) {
     S.loadCONF(argv[1]);
     S.head();
     S.integrate();
-		
+
   } catch (const std::exception &e) {
     std::cerr << "An error occurred: " << e.what() << std::endl;
     return 1;
   }
+  */
+
+  std::string confFileName;
+  // int nbThreads = 1;
+  // int verboseLevel = 0;
+  bool cleanAndLeave = false;
+  bool printBannerAndLeave = false;
+
+  try {
+
+    TCLAP::CmdLine cmd("This is the command line interface for l-hyphen", ' ', "1.0");
+    TCLAP::UnlabeledValueArg<std::string> nameArg("input", "Name of the conf-file", false, "input.txt", "conf-file");
+    // TCLAP::ValueArg<int> nbThreadsArg("j", "nbThreads", "Number of threads to be used", false, 1, "int");
+    // TCLAP::ValueArg<int> verboseArg(
+    //     "v", "verbose", "Verbose level (0='off', 1='critical', 2='err', 3='warn', 4='info', 5='debug', 6='trace')",
+    //     false, 4, "int");
+    TCLAP::SwitchArg cleanArg("c", "clean", "Clean files", false);
+    TCLAP::SwitchArg bannerArg("b", "banner", "show banner", false);
+
+    cmd.add(nameArg);
+    // cmd.add(nbThreadsArg);
+    // cmd.add(verboseArg);
+    cmd.add(cleanArg);
+    cmd.add(bannerArg);
+
+    cmd.parse(argc, argv);
+
+    confFileName = nameArg.getValue();
+    // nbThreads = nbThreadsArg.getValue();
+    // verboseLevel = verboseArg.getValue();
+    cleanAndLeave = cleanArg.getValue();
+    printBannerAndLeave = bannerArg.getValue();
+
+  } catch (TCLAP::ArgException &e) {
+    std::cerr << "TCLAP error: " << e.error() << " for argument " << e.argId() << std::endl;
+  }
+
+  if (cleanAndLeave) {
+    cleanSimulationFolder();
+    return 0;
+  }
+
+  // =======================================================================================
+
+  Lhyphen S;
+
+  S.head();
+  if (printBannerAndLeave) {
+    return 0;
+  }
+
+  S.loadCONF(argv[1]);
+  S.integrate();
 
   PRINT_TIMERS("l-hyphen");
 

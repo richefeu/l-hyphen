@@ -93,30 +93,43 @@ void Lhyphen::diagnostics() {
 
   // ---- Comptages ----
   size_t totalNodes = 0, totalBars = 0, totalNeighbors = 0;
-  for (auto& c : cells) {
-    totalNodes     += c.nodes.size();
-    totalBars      += c.bars.size();
+  for (auto &c : cells) {
+    totalNodes += c.nodes.size();
+    totalBars += c.bars.size();
     totalNeighbors += c.neighbors.size();
   }
 
   // ---- Masses ----
   double mMin = INF, mMax = 0.0;
-  for (auto& c : cells)
-    for (auto& n : c.nodes)
-      if (n.mass > 0.0) { mMin = std::min(mMin, n.mass); mMax = std::max(mMax, n.mass); }
+  for (auto &c : cells)
+    for (auto &n : c.nodes)
+      if (n.mass > 0.0) {
+        mMin = std::min(mMin, n.mass);
+        mMax = std::max(mMax, n.mass);
+      }
 
   // ---- Raideurs des barres ----
   double knBarMin = INF, knBarMax = 0.0;
-  for (auto& c : cells)
-    for (auto& b : c.bars)
-      if (b.kn > 0.0) { knBarMin = std::min(knBarMin, b.kn); knBarMax = std::max(knBarMax, b.kn); }
+  for (auto &c : cells)
+    for (auto &b : c.bars)
+      if (b.kn > 0.0) {
+        knBarMin = std::min(knBarMin, b.kn);
+        knBarMax = std::max(knBarMax, b.kn);
+      }
 
   // ---- Rayons des cellules ----
+  // ***** VR: c'est pas bon ce truc !!!!!!!!! <<<<<<<<<<<<<
   double rMin = INF, rMax = 0.0, rMean = 0.0;
   size_t nRad = 0;
-  for (auto& c : cells)
-    if (c.radius > 0.0) { rMin = std::min(rMin, c.radius); rMax = std::max(rMax, c.radius); rMean += c.radius; ++nRad; }
-  if (nRad > 0) rMean /= (double)nRad;
+  for (auto &c : cells)
+    if (c.radius > 0.0) {
+      rMin = std::min(rMin, c.radius);
+      rMax = std::max(rMax, c.radius);
+      rMean += c.radius;
+      ++nRad;
+    }
+  if (nRad > 0)
+    rMean /= (double)nRad;
 
   // ---- dt critique contact : dt_crit = sqrt(2 * m_min / kn_contact) ----
   // Cas le plus défavorable : deux noeuds de masse minimale en contact.
@@ -126,8 +139,8 @@ void Lhyphen::diagnostics() {
 
   // ---- dt critique cohésion ----
   double knCohMax = 0.0;
-  for (auto& c : cells)
-    for (auto& inter : c.neighbors)
+  for (auto &c : cells)
+    for (auto &inter : c.neighbors)
       knCohMax = std::max(knCohMax, inter.kn_coh);
   double dtCritCoh = INF;
   if (knCohMax > 0.0 && mMin < INF)
@@ -136,10 +149,14 @@ void Lhyphen::diagnostics() {
   // ---- Longueur moyenne des barres ----
   double lBarMean = 0.0;
   size_t nBarCount = 0;
-  for (auto& c : cells)
-    for (auto& b : c.bars)
-      if (b.l0 > 0.0) { lBarMean += b.l0; ++nBarCount; }
-  if (nBarCount > 0) lBarMean /= (double)nBarCount;
+  for (auto &c : cells)
+    for (auto &b : c.bars)
+      if (b.l0 > 0.0) {
+        lBarMean += b.l0;
+        ++nBarCount;
+      }
+  if (nBarCount > 0)
+    lBarMean /= (double)nBarCount;
 
   // ====================================================================
   // Préparation du texte de diagnostic
@@ -153,25 +170,28 @@ void Lhyphen::diagnostics() {
   //   >= 10  : proche de la limite
   //   >= 1   : tres proche de la limite (instabilite imminente)
   //   <  1   : INSTABLE
-  auto formatDtLine = [&](const char* label, double dtCrit) -> std::string {
-    if (dtCrit >= INF * 0.5) return "";
+  auto formatDtLine = [&](const char *label, double dtCrit) -> std::string {
+    if (dtCrit >= INF * 0.5)
+      return "";
     double ratio = (dt > 0.0) ? dtCrit / dt : 0.0;
     std::ostringstream line;
-    line << "    " << std::left << std::setw(10) << label
-         << " : dt_crit = " << std::scientific << std::setprecision(3) << dtCrit
-         << "   dt_crit/dt = " << std::fixed << std::setprecision(1)
-         << std::right << std::setw(8) << ratio;
-    if      (ratio <  1.0)  line << "  <<< INSTABLE !!";
-    else if (ratio < 10.0)  line << "  << tres proche de la limite";
-    else if (ratio < 20.0)  line << "  < proche de la limite";
-    else if (ratio >= 50.0) line << "     (dt peut etre augmente)";
+    line << "    " << std::left << std::setw(10) << label << " : dt_crit = " << std::scientific << std::setprecision(3)
+         << dtCrit << "   dt_crit/dt = " << std::fixed << std::setprecision(1) << std::right << std::setw(8) << ratio;
+    if (ratio < 1.0)
+      line << "  <<< INSTABLE !!";
+    else if (ratio < 10.0)
+      line << "  << tres proche de la limite";
+    else if (ratio < 20.0)
+      line << "  < proche de la limite";
+    else if (ratio >= 50.0)
+      line << "     (dt peut etre augmente)";
     return line.str();
   };
 
   oss << "\n";
-  oss << "╔═══════════════════════════════════════════════════════════════════════════════╗\n";
-  oss << "║                            DIAGNOSTIC SIMULATION                              ║\n";
-  oss << "╚═══════════════════════════════════════════════════════════════════════════════╝\n";
+  oss << "╔════════════════════════════════════════════════════════════════════════════╗\n";
+  oss << "║                           DIAGNOSTIC SIMULATION                            ║\n";
+  oss << "╚════════════════════════════════════════════════════════════════════════════╝\n";
   oss << "\n";
   oss << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
   oss << "  GEOMETRIE ET PROPRIETES\n";
@@ -182,8 +202,8 @@ void Lhyphen::diagnostics() {
   oss << "  Paires de voisins  : " << totalNeighbors / 2 << "\n";
 
   if (mMin < INF) {
-    oss << "\n  Masses des noeuds  : min = " << std::scientific << std::setprecision(3) << mMin
-        << "   max = " << mMax << "\n";
+    oss << "\n  Masses des noeuds  : min = " << std::scientific << std::setprecision(3) << mMin << "   max = " << mMax
+        << "\n";
   }
 
   if (knBarMin < INF) {
@@ -196,8 +216,8 @@ void Lhyphen::diagnostics() {
   }
 
   if (rMax > 0.0) {
-    oss << "  Rayon des barres            : min = " << std::fixed << std::setprecision(6) << rMin
-        << "   max = " << rMax << "\n";
+    oss << "  Rayon des barres            : min = " << std::fixed << std::setprecision(6) << rMin << "   max = " << rMax
+        << "\n";
   }
 
   // --- Pas de temps ---
@@ -211,24 +231,26 @@ void Lhyphen::diagnostics() {
   oss << "\n  Stabilité (dt_crit/dt >= 20 recommandé, < 10 critique) :\n";
   std::string contactLine = formatDtLine("contact", dtCritContact);
   std::string cohesionLine = formatDtLine("cohesion", dtCritCoh);
-  if (!contactLine.empty()) oss << contactLine << "\n";
-  if (!cohesionLine.empty()) oss << cohesionLine << "\n";
+  if (!contactLine.empty())
+    oss << contactLine << "\n";
+  if (!cohesionLine.empty())
+    oss << cohesionLine << "\n";
 
   // --- Sorties ---
   oss << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
   oss << "  FICHIERS DE SORTIE\n";
   oss << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
   if (nstepPeriodConf > 0) {
-    oss << "  Configurations (conf) : tous les " << std::setw(6) << nstepPeriodConf << " pas  ->  "
-        << std::setw(5) << (nstep / nstepPeriodConf) << " fichiers"
+    oss << "  Configurations (conf) : tous les " << std::setw(6) << nstepPeriodConf << " pas  ->  " << std::setw(5)
+        << (nstep / nstepPeriodConf) << " fichiers"
         << "  (dt_phys = " << std::scientific << std::setprecision(3) << nstepPeriodConf * dt << " s)\n";
   } else {
     oss << "  Configurations (conf) : désactivées\n";
   }
 
   if (nstepPeriodSVG > 0) {
-    oss << "  Visualisations (SVG)  : tous les " << std::setw(6) << nstepPeriodSVG  << " pas  ->  "
-        << std::setw(5) << (nstep / nstepPeriodSVG)  << " fichiers"
+    oss << "  Visualisations (SVG)  : tous les " << std::setw(6) << nstepPeriodSVG << " pas  ->  " << std::setw(5)
+        << (nstep / nstepPeriodSVG) << " fichiers"
         << "  (dt_phys = " << std::scientific << std::setprecision(3) << nstepPeriodSVG * dt << " s)\n";
   } else {
     oss << "  Visualisations (SVG)  : désactivées\n";
@@ -236,23 +258,19 @@ void Lhyphen::diagnostics() {
 
   // --- Voisins Verlet ---
   oss << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  oss << "  ALGORITHME DE VERLET\n";
+  oss << "  ALGORITHME DE RECHERCHE DE VOISINS\n";
   oss << "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-  oss << "  Principe : Regroupe toutes les paires dans un rayon de contact élargi de\n";
-  oss << "  distVerlet (peau de Verlet). Reste valide tant que le déplacement relatif\n";
-  oss << "  entre deux reconstructions est inférieur à distVerlet.\n";
+  oss << "  Principe : Regroupe toutes les paires dans une zone élargie.\n";
 
-  double Trecon = (dt > 0.0 && nstepPeriodVerlet > 0)
-                  ? (double)nstepPeriodVerlet * dt : 0.0;
+  double Trecon = (dt > 0.0 && nstepPeriodVerlet > 0) ? (double)nstepPeriodVerlet * dt : 0.0;
 
   oss << "\n  distVerlet                  : " << std::fixed << std::setprecision(6) << distVerlet << "\n";
   oss << "  nstepPeriodVerlet           : " << nstepPeriodVerlet << "\n";
 
   if (Trecon > 0.0) {
-    oss << "  T_recon (temps reconstruction) : " << std::scientific << std::setprecision(3) << Trecon << " s\n";
-    oss << "\n  Budget de déplacement relatif entre reconstructions :\n";
-    oss << "    v_rel_max = distVerlet / T_recon = " << std::scientific << std::setprecision(3)
-        << distVerlet / Trecon << " m/s\n";
+    oss << "  temps entre mises à jour : " << std::scientific << std::setprecision(3) << Trecon << " s\n";
+    oss << "\n  Budget de déplacement relatif entre mises à jour :\n";
+    oss << "    v_rel_max = " << std::scientific << std::setprecision(3) << distVerlet / Trecon << " m/s\n";
   }
 
   // Checks pertinents uniquement en présence de contacts inter-cellules
@@ -261,11 +279,11 @@ void Lhyphen::diagnostics() {
     if (linkCells_lx > 0.0) {
       double minSz = 2.0 * rMax + distVerlet;
       oss << "link-cells\n";
-      oss << "    lx = " << std::fixed << std::setprecision(6) << linkCells_lx
-          << "   ly = " << linkCells_ly << "\n";
+      // oss << "    lx = " << std::fixed << std::setprecision(6) << linkCells_lx
+      //     << "   ly = " << linkCells_ly << "\n";
       oss << "    Condition de validité : lx (et ly) >= 2 * r_max + distVerlet\n";
-      oss << "      2 * r_max + distVerlet = 2 * " << std::fixed << std::setprecision(6) << rMax
-          << " + " << distVerlet << " = " << minSz << "\n";
+      oss << "      2 * r_max + distVerlet = 2 * " << std::fixed << std::setprecision(6) << rMax << " + " << distVerlet
+          << " = " << minSz << "\n";
       bool lxOK = (linkCells_lx >= minSz);
       bool lyOK = (linkCells_ly >= minSz);
       oss << "      lx = " << linkCells_lx << (lxOK ? "  ✓ OK" : "  ✗ ATTENTION: paires possiblement manquées") << "\n";
@@ -277,8 +295,6 @@ void Lhyphen::diagnostics() {
       }
     }
   }
-
-  oss << "\n╚═══════════════════════════════════════════════════════════════════════════════╝\n\n";
 
   std::string diagnosticText = oss.str();
 
@@ -1353,11 +1369,13 @@ void Lhyphen::associateGlue(int modelGc, double activationLength) {
 
 // Il faudra plus tard utiliser cette fonction pour éviter les duplications dans la fonction qui calcul les forces
 // de contact
+// fn_visc: instantaneous viscous normal force (does NOT enter breakage criterion, only force application)
 void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext, double wbeg,
-                            double wend) {
+                            double wend, double fn_visc) {
 
   if (Inter->glueState == GLUE_FORCE_THRESHOLD) {
 
+    // breakage criterion uses elastic spring forces only (not fn_visc)
     double zeta =
         -Inter->fn_coh / Inter->fn_coh_max + pow(fabs(Inter->ft_coh) / Inter->ft_coh_max, Inter->yieldPower) - 1.0;
     if (zeta > 0.0) {
@@ -1370,63 +1388,43 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
         Inter->brother->glueState = 0;
       }
     } else {
-      // transfert des force vers les noeuds concernés
-      vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
+      vec2r finc = (Inter->fn_coh + fn_visc) * Inter->n + Inter->ft_coh * Inter->T;
       cells[ci].nodes[in].force += finc;
-      // cells[cj].nodes[jn].force -= finc;
-      if (wbeg > 0.0) {
-        cells[cj].nodes[jn].force -= wbeg * finc;
-      }
-      if (wend > 0.0) {
-        cells[cj].nodes[jnext].force -= wend * finc;
-      }
+      if (wbeg > 0.0) cells[cj].nodes[jn].force -= wbeg * finc;
+      if (wend > 0.0) cells[cj].nodes[jnext].force -= wend * finc;
     }
 
   } else if (Inter->glueState == GLUE_GC) {
+
+    // stored energy W uses elastic spring forces only (not fn_visc)
     double W = 0.0;
-    if (Inter->fn_coh < 0.0) { // heaviside(dn)
-      W += Inter->fn_coh * Inter->fn_coh / Inter->kn_coh;
-    }
+    if (Inter->fn_coh < 0.0) W += Inter->fn_coh * Inter->fn_coh / Inter->kn_coh; // heaviside(dn)
     W += Inter->ft_coh * Inter->ft_coh / Inter->kt_coh;
 
     if (Inter->brother != nullptr) {
-
-      if (Inter->brother->fn < 0.0) { // heaviside(dn)
-        W += Inter->brother->fn_coh * Inter->brother->fn_coh / Inter->brother->kn_coh;
-      }
+      if (Inter->brother->fn < 0.0) W += Inter->brother->fn_coh * Inter->brother->fn_coh / Inter->brother->kn_coh;
       W += Inter->brother->ft_coh * Inter->brother->ft_coh / Inter->brother->kt_coh;
 
-      double G = 0.0;
-      if (Inter->length > 1.0e-12) {
-        G = W / (2.0 * Inter->length);
-      }
+      double G = (Inter->length > 1.0e-12) ? W / (2.0 * Inter->length) : 0.0;
 
       if (G > Inter->Gc) {
-        // breakage
         Inter->fn_coh = 0.0;
         Inter->ft_coh = 0.0;
         Inter->glueState = 0;
         Inter->brother->fn_coh = 0.0;
         Inter->brother->ft_coh = 0.0;
         Inter->brother->glueState = 0;
-
         cumulatedG += G;
         cumulatedL += Inter->length;
       } else {
-        // transfert des force vers les noeuds concernés
-        vec2r finc = Inter->fn_coh * Inter->n + Inter->ft_coh * Inter->T;
+        vec2r finc = (Inter->fn_coh + fn_visc) * Inter->n + Inter->ft_coh * Inter->T;
         cells[ci].nodes[in].force += finc;
-        // cells[cj].nodes[jn].force -= finc;
-        if (wbeg > 0.0) {
-          cells[cj].nodes[jn].force -= wbeg * finc;
-        }
-        if (wend > 0.0) {
-          cells[cj].nodes[jnext].force -= wend * finc;
-        }
+        if (wbeg > 0.0) cells[cj].nodes[jn].force -= wbeg * finc;
+        if (wend > 0.0) cells[cj].nodes[jnext].force -= wend * finc;
       }
 
     } else {
-      // breakage if a 'brother' exists
+      // no brother: break immediately
       Inter->fn_coh = 0.0;
       Inter->ft_coh = 0.0;
       Inter->glueState = 0;
@@ -1441,8 +1439,8 @@ void Lhyphen::glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, si
 /// Il faudrait trouver une solution pour la rendre moins compliquée
 /// !!!!!!!!!!!
 ///
-void Lhyphen::computeInteractionForces() {
-  START_TIMER("computeInteractionForces");
+void Lhyphen::computeInteractionForces_originalVersion() {
+  START_TIMER("computeInteractionForces_originalVersion");
 
   vec2r vrel;
 
@@ -1920,6 +1918,214 @@ void Lhyphen::computeInteractionForces() {
 
     } // boucle sur les voisins dans ci
   } // boucle sur les cellules ci
+}
+
+// disk(ci,in) vs disk(cj,jn) — special case: jn has no next node
+// FIXME: normal convention here is n = (cj-ci)/|...| (opposite to other handlers); not used with closed cells
+void Lhyphen::handleDiskDiskContact(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn) {
+  vec2r branch = cells[cj].nodes[jn].pos - cells[ci].nodes[in].pos;
+  double sqrDist = norm2(branch);
+  double sumR = cells[ci].radius + cells[cj].radius;
+  vec2r vrel;
+
+  double cn = 0.0;
+  if (viscnrate > 0.0) {
+    double m_eff = 0.5 * (cells[ci].nodes[in].mass + cells[cj].nodes[jn].mass);
+    cn = viscnrate * 2.0 * sqrt(m_eff * kn);
+  }
+
+  if (sqrDist < sumR * sumR) {
+    Inter->contactState = TOUCHING;
+    double b_length = sqrt(sqrDist);
+    double dn = b_length - sumR;
+    Inter->n = branch / b_length;
+    Inter->fn = -kn * dn;
+    if (adaptativeStiffness == LH_ENABLED)
+      Inter->fn *= sumR / (sumR + dn);
+    vrel = cells[cj].nodes[jn].vel - cells[ci].nodes[in].vel;
+    Inter->fn -= cn * (vrel * Inter->n);
+    if (Inter->glueState == GLUE_NONE)
+      Inter->fn -= fadh;
+    Inter->T.set(-Inter->n.y, Inter->n.x);
+    Inter->ft -= kt * (vrel * Inter->T) * dt;
+    double threshold = mu * Inter->fn;
+    if (Inter->ft > threshold)
+      Inter->ft = threshold;
+    else if (Inter->ft < -threshold)
+      Inter->ft = -threshold;
+  } else {
+    Inter->contactState = NOT_TOUCHING;
+    if (Inter->glueState > 0)
+      Inter->n = branch / sqrt(sqrDist);
+    Inter->fn = 0.0;
+    Inter->ft = 0.0;
+  }
+
+  vec2r finc = Inter->fn * Inter->n;
+  cells[ci].nodes[in].force += finc;
+  cells[cj].nodes[jn].force -= finc;
+
+  if (Inter->glueState > 0) {
+    if (Inter->contactState == NOT_TOUCHING) {
+      vrel = cells[cj].nodes[jn].vel - cells[ci].nodes[in].vel;
+      Inter->T.set(-Inter->n.y, Inter->n.x);
+    }
+    Inter->fn_coh += -Inter->kn_coh * (vrel * Inter->n) * dt;
+    Inter->ft_coh += -Inter->kt_coh * (vrel * Inter->T) * dt;
+    if (Inter->fn_coh > 0.0)
+      Inter->fn_coh = 0.0;
+    glue_breakage(Inter, ci, cj, in, jn, null_size_t, 1.0, 0.0, -cn * (vrel * Inter->n));
+  }
+}
+
+// disk(ci,in) vs disk-end node jcontact (either jn or jnext of the bar)
+// wbeg, wend: bar weights for distributing cohesive forces to jn and jnext
+void Lhyphen::handleDiskEndContact(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jcontact, size_t jn,
+                                   size_t jnext, double wbeg, double wend) {
+  vec2r b = cells[ci].nodes[in].pos - cells[cj].nodes[jcontact].pos;
+  double sqrDist = norm2(b);
+  double sumR = cells[ci].radius + cells[cj].radius;
+  vec2r vrel;
+
+  double cn = 0.0;
+  if (viscnrate > 0.0) {
+    double m_eff = 0.5 * (cells[ci].nodes[in].mass + cells[cj].nodes[jcontact].mass);
+    cn = viscnrate * 2.0 * sqrt(m_eff * kn);
+  }
+
+  if (sqrDist < sumR * sumR) {
+    Inter->contactState = TOUCHING;
+    double b_length = sqrt(sqrDist);
+    double dn = b_length - sumR;
+    Inter->n = b / b_length;
+    Inter->fn = -kn * dn;
+    if (adaptativeStiffness == LH_ENABLED)
+      Inter->fn *= sumR / (sumR + dn);
+    vrel = cells[ci].nodes[in].vel - cells[cj].nodes[jcontact].vel;
+    Inter->fn -= cn * (vrel * Inter->n);
+    Inter->T.set(-Inter->n.y, Inter->n.x);
+    Inter->ft -= kt * (vrel * Inter->T) * dt;
+    double threshold = mu * Inter->fn;
+    if (Inter->ft > threshold)
+      Inter->ft = threshold;
+    else if (Inter->ft < -threshold)
+      Inter->ft = -threshold;
+    if (Inter->glueState == GLUE_NONE)
+      Inter->fn -= fadh;
+    vec2r finc = Inter->fn * Inter->n;
+    cells[ci].nodes[in].force += finc;
+    if (wbeg > 0.0) cells[cj].nodes[jn].force -= wbeg * finc;
+    if (wend > 0.0) cells[cj].nodes[jnext].force -= wend * finc;
+  } else {
+    Inter->contactState = NOT_TOUCHING;
+    Inter->fn = 0.0;
+    Inter->ft = 0.0;
+  }
+
+  if (Inter->glueState >= 1) {
+    if (Inter->contactState == NOT_TOUCHING) {
+      Inter->n = b / sqrt(sqrDist);
+      vrel = cells[ci].nodes[in].vel - cells[cj].nodes[jcontact].vel;
+      Inter->T.set(-Inter->n.y, Inter->n.x);
+    }
+    Inter->fn_coh += -Inter->kn_coh * (vrel * Inter->n) * dt;
+    Inter->ft_coh += -Inter->kt_coh * (vrel * Inter->T) * dt;
+    if (Inter->fn_coh > 0.0)
+      Inter->fn_coh = 0.0;
+    glue_breakage(Inter, ci, cj, in, jn, jnext, wbeg, wend, -cn * (vrel * Inter->n));
+  }
+}
+
+// disk(ci,in) vs bar segment (cj, jn->jnext), projection falls strictly between the two endpoints
+// u, u_length, proj, b are pre-computed by the caller (handleDiskBarInteraction)
+void Lhyphen::handleDiskOnBarContact(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext,
+                                     const vec2r &u, double u_length, double proj, const vec2r &b) {
+  vec2r urot(-u.y, u.x); // 90° rotation of bar direction: bar normal
+  double sumR = cells[ci].radius + cells[cj].radius;
+  double dist = b * urot; // signed distance from bar to disk center
+  double dn = fabs(dist) - sumR;
+  double wend = proj / u_length;
+  double wbeg = 1.0 - wend;
+  vec2r vrel;
+
+  double cn = 0.0;
+  if (viscnrate > 0.0) {
+    double m_bar = wbeg * cells[cj].nodes[jn].mass + wend * cells[cj].nodes[jnext].mass;
+    double m_eff = 0.5 * (cells[ci].nodes[in].mass + m_bar);
+    cn = viscnrate * 2.0 * sqrt(m_eff * kn);
+  }
+
+  if (dn < 0.0) {
+    Inter->contactState = TOUCHING;
+    Inter->n = (dist >= 0.0) ? urot : -urot; // oriented from bar toward disk
+    Inter->fn = -kn * dn;
+    if (adaptativeStiffness == LH_ENABLED)
+      Inter->fn *= sumR / (sumR + dn);
+    vrel = cells[ci].nodes[in].vel - (wbeg * cells[cj].nodes[jn].vel + wend * cells[cj].nodes[jnext].vel);
+    Inter->fn -= cn * (vrel * Inter->n);
+    Inter->T.set(-Inter->n.y, Inter->n.x);
+    Inter->ft -= kt * (vrel * Inter->T) * dt;
+    double threshold = mu * Inter->fn;
+    if (Inter->ft > threshold)
+      Inter->ft = threshold;
+    else if (Inter->ft < -threshold)
+      Inter->ft = -threshold;
+    if (Inter->glueState == GLUE_NONE)
+      Inter->fn -= fadh;
+    vec2r finc = Inter->fn * Inter->n + Inter->ft * Inter->T;
+    cells[ci].nodes[in].force += finc;
+    cells[cj].nodes[jn].force -= wbeg * finc;
+    cells[cj].nodes[jnext].force -= wend * finc;
+  } else {
+    Inter->contactState = NOT_TOUCHING;
+    Inter->fn = 0.0;
+    Inter->ft = 0.0;
+  }
+
+  if (Inter->glueState >= 1) {
+    if (Inter->contactState == NOT_TOUCHING) {
+      Inter->n = (dist >= 0.0) ? urot : -urot;
+      vrel = cells[ci].nodes[in].vel - (wbeg * cells[cj].nodes[jn].vel + wend * cells[cj].nodes[jnext].vel);
+      Inter->T.set(-Inter->n.y, Inter->n.x);
+    }
+    Inter->fn_coh += -Inter->kn_coh * (vrel * Inter->n) * dt;
+    Inter->ft_coh += -Inter->kt_coh * (vrel * Inter->T) * dt;
+    if (Inter->fn_coh > 0.0)
+      Inter->fn_coh = 0.0;
+    glue_breakage(Inter, ci, cj, in, jn, jnext, wbeg, wend, -cn * (vrel * Inter->n));
+  }
+}
+
+// disk(ci,in) vs bar(cj, jn->jnext): projects the disk onto the bar and dispatches
+// to the appropriate geometric sub-case (start cap, end cap, or bar body)
+void Lhyphen::handleDiskBarInteraction(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext) {
+  // START_TIMER("handleDiskBarInteraction");
+  vec2r b = cells[ci].nodes[in].pos - cells[cj].nodes[jn].pos;
+  vec2r u = cells[cj].nodes[jnext].pos - cells[cj].nodes[jn].pos;
+  double u_length = u.normalize();
+  double proj = b * u;
+
+  if (proj <= 0.0)
+    handleDiskEndContact(Inter, ci, cj, in, jn, jn, jnext, 1.0, 0.0);
+  else if (proj >= u_length)
+    handleDiskEndContact(Inter, ci, cj, in, jnext, jn, jnext, 0.0, 1.0);
+  else
+    handleDiskOnBarContact(Inter, ci, cj, in, jn, jnext, u, u_length, proj, b);
+}
+
+void Lhyphen::computeInteractionForces() {
+  START_TIMER("computeInteractionForces");
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    for (size_t ii = 0; ii < cells[ci].vec_neighbors.size(); ++ii) {
+      Neighbor *Inter = cells[ci].vec_neighbors[ii];
+      const size_t cj = Inter->jc, in = Inter->in, jn = Inter->jn;
+      const size_t jnext = cells[cj].nodes[jn].nextNode;
+      if (jnext == null_size_t)
+        handleDiskDiskContact(Inter, ci, cj, in, jn);
+      else
+        handleDiskBarInteraction(Inter, ci, cj, in, jn, jnext);
+    }
+  }
 }
 
 ///  Calculation of internal cell forces
@@ -2443,18 +2649,15 @@ void Lhyphen::loadCONF(const char *fname) {
         std::cout << "> gravity = " << gravity << std::endl;
       }
     } else if (token == "numericalDissipation") {
-      // file >> numericalDissipation;
       exprParser->getValue(file, numericalDissipation);
       if (firstLoad)
         std::cout << "> numericalDissipation = " << numericalDissipation << std::endl;
     } else if (token == "globalViscosity") {
-      // file >> globalViscosity;
       exprParser->getValue(file, globalViscosity);
       if (firstLoad) {
         std::cout << "> globalViscosity = " << globalViscosity << std::endl;
       }
     } else if (token == "linkCells") {
-      // file >> linkCells_lx >> linkCells_ly;
       exprParser->getValue(file, linkCells_lx);
       exprParser->getValue(file, linkCells_ly);
       if (firstLoad) {
@@ -2463,90 +2666,76 @@ void Lhyphen::loadCONF(const char *fname) {
       }
       updateNeighbors = [this]() { this->updateNeighbors_linkCells(); };
     } else if (token == "distVerlet") {
-      // file >> distVerlet;
       exprParser->getValue(file, distVerlet);
       if (firstLoad) {
         std::cout << "> distVerlet = " << distVerlet << std::endl;
       }
     } else if (token == "t") {
-      // file >> t;
       exprParser->getValue(file, t);
       if (firstLoad) {
         std::cout << "> t = " << t << std::endl;
       }
     } else if (token == "cyclicVelPeriod") {
-      // file >> cyclicVelPeriod;
       exprParser->getValue(file, cyclicVelPeriod);
       if (firstLoad) {
         std::cout << "> cyclicVelPeriod = " << cyclicVelPeriod << std::endl;
       }
     } else if (token == "dt") {
       double timestep;
-      // file >> timestep;
       exprParser->getValue(file, timestep);
       if (firstLoad) {
         std::cout << "> dt = " << timestep << std::endl;
       }
       setTimeStep(timestep);
     } else if (token == "nstep") {
-      // file >> nstep;
       exprParser->getValue(file, nstep);
       if (firstLoad) {
         std::cout << "> nstep = " << nstep << std::endl;
       }
     } else if (token == "nstepPeriodVerlet") {
-      // file >> nstepPeriodVerlet;
       exprParser->getValue(file, nstepPeriodVerlet);
       if (firstLoad) {
         std::cout << "> nstepPeriodVerlet = " << nstepPeriodVerlet << std::endl;
       }
     } else if (token == "nstepPeriodSVG") {
-      // file >> nstepPeriodSVG;
       exprParser->getValue(file, nstepPeriodSVG);
       if (firstLoad) {
         std::cout << "> nstepPeriodSVG = " << nstepPeriodSVG << std::endl;
       }
     } else if (token == "nstepPeriodRecord") {
-      // file >> nstepPeriodRecord;
       exprParser->getValue(file, nstepPeriodRecord);
       if (firstLoad) {
         std::cout << "> nstepPeriodRecord = " << nstepPeriodRecord << std::endl;
       }
     } else if (token == "nstepPeriodConf") {
-      // file >> nstepPeriodConf;
       exprParser->getValue(file, nstepPeriodConf);
       if (firstLoad) {
         std::cout << "> nstepPeriodConf = " << nstepPeriodConf << std::endl;
       }
     } else if (token == "isvg") {
-      // file >> isvg;
       exprParser->getValue(file, isvg);
       if (firstLoad) {
         std::cout << "> isvg = " << isvg << std::endl;
       }
     } else if (token == "iconf") {
-      // file >> iconf;
       exprParser->getValue(file, iconf);
       if (firstLoad) {
         std::cout << "> iconf = " << iconf << std::endl;
       }
     } else if (token == "kn") {
-      // file >> kn;
       exprParser->getValue(file, kn);
       if (firstLoad) {
         std::cout << "> kn = " << kn << std::endl;
       }
     } else if (token == "kt") {
-      // file >> kt;
       exprParser->getValue(file, kt);
       if (firstLoad) {
         std::cout << "> kt = " << kt << std::endl;
       }
-    } else if (token == "viscn") {
-      // file >> viscn;
-      exprParser->getValue(file, viscn);
+    } else if (token == "viscnrate") {
+      exprParser->getValue(file, viscnrate);
       if (firstLoad) {
-        std::cout << "> viscn = " << viscn << std::endl;
+        std::cout << "> viscnrate = " << viscnrate << std::endl;
       }
     } else if (token == "define") {
       std::string name;
@@ -2557,12 +2746,10 @@ void Lhyphen::loadCONF(const char *fname) {
       if (firstLoad)
         std::cout << "* Parameter defined as a constant: " << name << " " << value << std::endl;
     } else if (token == "adaptativeStiffness") {
-      // file >> adaptativeStiffness;
       exprParser->getValue(file, adaptativeStiffness);
       if (firstLoad)
         std::cout << "> adaptativeStiffness = " << adaptativeStiffness << std::endl;
     } else if (token == "compressFactor") {
-      // file >> compressFactor;
       exprParser->getValue(file, compressFactor);
       if (firstLoad)
         std::cout << "> compressFactor = " << compressFactor << std::endl;
@@ -2572,7 +2759,6 @@ void Lhyphen::loadCONF(const char *fname) {
       double fn_coh_max;
       double ft_coh_max;
       double yieldPower;
-      // file >> kn_coh >> kt_coh >> fn_coh_max >> ft_coh_max >> yieldPower;
       exprParser->getValue(file, kn_coh);
       exprParser->getValue(file, kt_coh);
       exprParser->getValue(file, fn_coh_max);
@@ -2591,7 +2777,6 @@ void Lhyphen::loadCONF(const char *fname) {
       double kn_coh;
       double kt_coh;
       double Gc;
-      // file >> kn_coh >> kt_coh >> Gc;
       exprParser->getValue(file, kn_coh);
       exprParser->getValue(file, kt_coh);
       exprParser->getValue(file, Gc);
@@ -2608,7 +2793,6 @@ void Lhyphen::loadCONF(const char *fname) {
       if (firstLoad)
         std::cout << "> mu = " << mu << std::endl;
     } else if (token == "fadh") {
-      // file >> fadh;
       exprParser->getValue(file, fadh);
       if (firstLoad)
         std::cout << "> fadh = " << fadh << std::endl;
@@ -2700,7 +2884,6 @@ void Lhyphen::loadCONF(const char *fname) {
       glue(dist, modelGc);
     } else if (token == "setCellWallDampingRates") {
       double alpha_s, alpha_b;
-      // file >> alpha_s >> alpha_b;
       exprParser->getValue(file, alpha_s);
       exprParser->getValue(file, alpha_b);
       if (firstLoad) {
@@ -2711,7 +2894,6 @@ void Lhyphen::loadCONF(const char *fname) {
       setCellWallDampingRates(alpha_s, alpha_b);
     } else if (token == "setCellWallDampings") {
       double nu_s, nu_b;
-      // file >> nu_s >> nu_b;
       exprParser->getValue(file, nu_s);
       exprParser->getValue(file, nu_b);
       if (firstLoad) {
@@ -2722,7 +2904,6 @@ void Lhyphen::loadCONF(const char *fname) {
       setCellWallDampings(nu_s, nu_b);
     } else if (token == "setCellMasses") {
       double mass;
-      // file >> mass;
       exprParser->getValue(file, mass);
       if (firstLoad) {
         std::cout << "* setCellMasses: " << std::endl;
@@ -2731,7 +2912,6 @@ void Lhyphen::loadCONF(const char *fname) {
       setCellMasses(mass);
     } else if (token == "setNodeMasses") {
       double mass;
-      // file >> mass;
       exprParser->getValue(file, mass);
       if (firstLoad) {
         std::cout << "* setNodeMasses: " << std::endl;
@@ -2740,7 +2920,6 @@ void Lhyphen::loadCONF(const char *fname) {
       setNodeMasses(mass);
     } else if (token == "setCellWallDensities") {
       double rho, thickness;
-      // file >> rho >> thickness;
       exprParser->getValue(file, rho);
       exprParser->getValue(file, thickness);
       if (firstLoad) {
@@ -2751,7 +2930,6 @@ void Lhyphen::loadCONF(const char *fname) {
       setCellWallDensities(rho, thickness);
     } else if (token == "setCellDensities") {
       double rho, thickness;
-      // file >> rho >> thickness;
       exprParser->getValue(file, rho);
       exprParser->getValue(file, thickness);
       if (firstLoad) {
@@ -2801,7 +2979,6 @@ void Lhyphen::loadCONF(const char *fname) {
       capturedNodes.push_back(CN);
     } else if (token == "followCell") {
       size_t cid;
-      // file >> cid;
       exprParser->getValue(file, cid);
       if (firstLoad) {
         std::cout << "* followCell cell.id = " << cid << std::endl;
@@ -2819,7 +2996,7 @@ void Lhyphen::loadCONF(const char *fname) {
     } else if (token == "readNodeFile") {
       std::string fileName;
       double barWidth, Kn, Kr, Mz_max, p_int;
-      file >> fileName; // >> barWidth >> Kn >> Kr >> Mz_max >> p_int;
+      file >> fileName;
       exprParser->getValue(file, barWidth);
       exprParser->getValue(file, Kn);
       exprParser->getValue(file, Kr);

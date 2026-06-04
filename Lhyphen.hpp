@@ -42,7 +42,7 @@
 #include "AABB_2D.hpp"
 #include "ColorTable.hpp"
 #include "linkCells2D.hpp"
-#include "profiler.hpp"
+#include "profiler_serial.hpp"
 #include "svgtools.hpp"
 #include "vec2.hpp"
 
@@ -134,8 +134,8 @@ public:
   std::vector<Cell> cells;       ///< cellules
   std::vector<Control> controls; ///< contrôles
 
-  std::vector<CapturedNodes> capturedNodes; ///< noeuds capturés
-  std::vector<ControlBoxArea> controlBoxAreas;
+  std::vector<CapturedNodes> capturedNodes; ///< noeuds capturés pour post-traitements
+  std::vector<ControlBoxArea> controlBoxAreas; ///< pour imposer une force ou une vitesse
 
   std::vector<size_t> followedCells; ///< cellules suivies
 
@@ -155,7 +155,7 @@ public:
   double dt2_2{0.0}; ///< pas de temps au carré divisé par deux
 
   double globalViscosity{0.0};      ///< viscosité globale
-  double numericalDissipation{0.0}; ///< coefficizent de dissipation numérique
+  double numericalDissipation{0.0}; ///< coefficizent de dissipation numérique (Cundall)
 
   vec2r gravity; ///< gravité
 
@@ -172,7 +172,7 @@ public:
   // parametres mécaniques d'interactions (contact frottant avec ou sans adhésion) entre les cellules
   double kn{0.0};             ///< raideur normale de contact
   double kt{0.0};             ///< raideur tangentielle de contact
-  double viscn{0.0};          ///< viscosity used for contact and glue points in normal direction
+  double viscnrate{0.0};      ///< viscosity used for contact and glue points in normal direction
   double mu{0.0};             ///< coefficient de frottement (entre les cellules)
   double fadh{0.0};           ///< force normale d'adhésion au contact
   int adaptativeStiffness{0}; ///< adaptativeStiffness
@@ -190,8 +190,7 @@ public:
   double SVG_colorTableMin{0.0};
   double SVG_colorTableMax{0.0};
   int SVG_cellForces{0}; // 0=rien, 1=rouge/bleu
-
-  ColorTable ctNeg, ctPos; // ??????? c'est pas le bon endroit pour mettre ça
+  ColorTable ctNeg, ctPos; // pour les couleurs dans les fichiers SVG
 
   int reorder{LH_ENABLED}; ///< flag pour ré-ordonner les noeud dans la fonction ReadNodeFile
 
@@ -244,8 +243,15 @@ public:
   void glue(double epsilonDist, int modelGc = 1);
   void associateGlue(int modelGc = 1, double activationLength = 0.0);
   void glue_breakage(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext, double wbeg,
-                     double wend);
-  void computeInteractionForces();
+                     double wend, double fn_visc = 0.0);
+  void handleDiskDiskContact(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn);
+  void handleDiskEndContact(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jcontact, size_t jn,
+                            size_t jnext, double wbeg, double wend);
+  void handleDiskOnBarContact(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext,
+                              const vec2r &u, double u_length, double proj, const vec2r &b);
+  void handleDiskBarInteraction(Neighbor *Inter, size_t ci, size_t cj, size_t in, size_t jn, size_t jnext);
+  void computeInteractionForces_originalVersion();
+  void computeInteractionForces();  
   void computeNodeForces();
   void nodeAccelerations();
   void SingleStep();
