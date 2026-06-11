@@ -32,6 +32,7 @@
 #include "null_size_t.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -277,17 +278,13 @@ void Lhyphen::diagnostics() {
   if (cells.size() > 1 && kn > 0.0) {
     oss << "\n  Algorithme de recherche : ";
     if (linkCells_lx > 0.0) {
-      double minSz = 2.0 * rMax + distVerlet;
-      oss << "link-cells\n";
-      // oss << "    lx = " << std::fixed << std::setprecision(6) << linkCells_lx
-      //     << "   ly = " << linkCells_ly << "\n";
-      oss << "    Condition de validité : lx (et ly) >= 2 * r_max + distVerlet\n";
-      oss << "      2 * r_max + distVerlet = 2 * " << std::fixed << std::setprecision(6) << rMax << " + " << distVerlet
-          << " = " << minSz << "\n";
-      bool lxOK = (linkCells_lx >= minSz);
-      bool lyOK = (linkCells_ly >= minSz);
-      oss << "      lx = " << linkCells_lx << (lxOK ? "  ✓ OK" : "  ✗ ATTENTION: paires possiblement manquées") << "\n";
-      oss << "      ly = " << linkCells_ly << (lyOK ? "  ✓ OK" : "  ✗ ATTENTION: paires possiblement manquées") << "\n";
+      oss << "link-cells (taille de cellule automatique)\n";
+      oss << "      cellSize = " << std::fixed << std::setprecision(6) << linkCells_lx
+          << "  (= plus grand diametre de cellule non-oversize)\n";
+      oss << "      cellules oversize (testees contre toutes les autres) : " << linkCells_nbOversized << " / "
+          << cells.size() << "\n";
+      oss << "      couverture : surensemble des paires de la recherche brute -> resultat identique garanti\n";
+      oss << "      (utiliser 'checkNeighbors' dans l'input pour verifier explicitement vs brute-force)\n";
     } else {
       oss << "recherche brute O(N²)\n";
       if (totalNodes > 500) {
@@ -982,149 +979,188 @@ void Lhyphen::updateNeighbors_brute_force() {
   copy_neighbors_set_to_vec();
 }
 
-// En cours de devel. !!!!!!!!!! (ne pas utiliser)
-// en plus il y a eu du changement, donc la procédure est devenue inadaptée
+// Recherche de voisins accélérée par link-cells (broad-phase PAR CELLULE), avec la grille de
+// toofus/proximitySearch/linkCells2D.hpp.
+//
+// Principe (équivalent strict à la brute-force) :
+//  - chaque cellule est résumée par un disque englobant (centre + rayon = demi-diagonale de son AABB
+//    élargie de radius + 0.5*distVerlet) ;
+//  - on classe en "oversize" les cellules dont le diamètre dépasse linkCells_oversizeFactor * médiane
+//    (typiquement les murs/lignes très allongés) ; elles ne vont pas dans la grille ;
+//  - cellSize = plus grand diamètre parmi les NON-oversize. Comme deux AABB qui se croisent ont leurs
+//    centres à distance <= R_i + R_j <= cellSize, le stencil ±1 voit forcément la paire : la grille
+//    visite donc un SURENSEMBLE des paires de la brute-force ;
+//  - chaque paire candidate passe ensuite par EXACTEMENT le même test (AABB + addNodeToBarNeighbor)
+//    que la brute-force ; les cellules oversize sont testées contre toutes les autres.
+// => la liste de voisins produite est identique à celle de updateNeighbors_brute_force().
+//
+// (Une variante broad-phase PAR NŒUD a été essayée pour réduire le test ni*nj de la narrow-phase, mais
+//  mesurée plus lente sur les empilements denses typiques — voir l'historique git.)
 void Lhyphen::updateNeighbors_linkCells() {
   START_TIMER("updateNeighbors_linkCells");
 
-  struct cellPair {
-    size_t i;
-    size_t j;
-    size_t jn;
+  const size_t nc = cells.size();
+  if (nc < 2) {
+    copy_neighbors_set_to_vec();
+    return;
+  }
+
+  std::vector<AABB_2D> aabbs(nc);
+  std::vector<double> diam(nc);
+  std::vector<char> isOversized(nc, 0);
+  std::vector<size_t> gridIds;
+  double cellSize = 0.0;
+
+  { // ===== SETUP : AABB, diamètres, classification oversize, taille de cellule auto =====
+    START_TIMER("lc_setup");
+    for (size_t ci = 0; ci < nc; ci++) {
+      aabbs[ci].set_single(cells[ci].nodes[0].pos);
+      for (size_t in = 1; in < cells[ci].nodes.size(); in++) {
+        aabbs[ci].add(cells[ci].nodes[in].pos);
+      }
+      aabbs[ci].enlarge(cells[ci].radius + 0.5 * distVerlet);
+      diam[ci] = (aabbs[ci].max - aabbs[ci].min).length();
+    }
+
+    std::vector<double> sortedDiam = diam;
+    std::sort(sortedDiam.begin(), sortedDiam.end());
+    double median = sortedDiam[nc / 2];
+    double oversizeThreshold = linkCells_oversizeFactor * median;
+
+    gridIds.reserve(nc);
+    for (size_t ci = 0; ci < nc; ci++) {
+      if (diam[ci] > oversizeThreshold) {
+        isOversized[ci] = 1;
+      } else {
+        gridIds.push_back(ci);
+        if (diam[ci] > cellSize) cellSize = diam[ci];
+      }
+    }
+    if (cellSize <= 0.0) cellSize = (median > 0.0) ? median : 1.0; // garde-fou (toutes oversize)
+    cellSize *= 1.001; // petite marge pour absorber les arrondis float de la grille
+
+    linkCells_lx = linkCells_ly = cellSize; // pour le diagnostic / signal "link-cells actif"
+    linkCells_nbOversized = nc - gridIds.size();
+  }
+
+  // Traitement d'une paire : EXACTEMENT la narrow-phase de la brute-force (test AABB + couples noeud-barre).
+  // insertOrRemove est idempotent, donc appeler processPair plusieurs fois sur une même paire est sans effet.
+  auto processPair = [&](size_t a, size_t b) {
+    size_t ci = std::min(a, b);
+    size_t cj = std::max(a, b);
+    if (!aabbs[ci].intersect(aabbs[cj])) return;
+    for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
+      for (size_t jn = 0; jn < cells[cj].nodes.size(); ++jn) {
+        addNodeToBarNeighbor(ci, cj, in, jn);
+      }
+    }
+    for (size_t jn = 0; jn < cells[cj].nodes.size(); ++jn) {
+      for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
+        addNodeToBarNeighbor(cj, ci, jn, in, cells[ci].radius);
+      }
+    }
   };
 
-  std::vector<AABB_2D> aabbs(cells.size());
-  for (size_t ci = 0; ci < cells.size(); ci++) {
-    aabbs[ci].set_single(cells[ci].nodes[0].pos);
-    for (size_t in = 1; in < cells[ci].nodes.size(); in++) {
-      aabbs[ci].add(cells[ci].nodes[in].pos);
-    }
-    aabbs[ci].enlarge(cells[ci].radius + 0.5 * distVerlet);
-  }
-
-  AABB_2D bigBox = aabbs[0];
-  for (size_t ci = 1; ci < cells.size(); ci++) {
-    bigBox.merge(aabbs[ci]);
-  }
-
-  vec2r subBoxSizes(linkCells_lx, linkCells_ly);
-  linkCells2D lc(bigBox, subBoxSizes);
-  for (size_t ci = 0; ci < cells.size(); ci++) {
-    vec2r pos = aabbs[ci].getCenter();
-    lc.add_body(ci, pos, aabbs[ci]);
-  }
-
-  std::vector<cellPair> cellPairs;
-
-  AABB_2D_Cell *cc, *cv;
-  for (size_t xc = 0; xc < lc.N.x; xc++) {
-    for (size_t yc = 0; yc < lc.N.y; yc++) {
-
-      cc = &(lc.cells[xc][yc]);
-
-      for (size_t v = 0; v < lc.cells[xc][yc].pcells.size(); v++) {
-        cv = cc->pcells[v];
-
-        for (size_t bi = 0; bi < cc->bodies.size(); bi++) {
-          size_t ci = cc->bodies[bi];
-          for (size_t bj = 0; bj < cv->bodies.size(); bj++) {
-            size_t cj = cv->bodies[bj];
-
-            if (cj <= ci) {
-              continue;
-            }
-
-            if (aabbs[ci].intersect(aabbs[cj])) {
-              cellPair P;
-
-              for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
-                if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
-                  P.i = ci;
-                  P.j = cj;
-                  P.jn = jn;
-                  cellPairs.push_back(P);
-                }
-              } // for jn
-            } // if intersect
-          } // for bj
-        } // for bi
-      } // for v
-    } // for yc
-  } // for xc
-
-  // Now we test if a too large bodies can collide another body in the
-  cc = &(lc.oversized_bodies);
-  for (size_t ix = 0; ix < lc.N.x; ++ix) {
-    for (size_t iy = 0; iy < lc.N.y; ++iy) {
-      cv = &(lc.cells[ix][iy]);
-
-      for (size_t icc = 0; icc < cc->bodies.size(); ++icc) {
-        size_t ci = cc->bodies[icc];
-        for (size_t jcv = 0; jcv < cv->bodies.size(); ++jcv) {
-          size_t cj = cv->bodies[jcv];
-
-          if (cj <= ci)
-            continue;
-
-          if (aabbs[ci].intersect(aabbs[cj])) {
-            cellPair P;
-
-            for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
-              if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
-                P.i = ci;
-                P.j = cj;
-                P.jn = jn;
-                cellPairs.push_back(P);
-              }
-            }
-          }
-        } // jcv
-      } // icc
-    } // iy
-  } // ix
-
-  // Now we test oversized vs oversized
-  cc = &(lc.oversized_bodies);
-  cv = cc;
-  for (size_t icc = 0; icc < cc->bodies.size(); ++icc) {
-    size_t ci = cc->bodies[icc];
-    for (size_t jcv = 0; jcv < cv->bodies.size(); ++jcv) {
-      size_t cj = cv->bodies[jcv];
-
-      if (cj <= ci)
-        continue;
-
-      if (aabbs[ci].intersect(aabbs[cj])) {
-        cellPair P;
-
-        for (size_t jn = 0; jn < cells[cj].nodes.size(); jn++) {
-          if (aabbs[ci].intersect(cells[cj].nodes[jn].pos)) {
-            P.i = ci;
-            P.j = cj;
-            P.jn = jn;
-            cellPairs.push_back(P);
-          }
-        }
+  std::vector<std::pair<size_t, size_t>> cand;
+  { // ===== BROAD-PHASE : grille link-cells + collecte des paires candidates =====
+    START_TIMER("lc_broad");
+    if (!gridIds.empty()) {
+      lc2d::Bounds bnd;
+      bnd.xmin = bnd.ymin = std::numeric_limits<float>::max();
+      bnd.xmax = bnd.ymax = -std::numeric_limits<float>::max();
+      std::vector<float> gx(gridIds.size()), gy(gridIds.size()), gr(gridIds.size());
+      for (size_t k = 0; k < gridIds.size(); k++) {
+        size_t ci = gridIds[k];
+        vec2r c = aabbs[ci].getCenter();
+        gx[k] = (float)c.x;
+        gy[k] = (float)c.y;
+        gr[k] = (float)(0.5 * diam[ci]);
+        bnd.xmin = std::min(bnd.xmin, (float)aabbs[ci].min.x);
+        bnd.ymin = std::min(bnd.ymin, (float)aabbs[ci].min.y);
+        bnd.xmax = std::max(bnd.xmax, (float)aabbs[ci].max.x);
+        bnd.ymax = std::max(bnd.ymax, (float)aabbs[ci].max.y);
       }
-    } // jcv
-  } // icc
+      auto getX = [&](uint32_t i) { return gx[i]; };
+      auto getY = [&](uint32_t i) { return gy[i]; };
+      auto getR = [&](uint32_t i) { return gr[i]; };
 
-  for (size_t ip = 0; ip < cellPairs.size(); ++ip) {
-
-    size_t ci = cellPairs[ip].i;
-    size_t cj = cellPairs[ip].j;
-    size_t jn = cellPairs[ip].jn;
-
-    for (size_t in = 0; in < cells[ci].nodes.size(); ++in) {
-      addNodeToBarNeighbor(ci, cj, in, jn /*, cells[ci].radius */);
+      lc2d::LinkCells2D lc(bnd, (float)cellSize, getX, getY, getR);
+      lc.build((uint32_t)gridIds.size());
+      lc.forEachCandidatePair([&](uint32_t a, uint32_t b) { cand.emplace_back(gridIds[a], gridIds[b]); });
     }
-
-    for (size_t in = 0; in < cells[ci].nodes.size(); in++) {
-      addNodeToBarNeighbor(cj, ci, jn, in, cells[cj].radius);
+    // cellules oversize : testées contre toutes les autres (broad-phase O(N) par cellule oversize)
+    for (size_t ci = 0; ci < nc; ci++) {
+      if (!isOversized[ci]) continue;
+      for (size_t cj = 0; cj < nc; cj++) {
+        if (cj == ci) continue;
+        if (isOversized[cj] && cj < ci) continue; // paire oversize-oversize traitée une seule fois
+        cand.emplace_back(ci, cj);
+      }
     }
+  }
+
+  { // ===== NARROW-PHASE : test précis de chaque paire candidate (identique à la brute-force) =====
+    START_TIMER("lc_narrow");
+    for (const auto &p : cand) processPair(p.first, p.second);
   }
 
   copy_neighbors_set_to_vec();
+}
+
+// Vérifie que updateNeighbors_linkCells() produit exactement la même liste de voisins que
+// updateNeighbors_brute_force() sur la configuration courante. Non destructif. Activé par le
+// mot-clé d'entrée "checkNeighbors".
+//
+// ATTENTION : Neighbor::brother (et vec_neighbors) sont des pointeurs bruts vers les noeuds du
+// std::set vivant. On NE peut PAS sauvegarder/restaurer par COPIE (cela réallouerait les noeuds et
+// rendrait tous les 'brother' pendants -> use-after-free dans glue_breakage). On utilise std::swap :
+// échanger deux std::set transfère les noeuds sans les réallouer, donc les adresses des Neighbor —
+// et les pointeurs brother — restent valides après restauration.
+void Lhyphen::validateNeighborSearchAgainstBruteForce() {
+  std::vector<std::set<Neighbor>> live(cells.size());
+  for (size_t ci = 0; ci < cells.size(); ci++) std::swap(live[ci], cells[ci].neighbors);
+
+  auto clearAll = [&]() {
+    for (auto &c : cells) {
+      c.neighbors.clear();
+      c.vec_neighbors.clear();
+    }
+  };
+  auto snapshot = [&]() {
+    std::vector<std::set<std::array<size_t, 3>>> snap(cells.size());
+    for (size_t ci = 0; ci < cells.size(); ci++) {
+      for (const auto &nb : cells[ci].neighbors) {
+        snap[ci].insert({nb.jc, nb.in, nb.jn});
+      }
+    }
+    return snap;
+  };
+
+  clearAll();
+  updateNeighbors_brute_force();
+  auto sBF = snapshot();
+
+  clearAll();
+  updateNeighbors_linkCells();
+  auto sLC = snapshot();
+  clearAll();
+
+  size_t missingInLC = 0, extraInLC = 0, nCellsDiff = 0;
+  for (size_t ci = 0; ci < cells.size(); ci++) {
+    if (sBF[ci] == sLC[ci]) continue;
+    nCellsDiff++;
+    for (const auto &k : sBF[ci]) if (!sLC[ci].count(k)) missingInLC++;
+    for (const auto &k : sLC[ci]) if (!sBF[ci].count(k)) extraInLC++;
+  }
+
+  // restauration des ensembles vivants (adresses des Neighbor préservées par le swap)
+  for (size_t ci = 0; ci < cells.size(); ci++) std::swap(cells[ci].neighbors, live[ci]);
+  copy_neighbors_set_to_vec();
+
+  std::cout << "[checkNeighbors] link-cells vs brute-force : "
+            << ((missingInLC + extraInLC == 0) ? "IDENTIQUE" : "DIFFERENT")
+            << "  (manquants=" << missingInLC << ", en trop=" << extraInLC << ", cellules differentes=" << nCellsDiff
+            << ", cellSize=" << linkCells_lx << ", oversize=" << linkCells_nbOversized << ")" << std::endl;
 }
 
 // ======================================================================================================
@@ -2417,6 +2453,9 @@ void Lhyphen::integrate() {
 
   // Première construction de la liste de voisins, puis diagnostic avant de démarrer
   updateNeighbors();
+  if (checkNeighbors) {
+    validateNeighborSearchAgainstBruteForce();
+  }
   diagnostics();
 
   // === START THE LOOP ===
@@ -2691,13 +2730,19 @@ void Lhyphen::loadCONF(const char *fname) {
         std::cout << "> globalViscosity = " << globalViscosity << std::endl;
       }
     } else if (token == "linkCells") {
-      exprParser->getValue(file, linkCells_lx);
-      exprParser->getValue(file, linkCells_ly);
+      // La taille de cellule est désormais automatique : on ignore d'éventuelles valeurs (lx ly)
+      // restées sur la ligne pour rester compatible avec les anciens fichiers d'entrée.
+      std::string rest;
+      std::getline(file, rest);
       if (firstLoad) {
-        std::cout << "* Update neighbors with linkCells: lx = " << linkCells_lx << ", ly = " << linkCells_ly
-                  << std::endl;
+        std::cout << "* Update neighbors with link-cells (cellSize auto)" << std::endl;
       }
       updateNeighbors = [this]() { this->updateNeighbors_linkCells(); };
+    } else if (token == "checkNeighbors") {
+      checkNeighbors = true;
+      if (firstLoad) {
+        std::cout << "* checkNeighbors enabled (link-cells validated against brute-force at start)" << std::endl;
+      }
     } else if (token == "distVerlet") {
       exprParser->getValue(file, distVerlet);
       if (firstLoad) {

@@ -22,6 +22,10 @@ define secur 1.5
 distVerlet $bwidth * secur$
 nstepPeriodVerlet 100
 
+#linkCells
+#checkNeighbors
+
+
 # outputs
 isvg              0
 nstepPeriodSVG    0

@@ -41,7 +41,7 @@
 
 #include "AABB_2D.hpp"
 #include "ColorTable.hpp"
-#include "linkCells2D.hpp"
+#include "proximitySearch/linkCells2D.hpp"
 #include "profiler_serial.hpp"
 #include "svgtools.hpp"
 #include "vec2.hpp"
@@ -167,8 +167,11 @@ public:
 
   double distVerlet{0.0}; ///< distance de Verlet entre noeuds et barres
 
-  double linkCells_lx{0.0};
-  double linkCells_ly{0.0};
+  double linkCells_lx{0.0}; ///< taille de cellule de la grille link-cells (auto, = plus grand diamètre non-oversize)
+  double linkCells_ly{0.0}; ///< idem (= linkCells_lx ; grille à cellules carrées)
+  double linkCells_oversizeFactor{4.0}; ///< une cellule est "oversize" si diamètre > facteur * médiane des diamètres
+  size_t linkCells_nbOversized{0};      ///< nombre de cellules oversize au dernier rebuild (pour le diagnostic)
+  bool checkNeighbors{false};           ///< si vrai, valide link-cells vs brute-force au démarrage
 
   int cellContent;
   double compressFactor{0.0};
@@ -244,6 +247,7 @@ public:
   void updateNeighbors_brute_force();
   void updateNeighbors_linkCells();
   void copy_neighbors_set_to_vec();
+  void validateNeighborSearchAgainstBruteForce(); ///< compare link-cells et brute-force (debug, non destructif)
 
   int getPosition(size_t ci, size_t cj, size_t in, size_t jn, vec2r &pos);
   void glue(double epsilonDist, int modelGc = 1);
