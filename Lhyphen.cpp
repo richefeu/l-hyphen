@@ -1415,6 +1415,7 @@ void Lhyphen::associateGlue(int modelGc, double activationLength) {
 // barre / cellule ouverte), on duplique le côté A : le trait dégénère en un point (invisible).
 void Lhyphen::recordBreakEvent(Neighbor *Inter, double releasedNRJ) {
   if (!breakHistory.is_open()) {
+    std::cout << "oula oula !!!\n";
     return;
   }
   size_t a_ci = Inter->ic, a_cj = Inter->jc, a_in = Inter->in, a_jn = Inter->jn;
@@ -1424,9 +1425,11 @@ void Lhyphen::recordBreakEvent(Neighbor *Inter, double releasedNRJ) {
     b_cj = Inter->brother->jc;
     b_in = Inter->brother->in;
     b_jn = Inter->brother->jn;
+  } else {
+    std::cout << "oula !!!!!\n";
   }
   breakHistory << t << ' ' << a_ci << ' ' << a_cj << ' ' << a_in << ' ' << a_jn << ' ' << b_ci << ' ' << b_cj << ' '
-               << b_in << ' ' << b_jn << ' ' << releasedNRJ << '\n';
+               << b_in << ' ' << b_jn << ' ' << releasedNRJ << std::endl;
 }
 
 // Il faudra plus tard utiliser cette fonction pour éviter les duplications dans la fonction qui calcul les forces

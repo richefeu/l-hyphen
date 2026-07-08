@@ -811,9 +811,11 @@ void drawCrackPath() {
     }
     if (!crackContactPos(ev.a_ci, ev.a_cj, ev.a_in, ev.a_jn, pos1)) {
       continue;
+      //pos1.reset();
     }
     if (!crackContactPos(ev.b_ci, ev.b_cj, ev.b_in, ev.b_jn, pos2)) {
       continue;
+      //pos2.reset();
     }
     glVertex2d(pos1.x, pos1.y);
     glVertex2d(pos2.x, pos2.y);
