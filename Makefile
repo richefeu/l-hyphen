@@ -63,7 +63,7 @@ OBJECTS = $(SOURCES:%.cpp=%.o)
 
 .PHONY: all clean clone_toofus
 
-all: run see2
+all: run see2 crackwatch
 
 clean:
 	@echo "\033[0;32m-> Remove object files\033[0m"
@@ -96,10 +96,10 @@ run: run.cpp liblhyphen.a
 	$(CXX) $(CXXFLAGS) -c $< -o run.o
 	$(CXX) $(LDFLAGS) -o $@ run.o liblhyphen.a
 
-cracktsemo: cracktsemo.cpp liblhyphen.a
+crackwatch: crackwatch.cpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
-	$(CXX) $(CXXFLAGS) -c $< -o cracktsemo.o
-	$(CXX) $(LDFLAGS) -o $@ cracktsemo.o liblhyphen.a
+	$(CXX) $(CXXFLAGS) -c $< -o crackwatch.o
+	$(CXX) $(LDFLAGS) -o $@ crackwatch.o liblhyphen.a
 
 see: see.cpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"

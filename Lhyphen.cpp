@@ -120,17 +120,17 @@ void Lhyphen::diagnostics() {
 
   // ---- Rayons des cellules ----
   // ***** VR: c'est pas bon ce truc !!!!!!!!! <<<<<<<<<<<<<
-  double rMin = INF, rMax = 0.0, rMean = 0.0;
-  size_t nRad = 0;
+  double rMin = INF, rMax = 0.0 /*, rMean = 0.0*/;
+  //size_t nRad = 0;
   for (auto &c : cells)
     if (c.radius > 0.0) {
       rMin = std::min(rMin, c.radius);
       rMax = std::max(rMax, c.radius);
-      rMean += c.radius;
-      ++nRad;
+      //rMean += c.radius;
+      //++nRad;
     }
-  if (nRad > 0)
-    rMean /= (double)nRad;
+  //if (nRad > 0)
+    //rMean /= (double)nRad;
 
   // ---- dt critique contact : dt_crit = sqrt(2 * m_min / kn_contact) ----
   // Cas le plus défavorable : deux noeuds de masse minimale en contact.
