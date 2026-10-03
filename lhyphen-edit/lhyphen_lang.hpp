@@ -179,8 +179,9 @@ class Language {
 
 // Looks for lhyphen.lang in, by order of decreasing priority: the LHYPHEN_LANG
 // environment variable, the current directory, the directory holding the running
-// executable and its two parents (and their "lhedit" subdirectory, so that a run
-// from the root of l-hyphen finds lhedit/lhyphen.lang), and finally ~/.lhyphen.
+// executable and its two parents (and their "lhyphen-edit" subdirectory, so that the
+// lhedit copied at the root of l-hyphen finds lhyphen-edit/lhyphen.lang), and finally
+// ~/.lhyphen.
 // Returns an empty string when nothing is found.
 inline std::string findFile(const char* argv0 = nullptr) {
   auto exists = [](const std::string& p) {
@@ -211,7 +212,7 @@ inline std::string findFile(const char* argv0 = nullptr) {
   for (const std::string& directory : directories) {
     std::string candidate = directory + "/lhyphen.lang";
     if (exists(candidate)) return candidate;
-    candidate = directory + "/lhedit/lhyphen.lang";
+    candidate = directory + "/lhyphen-edit/lhyphen.lang";
     if (exists(candidate)) return candidate;
   }
   return std::string();

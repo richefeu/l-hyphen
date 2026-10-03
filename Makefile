@@ -61,15 +61,16 @@ endif
 SOURCES = Neighbor.cpp Control.cpp Event.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
 OBJECTS = $(SOURCES:%.cpp=%.o)
 
-.PHONY: all clean clone_toofus
+.PHONY: all clean clone_toofus lhedit
 
-all: run see2 crackwatch
+all: run see2 crackwatch lhedit
 
 clean:
 	@echo "\033[0;32m-> Remove object files\033[0m"
 	rm -f *.o
 	@echo "\033[0;32m-> Remove compiled applications\033[0m"
-	rm -f run see see2
+	rm -f run see see2 crackwatch
+	$(MAKE) -C lhyphen-edit clean
 	@echo "\033[0;32m-> Remove liblhyphen.a\033[0m"
 	rm -f liblhyphen.a
 
@@ -112,3 +113,7 @@ see2: see2.cpp liblhyphen.a
 	$(CXX) $(LDFLAGS) -o $@ see2.o liblhyphen.a $(GLFWLINK) -framework OpenGL
 	
 
+# lhedit (éditeur terminal des fichiers d'entrée) : compilé dans lhyphen-edit/ puis copié ici
+lhedit:
+	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
+	$(MAKE) -C lhyphen-edit

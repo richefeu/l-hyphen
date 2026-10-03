@@ -12,9 +12,9 @@ Compilation
 -----------
 
 ~~~bash
-cd lhedit
-make
-./lhedit ../examples/Poutre/input.txt
+cd lhyphen-edit
+make                                   # compile lhedit et le copie à la racine (à côté de run et see2)
+../lhedit ../examples/Poutre/input.txt
 ~~~
 
 Touches
@@ -69,8 +69,9 @@ Le fichier est cherché, dans l'ordre :
 4. `~/.lhyphen`
 
 Chacun de ces répertoires est essayé directement et via un sous-répertoire
-`lhedit/`, si bien qu'un `lhedit/lhedit` lancé depuis la racine de l-hyphen (ou
-depuis un répertoire d'exemple, `../../lhedit/lhedit`) trouve son fichier. Pour
+`lhyphen-edit/`, si bien que le `lhedit` copié à la racine de l-hyphen, lancé
+depuis la racine (`./lhedit`) ou depuis un répertoire d'exemple (`../../lhedit`),
+trouve son fichier. Pour
 installer l'éditeur ailleurs, copier `lhyphen.lang` à côté du binaire ou dans
 `~/.lhyphen/`.
 

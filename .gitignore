@@ -47,7 +47,8 @@ cheatsheets/lhyphen_cheatsheet.pdf
 Icon*
 *.zip
 # Éditeur terminal
-lhedit/lhedit
+lhyphen-edit/lhedit
+/lhedit
 
 # nodeGen
 nodeGen/nodegen

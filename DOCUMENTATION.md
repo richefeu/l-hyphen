@@ -34,11 +34,11 @@ Les fichiers de sortie (`conf*`, `sample*.svg`) sont écrits dans le dossier cou
 ### `lhedit` — éditer un fichier d'entrée
 
 ```bash
-cd lhedit && make
-lhedit/lhedit <fichier_entrée>
+make                  # ou : cd lhyphen-edit && make ; lhedit est copié à la racine, à côté de run et see2
+./lhedit <fichier_entrée>
 ```
 
-Éditeur en terminal (utilisable par ssh) avec coloration syntaxique, documentation en ligne des mots-clés (`^D`) et snippets (`^P`). Les mots-clés, leur documentation et les snippets sont lus dans `lhedit/lhyphen.lang` : tout nouveau mot-clé de `loadCONF` doit aussi y être ajouté. Voir `lhedit/README.md`.
+Éditeur en terminal (utilisable par ssh) avec coloration syntaxique, documentation en ligne des mots-clés (`^D`) et snippets (`^P`). Les mots-clés, leur documentation et les snippets sont lus dans `lhyphen-edit/lhyphen.lang` : tout nouveau mot-clé de `loadCONF` doit aussi y être ajouté. Voir `lhyphen-edit/README.md`.
 
 ### `see2` — visualiser une configuration
 
