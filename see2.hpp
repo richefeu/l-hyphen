@@ -102,10 +102,14 @@ int show_pressure = 0;
 int show_contours = 1;
 int show_nodes = 0;
 int show_control_boxes = 0;
-int show_background = 1;
+int show_background = 0;
 int show_crack_path = 0; // trace les liens rompus jusqu'au temps du conf affiché
 int show_velocities = 0; // flèches de vitesse aux noeuds ('e'), échelle vScale ('y'/'Y')
-int show_hud = 1;        // panneau d'état permanent des toggles ('i')
+int show_strain = 0;      // couleur des cellules fermées selon la déformation ('k') : 0 = non, 1 = eps_v, 2 = eps_q
+int show_strain_dirs = 0; // directions principales de déformation ('j')
+int show_stress = 0;      // couleur des cellules fermées selon la contrainte ('l') : voir stressModeNames
+int show_stress_dirs = 0; // directions principales de contrainte ('m')
+int show_hud = 0;        // panneau d'état permanent des toggles ('i')
 int show_help = 0;       // overlay d'aide des raccourcis clavier ('h')
 
 // arrow/force sizes
@@ -114,6 +118,46 @@ double arrowAngle = 0.35; // demi-angle des barbules [rad]
 double vScale = 1.0;      // longueur de la plus grande flèche de vitesse, en rayons de cellule moyens ('y'/'Y')
 double fnWidthFactor = 1.0; // multiplicateur d'épaisseur des chaînes de force ('s'/'S')
 double forceFilter = 1.0;   // seuil du filtre = forceFilter * |fn|_moyen : ne montre que les chaînes porteuses ('t'/'T')
+double eScale = 0.8;         // demi-longueur du plus grand trait de direction principale, en rayons de cellule ('u'/'U')
+double strainColorMax = 0.0; // borne de l'échelle de couleur des déformations (0 = automatique, pour chaque conf)
+double stressColorMax = 0.0; // borne de l'échelle de couleur des contraintes (0 = automatique, pour chaque conf)
+
+/// Tenseur symétrique 2D d'une cellule fermée, par ses valeurs et directions principales
+/// (v1 >= v2, u1 et u2 unitaires, dans la conf affichée). Convention tension positive.
+/// - déformation : v_i = ln(lambda_i) (Hencky), à partir du gradient de transformation moyen F de la
+///   cellule entre la conf de référence (RefConf) et la conf affichée ;
+///   eps_v = v1 + v2 = ln(J) et eps_q = v1 - v2.
+/// - contrainte : sigma = (1/A) sum (x_c - centre) (x) f_c, sur les forces de contact et de cohésion
+///   exercées par les autres cellules (Love-Weber) ; sig_m = (v1 + v2)/2 et sig_q = v1 - v2.
+struct CellTensor {
+  bool ok{false}; // false si cellule ouverte, ou tenseur non calculable
+  vec2r center;   // centre (moyenne des noeuds) dans la conf affichée
+  double R{0.0};  // rayon moyen (distance moyenne des noeuds au centre)
+  double v1{0.0}, v2{0.0};
+  vec2r u1, u2;
+  double xx{0.0}, yy{0.0}, xy{0.0}; // composantes dans le repère (x, y)
+};
+std::vector<CellTensor> cellStrains;
+std::vector<CellTensor> cellStresses;
+Lhyphen RefConf;           // configuration de référence pour les déformations
+int refConfNum = 0;        // son numéro ('o' : conf affichée, Shift+o : conf0)
+int loadedRefConfNum = -1; // numéro de la conf de référence effectivement chargée (-1 : aucune)
+ColorTable TensorSphTable; // divergente bleu-blanc-rouge pour les grandeurs signées (eps_v, sig_m, p, sig_xx...)
+ColorTable TensorDevTable; // blanc-jaune-rouge pour les grandeurs positives (eps_q, sig_q)
+
+// Modes de couleur ('k' pour la déformation, 'l' pour la contrainte), 0 = rien.
+// p est la pression interne p_int de la cellule (positive quand elle tend à la faire gonfler).
+const char *strainModeNames[] = {"off", "eps_v", "eps_q"};
+const char *stressModeNames[] = {"off", "sig_m", "sig_q", "p", "p+sig_m", "sig_xx", "sig_yy", "sig_xy"};
+const int nbStrainModes = 3;
+const int nbStressModes = 8;
+
+/// Un scalaire par cellule à afficher en couleur
+struct CellScalarField {
+  std::vector<double> value;
+  std::vector<char> ok;  // la cellule est-elle coloriée ?
+  bool divergent{true};  // échelle symétrique bleu-blanc-rouge (sinon 0..max, blanc-jaune-rouge)
+};
 
 // window sizes
 int width = 800;
@@ -146,6 +190,15 @@ void drawForces();
 void drawVelocities();
 void drawPressure();
 void drawControlBoxes();
+bool loadRefConf();
+void computeStrains();
+void computeStresses();
+CellScalarField strainField(int mode);
+CellScalarField stressField(int mode);
+double fieldColorBound(const CellScalarField &field, double fixedMax);
+void drawCellScalars(const CellScalarField &field, double vmax);
+void drawTensorDirections(const std::vector<CellTensor> &tensors);
+void drawTensorColorBar(const char *name, double vmin, double vmax, bool autoBound, const char *extra);
 void drawHUD();
 void drawHelpOverlay();
 

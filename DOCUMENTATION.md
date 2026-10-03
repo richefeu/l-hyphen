@@ -307,6 +307,12 @@ Pour ajouter un nouveau type d'événement : dériver de la classe `Event` (`Eve
 | `n` | Afficher/masquer les contours des cellules |
 | `v` | Afficher/masquer les nœuds (points) |
 | `p` | Afficher/masquer la pression interne |
+| `k` | Couleur des cellules fermées selon la déformation : aucune / `eps_v` / `eps_q` (voir ci-dessous) |
+| `j` | Afficher/masquer les directions principales de déformation (trait épais : majeure, fin : mineure ; rouge : tension, bleu : compression) |
+| `l` | Couleur des cellules fermées selon la contrainte : aucune / `sig_m` / `sig_q` / `p` / `p+sig_m` / `sig_xx` / `sig_yy` / `sig_xy` (voir ci-dessous) |
+| `m` | Afficher/masquer les directions principales de contrainte (mêmes conventions que `j`) |
+| `u` / `U` | Raccourcir / allonger les traits des directions principales (déformation et contrainte) |
+| `o` | Prendre la configuration affichée comme référence des déformations (`Maj+o` : revenir à `conf0`) |
 | `q` | Quitter |
 | `s` / `S` | Réduire / augmenter l'échelle des vecteurs force |
 | `z` / `Z` | Zoom avant / arrière |
@@ -314,6 +320,46 @@ Pour ajouter un nouveau type d'événement : dériver de la classe `Event` (`Eve
 | `←` | Charger la configuration précédente (`confN-1`) |
 | `=` | Recadrer la vue sur l'ensemble de la scène |
 | `↑` / `↓` | Augmenter / réduire le nombre de lignes de texte |
+
+**Déformation des cellules (`k`, `j`) :** pour chaque cellule fermée, `see2` calcule le gradient de
+transformation moyen `F` qui envoie au mieux (moindres carrés) les nœuds de la configuration de référence
+(`conf0` par défaut) sur ceux de la configuration affichée, positions prises par rapport au centre de la
+cellule. Les déformations principales sont celles de Hencky, `e_i = ln(λ_i)`, où les `λ_i` sont les
+élongations principales de `F`. Elles ne sont pas affectées par la rotation des cellules et sont positives
+en extension, avec `e1 ≥ e2`. On en déduit `eps_v = e1 + e2 = ln(det F)`, la variation de surface, et
+`eps_q = e1 - e2`, la distorsion.
+- `eps_v` est affiché avec une échelle bleu-blanc-rouge symétrique (bleu : contraction) et `eps_q` avec
+  une échelle blanc-jaune-rouge. Une barre de couleur s'affiche en bas à droite. Par défaut, la borne est
+  le maximum sur les cellules de la conf affichée ; dans `see2-options.toml`, `[strain] colorMax` permet
+  de la fixer (utile pour comparer plusieurs confs ou faire un film).
+- Directions principales : chaque cellule porte un trait par direction, centré sur la cellule, de
+  longueur proportionnelle à `|e_i|`. Le trait le plus long mesure `eScale` rayons de sa cellule (`u`/`U`).
+  Le trait épais correspond à la direction majeure `e1`, le trait fin à la direction mineure `e2`. La
+  couleur donne le signe, avec la même convention que `eps_v` : rouge pour une tension (`e_i > 0`), bleu
+  pour une compression (`e_i < 0`).
+- `[strain] refConf` et `eScale` sont aussi enregistrés dans `see2-options.toml`.
+
+**Contrainte des cellules (`l`, `m`) :** pour chaque cellule fermée, `see2` calcule la contrainte moyenne
+de Love-Weber à partir des seules forces d'interaction exercées par les autres cellules (contact et
+cohésion ; ni les efforts internes des barres, ni la pression interne) :
+`σ = (1/A) sym( Σ (x_c − centre) ⊗ f_c )`, où `x_c` est le point de contact, `f_c` la force reçue
+(`(fn + fn_coh) n + (ft + ft_coh) t`) et `A` la surface actuelle de la cellule. Avec la convention
+tension positive, on note `sig_m = (σ1 + σ2)/2` la contrainte moyenne et `sig_q = σ1 − σ2` le déviateur.
+La touche `l` fait défiler `sig_m`, `sig_q`, puis `p` (pression interne `p_int`, positive quand elle
+tend à faire gonfler la cellule), `p+sig_m`, et les composantes `sig_xx`, `sig_yy`, `sig_xy`. Les
+grandeurs signées utilisent une échelle bleu-blanc-rouge symétrique (bleu : négatif, c'est-à-dire
+compression pour les contraintes), et `sig_q` une échelle blanc-jaune-rouge. `p` est affiché pour toutes
+les cellules fermées, y compris celles des mors. Pour les traits, l'épais correspond à la direction
+majeure et le fin à la mineure, en rouge pour une tension et en bleu pour une compression. La borne de
+couleur se fixe avec `[stress] colorMax` dans `see2-options.toml`. En 2D, les contraintes sont des forces
+par unité de longueur (N/m).
+- Les cellules qui ont des nœuds pilotés (mors) ne sont pas affichées : la réaction imposée par le
+  contrôle n'est pas une force d'interaction, donc leur tenseur serait incomplet.
+- Les forces visqueuses ne sont pas sauvegardées dans les `conf*` et ne sont donc pas prises en compte.
+- Vérification sur `examples/stressDrop` : avant le pic, la moyenne des `σ_yy` (pondérée par les
+  surfaces, hors mors) est égale à la force du mors divisée par la largeur de l'éprouvette, à 1 % près.
+- Un seul remplissage s'affiche à la fois (`k` ou `l`), et un seul jeu de traits (`j` ou `m`). On peut
+  combiner, par exemple, la couleur de `eps_v` et les traits de contrainte.
 
 **Navigation à la souris :**
 - Clic gauche + glisser → rotation/déplacement de la vue

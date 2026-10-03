@@ -42,6 +42,12 @@ void printHelp() {
   std::cout << "r           show/hide the crack path (broken links up to current time)" << std::endl;
   std::cout << "d           show/hide the background gradient" << std::endl;
   std::cout << "i           show/hide the state panel (HUD)" << std::endl;
+  std::cout << "k           cell strain colors: off / eps_v / eps_q (closed cells)" << std::endl;
+  std::cout << "j           show/hide principal strain directions (thick major, thin minor; red tension, blue compression)" << std::endl;
+  std::cout << "l           cell stress colors: off / sig_m / sig_q / p / p+sig_m / sig_xx / sig_yy / sig_xy" << std::endl;
+  std::cout << "m           show/hide principal stress directions (thick major, thin minor; red tension, blue compression)" << std::endl;
+  std::cout << "u/U         principal strain/stress lines shorter/longer (eScale)" << std::endl;
+  std::cout << "o           use the displayed conf as strain reference (Shift+o: conf0)" << std::endl;
   std::cout << "h           show/hide the on-screen help (and print it here)" << std::endl;
   std::cout << "n           show/hide cell contours" << std::endl;
   std::cout << "v           show/hide nodes (points)" << std::endl;
@@ -101,6 +107,52 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
   case GLFW_KEY_H: {
     show_help = 1 - show_help;
     printHelp();
+  } break;
+
+  case GLFW_KEY_K: {
+    show_strain = (show_strain + 1) % nbStrainModes;
+    if (show_strain) {
+      show_stress = 0; // un seul remplissage à la fois
+    }
+    textZone.addLine("show_strain = %s (ref. conf%d)", strainModeNames[show_strain], refConfNum);
+  } break;
+
+  case GLFW_KEY_J: {
+    show_strain_dirs = 1 - show_strain_dirs;
+    if (show_strain_dirs) {
+      show_stress_dirs = 0; // un seul jeu de traits à la fois
+    }
+    textZone.addLine("show_strain_dirs = %d (ref. conf%d)", show_strain_dirs, refConfNum);
+  } break;
+
+  case GLFW_KEY_L: {
+    show_stress = (show_stress + 1) % nbStressModes;
+    if (show_stress) {
+      show_strain = 0;
+    }
+    textZone.addLine("show_stress = %s", stressModeNames[show_stress]);
+  } break;
+
+  case GLFW_KEY_SEMICOLON: { // m
+    show_stress_dirs = 1 - show_stress_dirs;
+    if (show_stress_dirs) {
+      show_strain_dirs = 0;
+    }
+    textZone.addLine("show_stress_dirs = %d", show_stress_dirs);
+  } break;
+
+  case GLFW_KEY_U: {
+    if (mods == GLFW_MOD_SHIFT) {
+      eScale *= 1.25;
+    } else {
+      eScale *= 0.8;
+    }
+    textZone.addLine("eScale = %g", eScale);
+  } break;
+
+  case GLFW_KEY_O: {
+    refConfNum = (mods == GLFW_MOD_SHIFT) ? 0 : confNum;
+    textZone.addLine("strain reference = conf%d", refConfNum);
   } break;
 
   case GLFW_KEY_I: {
@@ -330,11 +382,37 @@ void display(GLFWwindow *window) {
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
 
+  if (show_strain || show_strain_dirs) {
+    computeStrains();
+  }
+  if ((show_stress && show_stress != 3) || show_stress_dirs) {
+    computeStresses();
+  }
+  // champ affiché en couleur (déformation ou contrainte, un seul à la fois) et borne de son échelle
+  CellScalarField colorField;
+  double colorBound = 0.0;
+  if (show_strain) {
+    colorField = strainField(show_strain);
+    colorBound = fieldColorBound(colorField, strainColorMax);
+  } else if (show_stress) {
+    colorField = stressField(show_stress);
+    colorBound = fieldColorBound(colorField, stressColorMax);
+  }
+
   if (show_pressure) {
     drawPressure();
   }
+  if (show_strain || show_stress) {
+    drawCellScalars(colorField, colorBound);
+  }
   if (show_cells) {
     drawCells();
+  }
+  if (show_strain_dirs) {
+    drawTensorDirections(cellStrains);
+  }
+  if (show_stress_dirs) {
+    drawTensorDirections(cellStresses);
   }
   if (show_glue_points) {
     drawGluePoints();
@@ -354,6 +432,16 @@ void display(GLFWwindow *window) {
   }
 
   textZone.draw();
+
+  if (show_strain) {
+    char extra[64];
+    snprintf(extra, 64, "  ref conf%d", refConfNum);
+    drawTensorColorBar(strainModeNames[show_strain], colorField.divergent ? -colorBound : 0.0, colorBound,
+                       strainColorMax <= 0.0, extra);
+  } else if (show_stress) {
+    drawTensorColorBar(stressModeNames[show_stress], colorField.divergent ? -colorBound : 0.0, colorBound,
+                       stressColorMax <= 0.0, "");
+  }
 
   if (show_hud) {
     drawHUD();
@@ -1026,6 +1114,417 @@ void drawVelocities() {
   glLineWidth(1.0f);
 }
 
+// =====================================================================
+// Tenseurs de déformation et de contrainte des cellules fermées
+// =====================================================================
+
+// Valeurs et directions principales du tenseur symétrique [[a, b], [b, d]] (l1 >= l2)
+static void symEigen(double a, double b, double d, double &l1, double &l2, vec2r &u1, vec2r &u2) {
+  double m = 0.5 * (a + d);
+  double r = sqrt(0.25 * (a - d) * (a - d) + b * b);
+  l1 = m + r;
+  l2 = m - r;
+  double theta = 0.5 * atan2(2.0 * b, a - d);
+  u1.set(cos(theta), sin(theta));
+  u2.set(-sin(theta), cos(theta));
+}
+
+// Centre (moyenne des noeuds) et rayon moyen (distance moyenne des noeuds au centre) d'une cellule
+static void cellCenterAndRadius(const Cell &C, vec2r &center, double &R) {
+  center.reset();
+  for (size_t n = 0; n < C.nodes.size(); n++) {
+    center += C.nodes[n].pos;
+  }
+  center /= (double)C.nodes.size();
+  R = 0.0;
+  for (size_t n = 0; n < C.nodes.size(); n++) {
+    R += (C.nodes[n].pos - center).length();
+  }
+  R /= (double)C.nodes.size();
+}
+
+// Charge la conf de référence refConfNum dans RefConf (si ce n'est pas déjà fait)
+bool loadRefConf() {
+  if (loadedRefConfNum == refConfNum) {
+    return true;
+  }
+  char file_name[256];
+  snprintf(file_name, 256, "conf%d", refConfNum);
+  if (!fileTool::fileExists(file_name)) {
+    std::cout << "Reference " << file_name << " does not exist" << std::endl;
+    textZone.addLine("reference %s does not exist", file_name);
+    loadedRefConfNum = -1;
+    return false;
+  }
+  std::cout << "Read reference " << file_name << std::endl;
+  RefConf.loadCONF(file_name);
+  loadedRefConfNum = refConfNum;
+  return true;
+}
+
+// Pour chaque cellule fermée, gradient de transformation moyen F (moindres carrés) entre la conf de
+// référence et la conf affichée : x_k = F X_k, positions des noeuds relatives au centre de la cellule,
+// F = (sum x_k X_k^T) (sum X_k X_k^T)^-1. Les déformations principales sont celles de Hencky,
+// e_i = 0.5 ln(b_i), où les b_i sont les valeurs propres de B = F F^T ; elles ne dépendent pas de la
+// rotation de la cellule. Les vecteurs propres de B donnent les directions dans la conf affichée.
+void computeStrains() {
+  cellStrains.assign(Conf.cells.size(), CellTensor());
+  if (!loadRefConf()) {
+    return;
+  }
+
+  for (size_t c = 0; c < Conf.cells.size(); c++) {
+    CellTensor &S = cellStrains[c];
+    if (c >= RefConf.cells.size() || !Conf.cells[c].close) {
+      continue;
+    }
+    const std::vector<Node> &cur = Conf.cells[c].nodes;
+    const std::vector<Node> &ref = RefConf.cells[c].nodes;
+    size_t nn = cur.size();
+    if (nn < 3 || ref.size() != nn) {
+      continue;
+    }
+
+    vec2r xc, Xc;
+    double R;
+    cellCenterAndRadius(Conf.cells[c], xc, R);
+    for (size_t n = 0; n < nn; n++) {
+      Xc += ref[n].pos;
+    }
+    Xc /= (double)nn;
+
+    // A = sum x X^T, G = sum X X^T
+    double A11 = 0.0, A12 = 0.0, A21 = 0.0, A22 = 0.0;
+    double G11 = 0.0, G12 = 0.0, G22 = 0.0;
+    for (size_t n = 0; n < nn; n++) {
+      vec2r x = cur[n].pos - xc;
+      vec2r X = ref[n].pos - Xc;
+      A11 += x.x * X.x;
+      A12 += x.x * X.y;
+      A21 += x.y * X.x;
+      A22 += x.y * X.y;
+      G11 += X.x * X.x;
+      G12 += X.x * X.y;
+      G22 += X.y * X.y;
+    }
+    double detG = G11 * G22 - G12 * G12;
+    if (detG <= 0.0) {
+      continue;
+    }
+    // G^-1
+    double I11 = G22 / detG, I12 = -G12 / detG, I22 = G11 / detG;
+    // F = A G^-1
+    double F11 = A11 * I11 + A12 * I12;
+    double F12 = A11 * I12 + A12 * I22;
+    double F21 = A21 * I11 + A22 * I12;
+    double F22 = A21 * I12 + A22 * I22;
+    if (F11 * F22 - F12 * F21 <= 0.0) {
+      continue; // cellule retournée
+    }
+    // B = F F^T (symétrique)
+    double b1, b2;
+    symEigen(F11 * F11 + F12 * F12, F11 * F21 + F12 * F22, F21 * F21 + F22 * F22, b1, b2, S.u1, S.u2);
+    if (b2 <= 0.0) {
+      continue;
+    }
+
+    S.ok = true;
+    S.center = xc;
+    S.R = R;
+    S.v1 = 0.5 * log(b1);
+    S.v2 = 0.5 * log(b2);
+    // composantes du tenseur de Hencky sum v_i u_i (x) u_i
+    S.xx = S.v1 * S.u1.x * S.u1.x + S.v2 * S.u2.x * S.u2.x;
+    S.yy = S.v1 * S.u1.y * S.u1.y + S.v2 * S.u2.y * S.u2.y;
+    S.xy = S.v1 * S.u1.x * S.u1.y + S.v2 * S.u2.x * S.u2.y;
+  }
+}
+
+// Contrainte moyenne de chaque cellule fermée (Love-Weber), à partir des seules forces d'interaction
+// avec les autres cellules (contact et cohésion, sans les efforts internes de la cellule ni sa
+// pression) : sigma = (1/A) sym( sum (x_c - centre) (x) f_c ), A étant la surface actuelle de la cellule.
+// Une interaction (ci, in) / (cj, jn) exerce f = (fn + fn_coh) n + (ft + ft_coh) T sur ci et -f sur cj,
+// toutes deux au point de contact x_c (Lhyphen::getPosition). Les forces visqueuses, non sauvegardées
+// dans les conf, ne sont pas prises en compte. Les cellules ayant des noeuds pilotés (mors) ne sont pas
+// affichées : la réaction du contrôle leur manque, leur tenseur serait incomplet.
+void computeStresses() {
+  size_t nc = Conf.cells.size();
+  cellStresses.assign(nc, CellTensor());
+
+  std::vector<vec2r> center(nc);
+  std::vector<double> radius(nc, 0.0);
+  for (size_t c = 0; c < nc; c++) {
+    if (!Conf.cells[c].nodes.empty()) {
+      cellCenterAndRadius(Conf.cells[c], center[c], radius[c]);
+    }
+  }
+
+  std::vector<double> M11(nc, 0.0), M12(nc, 0.0), M21(nc, 0.0), M22(nc, 0.0); // sum x (x) f
+  vec2r pc;
+  for (size_t ci = 0; ci < nc; ci++) {
+    for (const Neighbor &Inter : Conf.cells[ci].neighbors) {
+      size_t cj = Inter.jc;
+      if (cj >= nc || cj == ci) {
+        continue;
+      }
+      double fn = Inter.fn + Inter.fn_coh;
+      double ft = Inter.ft + Inter.ft_coh;
+      if (fn == 0.0 && ft == 0.0) {
+        continue;
+      }
+      vec2r T(-Inter.n.y, Inter.n.x);
+      vec2r f = fn * Inter.n + ft * T;
+      Conf.getPosition(ci, cj, Inter.in, Inter.jn, pc);
+
+      vec2r xi = pc - center[ci];
+      M11[ci] += xi.x * f.x;
+      M12[ci] += xi.x * f.y;
+      M21[ci] += xi.y * f.x;
+      M22[ci] += xi.y * f.y;
+
+      vec2r xj = pc - center[cj];
+      M11[cj] -= xj.x * f.x;
+      M12[cj] -= xj.x * f.y;
+      M21[cj] -= xj.y * f.x;
+      M22[cj] -= xj.y * f.y;
+    }
+  }
+
+  for (size_t c = 0; c < nc; c++) {
+    const Cell &C = Conf.cells[c];
+    if (!C.close || C.nodes.size() < 3) {
+      continue;
+    }
+    bool controlled = false;
+    for (size_t n = 0; n < C.nodes.size(); n++) {
+      if (C.nodes[n].ictrl != null_size_t) {
+        controlled = true;
+        break;
+      }
+    }
+    if (controlled) {
+      continue;
+    }
+    // surface actuelle (formule du lacet)
+    double A = 0.0;
+    for (size_t n = 0; n < C.nodes.size(); n++) {
+      const vec2r &p = C.nodes[n].pos;
+      const vec2r &q = C.nodes[(n + 1) % C.nodes.size()].pos;
+      A += p.x * q.y - p.y * q.x;
+    }
+    A = 0.5 * fabs(A);
+    if (A <= 0.0) {
+      continue;
+    }
+    CellTensor &S = cellStresses[c];
+    S.xx = M11[c] / A;
+    S.yy = M22[c] / A;
+    S.xy = 0.5 * (M12[c] + M21[c]) / A;
+    symEigen(S.xx, S.xy, S.yy, S.v1, S.v2, S.u1, S.u2);
+    S.ok = true;
+    S.center = center[c];
+    S.R = radius[c];
+  }
+}
+
+// Champ de couleur de la déformation : 1 = eps_v = v1 + v2, 2 = eps_q = v1 - v2
+CellScalarField strainField(int mode) {
+  CellScalarField F;
+  F.divergent = (mode != 2);
+  F.value.assign(cellStrains.size(), 0.0);
+  F.ok.assign(cellStrains.size(), 0);
+  for (size_t c = 0; c < cellStrains.size(); c++) {
+    const CellTensor &T = cellStrains[c];
+    if (!T.ok) {
+      continue;
+    }
+    F.ok[c] = 1;
+    F.value[c] = (mode == 1) ? T.v1 + T.v2 : T.v1 - T.v2;
+  }
+  return F;
+}
+
+// Champ de couleur de la contrainte (voir stressModeNames) : 1 = sig_m = (v1 + v2)/2, 2 = sig_q = v1 - v2,
+// 3 = p (pression interne, toutes les cellules fermées), 4 = p + sig_m, 5/6/7 = sig_xx, sig_yy, sig_xy
+CellScalarField stressField(int mode) {
+  CellScalarField F;
+  F.divergent = (mode != 2);
+  F.value.assign(Conf.cells.size(), 0.0);
+  F.ok.assign(Conf.cells.size(), 0);
+  for (size_t c = 0; c < Conf.cells.size(); c++) {
+    if (mode == 3) {
+      if (Conf.cells[c].close) {
+        F.ok[c] = 1;
+        F.value[c] = Conf.cells[c].p_int;
+      }
+      continue;
+    }
+    if (c >= cellStresses.size() || !cellStresses[c].ok) {
+      continue;
+    }
+    const CellTensor &T = cellStresses[c];
+    double sm = 0.5 * (T.v1 + T.v2);
+    double v = 0.0;
+    switch (mode) {
+    case 1: v = sm; break;
+    case 2: v = T.v1 - T.v2; break;
+    case 4: v = Conf.cells[c].p_int + sm; break;
+    case 5: v = T.xx; break;
+    case 6: v = T.yy; break;
+    case 7: v = T.xy; break;
+    default: break;
+    }
+    F.ok[c] = 1;
+    F.value[c] = v;
+  }
+  return F;
+}
+
+// Borne de l'échelle de couleur : fixedMax si > 0, sinon max de |valeur| sur les cellules coloriées
+double fieldColorBound(const CellScalarField &field, double fixedMax) {
+  if (fixedMax > 0.0) {
+    return fixedMax;
+  }
+  double vmax = 0.0;
+  for (size_t c = 0; c < field.value.size(); c++) {
+    if (field.ok[c]) {
+      vmax = std::max(vmax, fabs(field.value[c]));
+    }
+  }
+  return (vmax > 0.0) ? vmax : 1.0e-12;
+}
+
+// Remplissage des cellules : échelle bleu-blanc-rouge symétrique [-vmax, vmax] pour un champ signé,
+// blanc-jaune-rouge [0, vmax] sinon
+void drawCellScalars(const CellScalarField &field, double vmax) {
+  ColorTable &table = field.divergent ? TensorSphTable : TensorDevTable;
+  if (field.divergent) {
+    table.setMinMax((float)(-vmax), (float)vmax);
+  } else {
+    table.setMinMax(0.0f, (float)vmax);
+  }
+
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
+
+  color4f col;
+  for (size_t i = 0; i < Conf.cells.size(); ++i) {
+    if (i >= field.value.size() || !field.ok[i]) {
+      continue;
+    }
+    table.getColor4f((float)field.value[i], &col);
+    glColor3f(col.r, col.g, col.b);
+
+    std::vector<vec2r> contour;
+    for (size_t n = 0; n < Conf.cells[i].nodes.size(); ++n) {
+      contour.push_back(Conf.cells[i].nodes[n].pos);
+    }
+    std::vector<int> result;
+    TriangulatePolygon::Process(contour, result);
+    glBegin(GL_TRIANGLES);
+    for (size_t s = 0; s < result.size(); s += 3) {
+      glVertex2d(contour[result[s]].x, contour[result[s]].y);
+      glVertex2d(contour[result[s + 1]].x, contour[result[s + 1]].y);
+      glVertex2d(contour[result[s + 2]].x, contour[result[s + 2]].y);
+    }
+    glEnd();
+  }
+}
+
+// Directions principales : un trait centré sur la cellule pour chaque direction (épais = majeure v1,
+// fin = mineure v2), de demi-longueur eScale * R * |v_i| / max|v|. Le plus grand trait mesure donc
+// eScale rayons de sa cellule ; les longueurs sont comparables entre cellules de même taille.
+// Couleur selon le signe (convention tension positive) : rouge = tension (v_i > 0),
+// bleu = compression (v_i < 0).
+void drawTensorDirections(const std::vector<CellTensor> &tensors) {
+  double vmax = 0.0;
+  for (size_t c = 0; c < tensors.size(); c++) {
+    if (tensors[c].ok) {
+      vmax = std::max(vmax, std::max(fabs(tensors[c].v1), fabs(tensors[c].v2)));
+    }
+  }
+  if (vmax == 0.0) {
+    return;
+  }
+
+  glDisable(GL_DEPTH_TEST);
+  glDisable(GL_LIGHTING);
+
+  // un passage par direction (l'épaisseur ne peut pas changer entre glBegin et glEnd)
+  for (int dir = 1; dir <= 2; dir++) {
+    glLineWidth((dir == 1) ? 4.0f : 1.5f);
+    glBegin(GL_LINES);
+    for (size_t c = 0; c < tensors.size(); c++) {
+      const CellTensor &S = tensors[c];
+      if (!S.ok) {
+        continue;
+      }
+      double v = (dir == 1) ? S.v1 : S.v2;
+      const vec2r &u = (dir == 1) ? S.u1 : S.u2;
+      double l = eScale * S.R * fabs(v) / vmax;
+      if (v > 0.0) {
+        glColor4f(0.85f, 0.05f, 0.05f, 1.0f); // tension
+      } else {
+        glColor4f(0.05f, 0.15f, 0.90f, 1.0f); // compression
+      }
+      glVertex2d(S.center.x - l * u.x, S.center.y - l * u.y);
+      glVertex2d(S.center.x + l * u.x, S.center.y + l * u.y);
+    }
+    glEnd();
+  }
+  glLineWidth(1.0f);
+}
+
+// Barre de couleur (coin bas-droit) ; vmin < 0 pour la partie sphérique (échelle divergente)
+void drawTensorColorBar(const char *name, double vmin, double vmax, bool autoBound, const char *extra) {
+  ColorTable &table = (vmin < 0.0) ? TensorSphTable : TensorDevTable;
+  table.setMinMax((float)vmin, (float)vmax);
+
+  const int glyphW = 10; // largeur approximative d'un caractère de glText
+  const int barW = 260;
+  const int barH = 14;
+  const int x0 = width - barW - 30;
+  const int y0 = 30;
+  const int nSeg = 64;
+
+  char title[128], smin[32], smax[32];
+  snprintf(title, 128, "%s%s%s", name, extra, autoBound ? "  (auto)" : "");
+  snprintf(smin, 32, "%.3g", vmin);
+  snprintf(smax, 32, "%.3g", vmax);
+
+  switch2D::go(width, height);
+
+  glColor4f(0.0f, 0.0f, 0.0f, 0.3f);
+  glBegin(GL_QUADS);
+  glVertex2i(x0 - 10, y0 - 22);
+  glVertex2i(x0 + barW + 10, y0 - 22);
+  glVertex2i(x0 + barW + 10, y0 + barH + 26);
+  glVertex2i(x0 - 10, y0 + barH + 26);
+  glEnd();
+
+  color4f col;
+  glBegin(GL_QUADS);
+  for (int k = 0; k < nSeg; k++) {
+    double v = vmin + (vmax - vmin) * (k + 0.5) / (double)nSeg;
+    table.getColor4f((float)v, &col);
+    glColor3f(col.r, col.g, col.b);
+    int xa = x0 + (barW * k) / nSeg;
+    int xb = x0 + (barW * (k + 1)) / nSeg;
+    glVertex2i(xa, y0);
+    glVertex2i(xb, y0);
+    glVertex2i(xb, y0 + barH);
+    glVertex2i(xa, y0 + barH);
+  }
+  glEnd();
+
+  glColor3f(0.95f, 0.95f, 0.95f);
+  glText::print(x0, y0 + barH + 8, "%s", title);
+  glText::print(x0, y0 - 16, "%s", smin);
+  glText::print(x0 + barW - glyphW * (int)strlen(smax), y0 - 16, "%s", smax);
+
+  switch2D::back();
+}
+
 void drawControlBoxes() {
   glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
   glLineWidth(2.0f);
@@ -1064,13 +1563,17 @@ void drawHUD() {
       {"e", "velocities", show_velocities},
       {"g", "glue", show_glue_points},
       {"r", "crack path", show_crack_path},
+      {"k", "strain", show_strain},
+      {"j", "strain dirs", show_strain_dirs},
+      {"l", "stress", show_stress},
+      {"m", "stress dirs", show_stress_dirs},
       {"b", "bar colors", show_bar_colors},
       {"a", "ctrl boxes", show_control_boxes},
       {"d", "background", show_background},
   };
   const int n = (int)(sizeof(items) / sizeof(items[0]));
 
-  const int nInfo  = 4; // conf/temps + les trois réglages continus
+  const int nInfo  = 6; // conf/temps + les réglages continus + la référence des déformations
   const int glyphH = 13;
   const int lineH  = 16;
   const int padX   = 8;
@@ -1127,6 +1630,10 @@ void drawHUD() {
   glText::print(x0 + padX, ty, "t/T filter    %.3g", forceFilter);
   ty -= lineH;
   glText::print(x0 + padX, ty, "y/Y vel scale %.3g", vScale);
+  ty -= lineH;
+  glText::print(x0 + padX, ty, "u/U tens scale %.3g", eScale);
+  ty -= lineH;
+  glText::print(x0 + padX, ty, "o   eps ref   conf%d", refConfNum);
 
   switch2D::back();
 }
@@ -1148,6 +1655,12 @@ void drawHelpOverlay() {
       "p           show/hide pressure",
       "d           show/hide the background gradient",
       "i           show/hide this state panel (HUD)",
+      "k           strain colors: off / eps_v / eps_q",
+      "j           principal strain directions",
+      "l           stress colors (sig_m, sig_q, p, ...)",
+      "m           principal stress directions",
+      "u/U         tensor lines shorter/longer (eScale)",
+      "o           strain reference = this conf (Shift: 0)",
       "h           show/hide this help",
       "q           quit",
       "s/S         force-chain lines thinner/thicker",
@@ -1258,6 +1771,12 @@ void readTomlOptions() {
     show_crack_path         = tbl["display"]["show_crack_path"].value_or(show_crack_path);
     show_velocities         = tbl["display"]["show_velocities"].value_or(show_velocities);
     show_hud                = tbl["display"]["show_hud"].value_or(show_hud);
+    show_strain             = tbl["display"]["show_strain"].value_or(show_strain);
+    show_strain_dirs        = tbl["display"]["show_strain_dirs"].value_or(show_strain_dirs);
+    show_stress             = tbl["display"]["show_stress"].value_or(show_stress);
+    show_stress_dirs        = tbl["display"]["show_stress_dirs"].value_or(show_stress_dirs);
+    if (show_strain < 0 || show_strain >= nbStrainModes) show_strain = 0;
+    if (show_stress < 0 || show_stress >= nbStressModes) show_stress = 0;
 
     if (tbl["display"].as_table()->contains("bottom_color")) {
       auto arr = tbl["display"]["bottom_color"].as_array();
@@ -1297,6 +1816,16 @@ void readTomlOptions() {
     fnWidthFactor  = tbl["arrows"]["fnWidthFactor"].value_or(fnWidthFactor);
     forceFilter    = tbl["arrows"]["forceFilter"].value_or(forceFilter);
   }
+
+  if (tbl.contains("strain")) {
+    refConfNum     = tbl["strain"]["refConf"].value_or(refConfNum);
+    eScale         = tbl["strain"]["eScale"].value_or(eScale);
+    strainColorMax = tbl["strain"]["colorMax"].value_or(strainColorMax);
+  }
+
+  if (tbl.contains("stress")) {
+    stressColorMax = tbl["stress"]["colorMax"].value_or(stressColorMax);
+  }
 }
 
 void saveTomlOptions() {
@@ -1315,6 +1844,10 @@ void saveTomlOptions() {
       {"show_crack_path",         show_crack_path},
       {"show_velocities",         show_velocities},
       {"show_hud",                show_hud},
+      {"show_strain",             show_strain},
+      {"show_strain_dirs",        show_strain_dirs},
+      {"show_stress",             show_stress},
+      {"show_stress_dirs",        show_stress_dirs},
       {"bottom_color", toml::array{bottom_r, bottom_g, bottom_b}},
       {"top_color",    toml::array{top_r,    top_g,    top_b}},
     }},
@@ -1335,6 +1868,14 @@ void saveTomlOptions() {
       {"arrowAngle",    arrowAngle},
       {"fnWidthFactor", fnWidthFactor},
       {"forceFilter",   forceFilter},
+    }},
+    {"strain", toml::table{
+      {"refConf",  refConfNum},
+      {"eScale",   eScale},
+      {"colorMax", strainColorMax},
+    }},
+    {"stress", toml::table{
+      {"colorMax", stressColorMax},
     }},
   };
   // clang-format on
@@ -1373,6 +1914,11 @@ int main(int argc, char *argv[]) {
   BarBlueTable.setSize(128);
   BarBlueTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {0, 0, 255, 255}});
   // BarBlueTable.savePpm("BarBlueTable.ppm");
+
+  TensorSphTable.setSize(128);
+  TensorSphTable.rebuild_interp_rgba({0, 63, 127}, {{40, 60, 200, 255}, {255, 255, 255, 255}, {200, 30, 30, 255}});
+  TensorDevTable.setSize(128);
+  TensorDevTable.rebuild_interp_rgba({0, 63, 127}, {{255, 255, 255, 255}, {255, 210, 60, 255}, {200, 30, 30, 255}});
 
   NodeRedTable.setSize(128);
   NodeRedTable.rebuild_interp_rgba({0, 127}, {{0, 255, 0, 255}, {255, 0, 0, 255}});
