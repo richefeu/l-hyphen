@@ -307,7 +307,7 @@ Pour ajouter un nouveau type d'événement : dériver de la classe `Event` (`Eve
 | `n` | Afficher/masquer les contours des cellules |
 | `v` | Afficher/masquer les nœuds (points) |
 | `p` | Afficher/masquer la pression interne |
-| `k` | Couleur des cellules fermées selon la déformation : aucune / `eps_v` / `eps_q` (voir ci-dessous) |
+| `k` | Couleur des cellules fermées selon la déformation : aucune / `eps_v` / `eps_q` / `eps_xx` / `eps_yy` / `eps_xy` (voir ci-dessous) |
 | `j` | Afficher/masquer les directions principales de déformation (trait épais : majeure, fin : mineure ; rouge : tension, bleu : compression) |
 | `l` | Couleur des cellules fermées selon la contrainte : aucune / `sig_m` / `sig_q` / `p` / `p+sig_m` / `sig_xx` / `sig_yy` / `sig_xy` (voir ci-dessous) |
 | `m` | Afficher/masquer les directions principales de contrainte (mêmes conventions que `j`) |
@@ -328,8 +328,9 @@ cellule. Les déformations principales sont celles de Hencky, `e_i = ln(λ_i)`, 
 élongations principales de `F`. Elles ne sont pas affectées par la rotation des cellules et sont positives
 en extension, avec `e1 ≥ e2`. On en déduit `eps_v = e1 + e2 = ln(det F)`, la variation de surface, et
 `eps_q = e1 - e2`, la distorsion.
-- `eps_v` est affiché avec une échelle bleu-blanc-rouge symétrique (bleu : contraction) et `eps_q` avec
-  une échelle blanc-jaune-rouge. Une barre de couleur s'affiche en bas à droite. Par défaut, la borne est
+- La touche `k` fait défiler `eps_v`, `eps_q`, puis les composantes `eps_xx`, `eps_yy`, `eps_xy` du
+  tenseur de Hencky (`Σ e_i u_i ⊗ u_i`) dans le repère (x, y). Les grandeurs signées utilisent une échelle
+  bleu-blanc-rouge symétrique (bleu : contraction) et `eps_q` une échelle blanc-jaune-rouge. Une barre de couleur s'affiche en bas à droite. Par défaut, la borne est
   le maximum sur les cellules de la conf affichée ; dans `see2-options.toml`, `[strain] colorMax` permet
   de la fixer (utile pour comparer plusieurs confs ou faire un film).
 - Directions principales : chaque cellule porte un trait par direction, centré sur la cellule, de

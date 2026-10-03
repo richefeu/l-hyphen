@@ -105,7 +105,7 @@ int show_control_boxes = 0;
 int show_background = 0;
 int show_crack_path = 0; // trace les liens rompus jusqu'au temps du conf affiché
 int show_velocities = 0; // flèches de vitesse aux noeuds ('e'), échelle vScale ('y'/'Y')
-int show_strain = 0;      // couleur des cellules fermées selon la déformation ('k') : 0 = non, 1 = eps_v, 2 = eps_q
+int show_strain = 0;      // couleur des cellules fermées selon la déformation ('k') : voir strainModeNames
 int show_strain_dirs = 0; // directions principales de déformation ('j')
 int show_stress = 0;      // couleur des cellules fermées selon la contrainte ('l') : voir stressModeNames
 int show_stress_dirs = 0; // directions principales de contrainte ('m')
@@ -147,9 +147,9 @@ ColorTable TensorDevTable; // blanc-jaune-rouge pour les grandeurs positives (ep
 
 // Modes de couleur ('k' pour la déformation, 'l' pour la contrainte), 0 = rien.
 // p est la pression interne p_int de la cellule (positive quand elle tend à la faire gonfler).
-const char *strainModeNames[] = {"off", "eps_v", "eps_q"};
+const char *strainModeNames[] = {"off", "eps_v", "eps_q", "eps_xx", "eps_yy", "eps_xy"};
 const char *stressModeNames[] = {"off", "sig_m", "sig_q", "p", "p+sig_m", "sig_xx", "sig_yy", "sig_xy"};
-const int nbStrainModes = 3;
+const int nbStrainModes = 6;
 const int nbStressModes = 8;
 
 /// Un scalaire par cellule à afficher en couleur

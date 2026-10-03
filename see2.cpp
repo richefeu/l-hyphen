@@ -42,7 +42,7 @@ void printHelp() {
   std::cout << "r           show/hide the crack path (broken links up to current time)" << std::endl;
   std::cout << "d           show/hide the background gradient" << std::endl;
   std::cout << "i           show/hide the state panel (HUD)" << std::endl;
-  std::cout << "k           cell strain colors: off / eps_v / eps_q (closed cells)" << std::endl;
+  std::cout << "k           cell strain colors: off / eps_v / eps_q / eps_xx / eps_yy / eps_xy" << std::endl;
   std::cout << "j           show/hide principal strain directions (thick major, thin minor; red tension, blue compression)" << std::endl;
   std::cout << "l           cell stress colors: off / sig_m / sig_q / p / p+sig_m / sig_xx / sig_yy / sig_xy" << std::endl;
   std::cout << "m           show/hide principal stress directions (thick major, thin minor; red tension, blue compression)" << std::endl;
@@ -1327,7 +1327,8 @@ void computeStresses() {
   }
 }
 
-// Champ de couleur de la déformation : 1 = eps_v = v1 + v2, 2 = eps_q = v1 - v2
+// Champ de couleur de la déformation (voir strainModeNames) : 1 = eps_v = v1 + v2, 2 = eps_q = v1 - v2,
+// 3/4/5 = eps_xx, eps_yy, eps_xy (composantes du tenseur de Hencky)
 CellScalarField strainField(int mode) {
   CellScalarField F;
   F.divergent = (mode != 2);
@@ -1338,8 +1339,17 @@ CellScalarField strainField(int mode) {
     if (!T.ok) {
       continue;
     }
+    double v = 0.0;
+    switch (mode) {
+    case 1: v = T.v1 + T.v2; break;
+    case 2: v = T.v1 - T.v2; break;
+    case 3: v = T.xx; break;
+    case 4: v = T.yy; break;
+    case 5: v = T.xy; break;
+    default: break;
+    }
     F.ok[c] = 1;
-    F.value[c] = (mode == 1) ? T.v1 + T.v2 : T.v1 - T.v2;
+    F.value[c] = v;
   }
   return F;
 }
@@ -1655,7 +1665,7 @@ void drawHelpOverlay() {
       "p           show/hide pressure",
       "d           show/hide the background gradient",
       "i           show/hide this state panel (HUD)",
-      "k           strain colors: off / eps_v / eps_q",
+      "k           strain colors (eps_v, eps_q, eps_xx, ...)",
       "j           principal strain directions",
       "l           stress colors (sig_m, sig_q, p, ...)",
       "m           principal stress directions",
