@@ -1,0 +1,64 @@
+# Input généré par nodegen à partir du modèle input_modele.txt et de params.txt
+# Les lignes modifiées par nodegen sont marquées [nodegen] ; les autres sont celles du modèle.
+# SIMULATION INPUTS ===================================================       
+# dt : avec cleanShortBars 0.3, dt_crit(flexion) ~ 5.2e-7 et dt_crit(contact) ~ 2.5e-6
+# (avant nettoyage : barres de 2.4e-6 m -> dt_crit(flexion) = 2.4e-8, d'où l'ancien dt = 1.75e-8)
+define DT 5e-8
+# sans événement, le pic de force est atteint vers t = 0.009 s (première rupture),
+# puis l'éprouvette est entièrement rompue vers t = 0.013 s
+define TFINAL 0.02
+dt $DT$
+nstep $TFINAL/DT$
+numericalDissipation 0.0                                                      
+globalViscosity      0.0                                                        
+gravity 0 0                                                                  
+# distVerlet ~ 10 barWidth (au lieu de ~l_moy) : beaucoup moins de paires inutiles
+distVerlet 2e-5
+nstepPeriodVerlet 2000
+isvg              0                                                           
+nstepPeriodSVG    $TFINAL/DT/100$
+iconf             0                                                           
+nstepPeriodConf   $TFINAL/DT/100$
+                                                                              
+kn 26373.626373626375                                                                        
+kt 26373.626373626375                                                                       
+mu 0.0
+adaptativeStiffness 1
+
+# SAMPLE ===================================================                            
+#             filename      barWidth  ks    kb                    my_max            pressure
+readNodeFile  nodefile.txt  2e-06     2000  0.000792863858442045  79286385.8442045  0    # [nodegen]
+# fusion des barres plus courtes que 0.3 x longueur moyenne
+# (doit précéder masses, amortissements, contrôles et glue)
+# cleanShortBars 0.3    # [nodegen] inutile : l_min/l_moy = 0.333
+
+#setCellDensities 500.0 1
+setNodeMasses 8e-8
+setCellWallDampingRates 0.5 0.1
+viscnrate 0.5
+cellContent 2
+compressFactor 0.0
+
+# IMPOSED CONTROLS ===================================================        
+#                    xmin  xmax    ymin    ymax     xmode  xvalue  ymode   yvalue   
+setNodeControlInBox  0     0.0028  0       0.0004   1      0.0     0       -0.0003   # [nodegen] mors bas
+setNodeControlInBox  0     0.0028  0.0031  0.0035   1      0.0     0       0.0003    # [nodegen] mors haut
+
+#              filename   xmin    xmax    ymin     ymax
+captureNodes  bottom.txt  0  0.0028  0  0.0004    # [nodegen]
+captureNodes  top.txt  0  0.0028  0.0031  0.0035    # [nodegen]
+
+nstepPeriodRecord 100
+followCell 0
+
+distGcGlue 2.00000e-07                                                     
+
+setGcGlueSameProperties  26373.6263736264  26373.6263736264  1.25751147880661e-06    # [nodegen]
+findDisplayArea 2.0
+
+# EVENTS ===================================================
+# Arrêt 0.001 s après une chute de 30 % de la force de réaction du mors haut
+# (contrôle 1 = 2e setNodeControlInBox), composante y ; pic suivi à partir de t = 0.0005 s,
+# force lissée sur tau = 1e-4 s
+#                   ictrl  comp  chute%  délai   tStart   tau
+event stopAfterStressDrop 1  y     30      0.001   0.0005   1e-4

@@ -104,11 +104,14 @@ int show_nodes = 0;
 int show_control_boxes = 0;
 int show_background = 1;
 int show_crack_path = 0; // trace les liens rompus jusqu'au temps du conf affiché
+int show_velocities = 0; // flèches de vitesse aux noeuds ('e'), échelle vScale ('y'/'Y')
+int show_hud = 1;        // panneau d'état permanent des toggles ('i')
+int show_help = 0;       // overlay d'aide des raccourcis clavier ('h')
 
 // arrow/force sizes
-double arrowSize = 0.15;
-double arrowAngle = 0.35;
-double vScale = 0.05;
+double arrowSize = 0.25;  // longueur des barbules, en fraction de la longueur de la flèche
+double arrowAngle = 0.35; // demi-angle des barbules [rad]
+double vScale = 1.0;      // longueur de la plus grande flèche de vitesse, en rayons de cellule moyens ('y'/'Y')
 double fnWidthFactor = 1.0; // multiplicateur d'épaisseur des chaînes de force ('s'/'S')
 double forceFilter = 1.0;   // seuil du filtre = forceFilter * |fn|_moyen : ne montre que les chaînes porteuses ('t'/'T')
 
@@ -140,8 +143,11 @@ void readBreakHistory(const char *fname = "breakHistory.txt");
 void arrow(double x0, double y0, double x1, double y1);
 
 void drawForces();
+void drawVelocities();
 void drawPressure();
 void drawControlBoxes();
+void drawHUD();
+void drawHelpOverlay();
 
 void updateTextLine();
 
@@ -151,6 +157,7 @@ void mouse_button(GLFWwindow *window, int button, int action, int mods);
 void cursor_pos(GLFWwindow *window, double xpos, double ypos);
 void display(GLFWwindow *window);
 void reshape(GLFWwindow *window, int width, int height);
+void framebuffer_size(GLFWwindow *window, int width, int height);
 
 // Screenshot
 void captureScreenshot(const char *filename);

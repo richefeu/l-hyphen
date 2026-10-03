@@ -1,0 +1,37 @@
+# nodegen : échantillon du type Frank-ouverture-fissure (13.6 mm x 16 mm, ~2200 cellules)
+
+# Domaine
+xmin 0.0032
+ymin 0.002
+Lx   0.0136
+Ly   0.016
+
+# Cellules
+cellSize        3.53e-4   # diamètre équivalent visé
+barWidth        2e-6      # écart entre parois voisines (= barWidth de readNodeFile)
+lattice         hex       # hex : réseau hexagonal perturbé (surtout des hexagones) ; random : tirage aléatoire
+disorder        0.6       # perturbation des germes du réseau hex (fraction du pas) : 0 = hexagones parfaits
+lloydIterations 5         # régularisation de Lloyd
+minEdgeRatio    0.33       # arêtes plus courtes que 0.4 x longueur moyenne : fusionnées, ou étirées si
+minSides        5         #   la fusion ferait passer une cellule sous minSides côtés
+seed            1
+
+# Pré-fissure : segment x0 y0 x1 y1 (ici depuis le bord gauche, à mi-hauteur, longueur 1.2 mm)
+crack   0.0032 0.010  0.0038 0.01
+tipInterface 1             # interface collée prolongeant la fissure au-delà de la pointe (en cellules)
+opening 2e-6              # écart supplémentaire entre les parois de la fissure (> distGlue)
+distGlue 2e-7             # valeur de distGcGlue dans l'input (contrôle du collage)
+
+# Lignes d'input l-hyphen (valeurs de Frank-ouverture-fissure)
+cellProperties  2000.0  7.928638584420448e-4  79286385.84420447  0   # Kn Kr Mz_max p_int de readNodeFile
+glueProperties  26373.626373626375  26373.626373626375  1.2575114788066131e-06   # setGcGlueSameProperties
+grips           4e-4  3e-4      # mors haut et bas : hauteur, vitesse imposée
+nodeMass        8e-8            # setNodeMasses (estimation du pas de temps critique)
+
+# Sorties
+output nodefile.txt
+svg    nodefile.svg
+input  nodegen_input.txt
+
+# Input complet à partir d'un input existant (ici celui de Frank-ouverture-fissure)
+inputTemplate  input_modele.txt  input.txt

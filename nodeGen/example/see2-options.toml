@@ -1,0 +1,33 @@
+[arrows]
+arrowAngle = 0.34999999999999998
+arrowSize = 0.25
+fnWidthFactor = 1.0
+forceFilter = 1.0
+vScale = 1.0
+
+[display]
+bottom_color = [ 135, 206, 250 ]
+show_background = 1
+show_bar_colors = 0
+show_cells = 1
+show_contours = 1
+show_control_boxes = 0
+show_crack_path = 0
+show_glue_points = 0
+show_hud = 1
+show_inter_cells_forces = 0
+show_nodes = 0
+show_pressure = 0
+show_velocities = 0
+top_color = [ 255, 255, 255 ]
+
+[view]
+fit_at_loading = 1
+xmax = 0.0
+xmin = 0.0
+ymax = 0.0
+ymin = 0.0
+
+[window]
+height = 600
+width = 800

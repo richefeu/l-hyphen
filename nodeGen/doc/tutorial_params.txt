@@ -1,0 +1,37 @@
+# Paramètres du tutoriel : échantillon du type Frank-ouverture-fissure (13.6 mm x 16 mm, ~2200 cellules)
+
+# Domaine
+xmin 0.0032
+ymin 0.002
+Lx   0.0136
+Ly   0.016
+
+# Cellules
+cellSize        3.53e-4   # diamètre équivalent visé
+barWidth        2e-6      # écart entre parois voisines (= barWidth de readNodeFile)
+lattice         hex       # réseau hexagonal perturbé
+disorder        0.3       # perturbation des germes (fraction du pas du réseau)
+lloydIterations 5         # régularisation de Lloyd
+minEdgeRatio    0.4       # seuil des arêtes courtes (fraction de la longueur moyenne)
+minSides        5         # fusion interdite si une cellule passait sous 5 côtés (étirement à la place)
+seed            1
+
+# Pré-fissure depuis le bord gauche, à mi-hauteur, longueur 1.2 mm
+crack        0.0032 0.010  0.0044 0.010
+tipInterface 1            # interface collée prolongeant la fissure au-delà de la pointe (en cellules)
+opening      2e-6         # écart supplémentaire entre les lèvres (> distGlue)
+distGlue     2e-7         # valeur de distGcGlue dans l'input
+
+# Lignes d'input l-hyphen (valeurs de Frank-ouverture-fissure)
+cellProperties  2000.0  7.928638584420448e-4  79286385.84420447  0   # Kn Kr Mz_max p_int
+glueProperties  26373.626373626375  26373.626373626375  1.2575114788066131e-06
+grips           4e-4  3e-4    # mors : hauteur, vitesse imposée
+nodeMass        8e-8          # masse des nœuds (pas de temps critique)
+
+# Sorties
+output work/nodefile.txt
+svg    work/nodefile.svg
+input  work/nodegen_input.txt
+
+# Input complet : copie de modele_input.txt (input de Frank) avec les lignes du maillage remplacées
+inputTemplate  modele_input.txt  work/input.txt

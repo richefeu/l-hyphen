@@ -1,0 +1,54 @@
+# SIMULATION INPUTS ===================================================       
+# dt : avec cleanShortBars 0.3, dt_crit(flexion) ~ 5.2e-7 et dt_crit(contact) ~ 2.5e-6
+# (avant nettoyage : barres de 2.4e-6 m -> dt_crit(flexion) = 2.4e-8, d'où l'ancien dt = 1.75e-8)
+define DT 5e-8
+# la rupture se produit entre t = 0.029 et 0.037 s (cf. breakHistory du calcul précédent)
+define TFINAL 0.045
+dt $DT$
+nstep $TFINAL/DT$
+numericalDissipation 0.0                                                      
+globalViscosity      0.0                                                        
+gravity 0 0                                                                  
+# distVerlet ~ 10 barWidth (au lieu de ~l_moy) : beaucoup moins de paires inutiles
+distVerlet 2e-5
+nstepPeriodVerlet 2000
+isvg              0                                                           
+nstepPeriodSVG    $TFINAL/DT/100$
+iconf             0                                                           
+nstepPeriodConf   $TFINAL/DT/100$
+                                                                              
+kn 26373.626373626375                                                                        
+kt 26373.626373626375                                                                       
+mu 0.0
+adaptativeStiffness 1
+
+# SAMPLE ===================================================                            
+#             filename       barWidth     ks       kb                      my_max              pressure
+readNodeFile  nodefile.txt   2e-06        2000.0   0.0007928638584420448   79286385.84420447   0
+# fusion des barres plus courtes que 0.3 x longueur moyenne
+# (doit précéder masses, amortissements, contrôles et glue)
+cleanShortBars 0.3
+
+#setCellDensities 500.0 1
+setNodeMasses 8e-8
+setCellWallDampingRates 0.5 0.1
+viscnrate 0.5
+cellContent 2
+compressFactor 0.0
+
+# IMPOSED CONTROLS ===================================================        
+#                   xmin   xmax   ymin    ymax     xmode    xvalue   ymode   yvalue   
+setNodeControlInBox 0.0032085515974282354       0.01679607384100938     0.002   0.0024009500000000002      1        0.0       0      -3e-04
+setNodeControlInBox 0.0032085515974282354       0.01679607384100938    0.017599049999999998    0.018      1        0.0       0      3e-04
+
+#              filename   xmin    xmax    ymin     ymax
+captureNodes      bottom.txt 0.0032085515974282354       0.01679607384100938       0.002     0.0024009500000000002
+captureNodes      top.txt    0.0032085515974282354       0.01679607384100938       0.017599049999999998     0.018
+
+nstepPeriodRecord 100
+followCell 0
+
+distGcGlue 2.00000e-07                                                     
+
+setGcGlueSameProperties 26373.626373626375 26373.626373626375 1.2575114788066131e-06                               
+findDisplayArea 2.0

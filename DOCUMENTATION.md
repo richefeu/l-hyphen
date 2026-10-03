@@ -31,6 +31,15 @@ La dépendance [toofus](https://github.com/richefeu/toofus) est clonée automati
 Lit le fichier d'entrée, construit la configuration initiale et intègre les équations du mouvement.  
 Les fichiers de sortie (`conf*`, `sample*.svg`) sont écrits dans le dossier courant.
 
+### `lhedit` — éditer un fichier d'entrée
+
+```bash
+cd lhedit && make
+lhedit/lhedit <fichier_entrée>
+```
+
+Éditeur en terminal (utilisable par ssh) avec coloration syntaxique, documentation en ligne des mots-clés (`^D`) et snippets (`^P`). Les mots-clés, leur documentation et les snippets sont lus dans `lhedit/lhyphen.lang` : tout nouveau mot-clé de `loadCONF` doit aussi y être ajouté. Voir `lhedit/README.md`.
+
 ### `see2` — visualiser une configuration
 
 ```bash
@@ -61,7 +70,7 @@ Définit une constante réutilisable dans les expressions suivantes.
 | `dt <valeur>` | Pas de temps |
 | `nstep <valeur>` | Nombre de pas à simuler |
 | `t <valeur>` | Temps initial |
-| `cyclicVelPeriod <valeur>` | Durée d'un cycle (inversion de la vitesse de chargement) |
+| `cyclicVelPeriod <valeur>` | Période d'un chargement cyclique : les vitesses imposées changent de signe pendant la seconde moitié de chaque période (0 = désactivé) |
 
 ---
 
@@ -69,7 +78,7 @@ Définit une constante réutilisable dans les expressions suivantes.
 
 | Commande | Description |
 |----------|-------------|
-| `numericalDissipation <valeur>` | Coefficient de dissipation numérique |
+| `numericalDissipation <valeur>` | Dissipation numérique : les vitesses sont multipliées par `(1 - valeur)` à chaque pas |
 | `globalViscosity <valeur>` | Viscosité globale |
 | `setCellWallDampingRates <alpha_s> <alpha_b>` | Taux d'amortissement axial (`alpha_s`) et en flexion (`alpha_b`) |
 | `setCellWallDampings <nu_s> <nu_b>` | Coefficients d'amortissement directs (axial et flexion) |
@@ -90,7 +99,8 @@ gravity <gx> <gy>
 |----------|-------------|
 | `distVerlet <valeur>` | Distance de la zone tampon de Verlet |
 | `nstepPeriodVerlet <valeur>` | Fréquence de mise à jour de la liste de voisins (en pas) |
-| `linkCells <lx> <ly>` | Active l'algorithme link-cells (plus rapide pour grands systèmes) ; `lx`/`ly` sont les dimensions des cellules |
+| `linkCells` | Active l'algorithme link-cells (plus rapide pour grands systèmes). La taille des cellules est automatique ; d'éventuelles valeurs `lx ly` laissées sur la ligne (anciens fichiers) sont ignorées |
+| `checkNeighbors` | Au démarrage, vérifie la liste de voisins obtenue par link-cells contre la recherche brute |
 
 Sans `linkCells`, la recherche est en O(N²).
 
@@ -102,7 +112,7 @@ Sans `linkCells`, la recherche est en O(N²).
 |----------|-------------|
 | `kn <valeur>` | Raideur normale de contact |
 | `kt <valeur>` | Raideur tangentielle de contact |
-| `viscn <valeur>` | Viscosité normale au contact |
+| `viscnrate <valeur>` | Viscosité normale au contact, en fraction de l'amortissement critique (`cn = viscnrate · 2√(m_eff · kn)`) |
 | `mu <valeur>` | Coefficient de frottement |
 | `fadh <valeur>` | Force d'adhésion normale |
 | `adaptativeStiffness <0|1>` | Raideur adaptative (0 = désactivée, 1 = activée) |
@@ -114,7 +124,7 @@ Sans `linkCells`, la recherche est en O(N²).
 ```
 glue <dist>
 ```
-Crée des points de colle entre nœuds distants de moins de `<dist>` (modèle à énergie critique).
+Crée des points de colle entre nœuds de cellules différentes distants de moins de `<dist>` (modèle à force maximale, voir `setGlueSameProperties`).
 
 ```
 GcGlue <dist>
@@ -143,6 +153,22 @@ readNodeFile <fichier> <barWidth> <Kn> <Kr> <Mz_max> <p_int>
 ```
 
 Le fichier contient des lignes `x y id_cellule`. Mettre `barWidth` négatif pour une estimation automatique (= moitié de la distance minimale entre nœuds de cellules différentes).
+
+#### Nettoyer le maillage (barres trop courtes)
+
+```
+cleanShortBars <ratio>
+```
+
+Fusionne les barres plus courtes que `ratio` × longueur moyenne des barres (typiquement 0.2 à 0.3). Les barres très courtes donnent une raideur de flexion effective `Kr/l0²` très élevée et imposent un pas de temps minuscule (voir la ligne `flexion` de `diagnostic.txt`). Les sommets du pavage d'origine sont reconstruits (parois décalées de `barWidth/2` vers l'extérieur, comme dans cellPrepro), les deux sommets d'une barre courte sont fusionnés en leur milieu pour toutes les cellules qui les partagent, puis seules les cellules concernées sont reconstruites (parois décalées de `barWidth/2` vers l'intérieur) : l'écartement entre parois voisines reste exactement `barWidth`, ce qui préserve le collage. Les très petites faces communes disparaissent (deux cellules ne se touchent plus qu'en un point). Une cellule ne descend jamais sous 3 nœuds. À placer juste après `readNodeFile`, **avant** masses, amortissements, contrôles, `captureNodes` et glue.
+
+#### Limiter les forces de flexion (bras de levier courts)
+
+```
+momentForceMax <Fmax>
+```
+
+Au nœud n, le moment de flexion est transmis aux barres voisines par les forces `m/l_next` et `m/l_prev`, qui deviennent énormes si une barre est très courte. Avec `momentForceMax`, **seulement si** l'une de ces forces dépasse `Fmax`, le moment *transmis* est réduit à `±Fmax · min(l_prev, l_next)` : un grand moment sur des bras de levier longs n'est jamais limité. L'état élastique `mz` n'est pas modifié (la limitation est réversible, sans rotation résiduelle, contrairement au seuil plastique `Mz_max`) et les deux forces utilisent le même moment, donc pas de couple parasite sur la cellule. Cela permet un `dt` supérieur au `dt_crit` flexion affiché (qui ignore cette limite) ; associer `alpha_b > 0` (`setCellWallDampingRates`) pour amortir le bruit résiduel des nœuds à bras court. Choisir `Fmax` au-dessus des forces de flexion des barres de taille normale. `0` (défaut) désactive la limite. Complémentaire de `cleanShortBars`, qui supprime les barres courtes : une barre très courte doit transmettre un moment physique avec une force ∝ 1/l, donc la limite y reste active en quasi-statique et assouplit localement ce nœud.
 
 #### Ajouter un polygone régulier
 
@@ -180,7 +206,7 @@ addMultiLine <xo> <yo> <xe> <ye> <barWidth> <n> <kn> <kr> <mz_max>
 | Commande | Description |
 |----------|-------------|
 | `cellContent <0\|1\|2>` | 0 = vide, 1 = PV constant (gaz), 2 = PV élastique (liquide) |
-| `compressFactor <valeur>` | Facteur de compressibilité pour le mode élastique |
+| `compressFactor <valeur>` | Raideur `K` du contenu élastique (`cellContent 2`) : `p = -K (Ω - Ω₀) / Ω₀` |
 | `setCellInternalPressure <id_cellule> <p>` | Pression initiale d'une cellule |
 | `setCellAsOpen <id_cellule>` | Marque la cellule comme ouverte (non fermée) |
 | `setClose <id_cellule>` | Marque la cellule comme fermée |
@@ -220,6 +246,42 @@ Applique le contrôle à tous les nœuds de la cellule.
 | `followCell <id_cellule>` | Suit une cellule particulière (données de suivi) |
 | `findDisplayArea <facteur>` | Calcule automatiquement les limites d'affichage (facteur ≥ 1) |
 | `limits <xmin> <xmax> <ymin> <ymax>` | Définit manuellement les limites d'affichage |
+
+---
+
+### Événements
+
+Un événement est vérifié au début de chaque pas de temps ; dès que sa condition est remplie, il fait
+son action, une seule fois. On peut en déclarer autant qu'on veut (une ligne par événement). Les
+événements pas encore déclenchés sont réécrits dans les fichiers `conf*`.
+
+| Commande | Description |
+|----------|-------------|
+| `event saveConfAtTime <t>` | Sauvegarde une configuration (`conf<iconf>`) quand le temps atteint `t` |
+| `event saveConfAtBrokenLength <L>` | Sauvegarde une configuration quand la longueur cumulée d'interfaces rompues dépasse `L` (`0` = dès la première rupture) |
+| `event stopAtBrokenLength <L>` | Sauvegarde une configuration puis arrête la simulation quand la longueur cumulée d'interfaces rompues dépasse `L` |
+| `event stopAfterStressDrop <ictrl> <x\|y> <chute%> <délai> <tStart> <tau>` | Sauvegarde une configuration puis arrête la simulation `délai` après avoir détecté une chute de contrainte de `chute%` par rapport au pic (voir ci-dessous) |
+
+La longueur cumulée d'interfaces rompues est celle de la 3e colonne de `breakEvol.txt` ; elle repart
+de 0 à chaque lancement de `run`.
+
+Pour `stopAfterStressDrop`, la contrainte est mesurée par la force de réaction (composante `x` ou `y`)
+sommée sur les nœuds pilotés par le contrôle numéro `ictrl` : les contrôles sont numérotés à partir
+de 0 dans l'ordre des lignes `setNodeControl`, `setCellControl` et `setNodeControlInBox`. La chute
+est détectée quand `|F| <= (1 - chute/100) * max|F|`. Comme la réaction présente des pics brefs
+(chocs), la force est d'abord lissée par une moyenne glissante exponentielle de temps
+caractéristique `tau` (`0` = pas de lissage) ; `tau` doit être grand devant la durée des chocs mais
+petit devant le temps de chargement. Le pic n'est suivi qu'à partir de `tStart`, pour ignorer le
+régime transitoire du début. Exemple (traction par la 2e boîte, arrêt 0.1 s après une chute de 20 %) :
+
+```
+setNodeControlInBox 0 10 -0.5 0.05 0 0.0 0 -5e-3   # contrôle 0
+setNodeControlInBox 0 10 1.95 2.5  0 0.0 0  5e-3   # contrôle 1
+event stopAfterStressDrop 1 y 20 0.1 0.1 0.05
+```
+
+Pour ajouter un nouveau type d'événement : dériver de la classe `Event` (`Event.hpp`), implémenter
+`check` et `action`, puis l'ajouter dans `Event::create`.
 
 ---
 
@@ -372,6 +434,7 @@ Le diagnostic indique le ratio `dt_crit / dt` pour contact et cohésion :
 | Problème | Cause probable | Solution |
 |----------|---|---|
 | Instabilité explosif | dt trop grand | Réduire dt, vérifier `dt_crit/dt` dans le diagnostic |
+| `dt_crit` flexion très petit | Barres très courtes dans le maillage (`kr/l_min²`) | `cleanShortBars 0.3` après `readNodeFile`, et/ou `momentForceMax` |
 | Contacts manqués | `distVerlet` trop petit ou `nstepPeriodVerlet` trop grand | Augmenter `distVerlet` ou réduire `nstepPeriodVerlet` |
 | Cellules pénétrantes | `kn` trop faible ou `adaptativeStiffness = 0` | Augmenter `kn` ou activer `adaptativeStiffness = 1` |
 | Sorties bloquées | Disque plein ou permissions insuffisantes | Vérifier l'espace disque ou augmenter les fréquences |
@@ -446,6 +509,8 @@ findDisplayArea  1.1
 
 ## Historique des modifications
 
+- **2026-10-03** : Ajout des événements (`event saveConfAtTime`, `saveConfAtBrokenLength`, `stopAtBrokenLength`, `stopAfterStressDrop`)
+- **2026-10-03** : Ajout de l'éditeur `lhedit` ; corrections (`viscnrate`, `linkCells` sans argument, `checkNeighbors`, modèle de `glue`, `compressFactor`, `cyclicVelPeriod`, `numericalDissipation`)
 - **2026-05-29** : Amélioration du diagnostic (suppression dt_crit barres/flexion, meilleure lisibilité, sauvegarde en fichier)
 - **2026-05-29** : Complétion du cheatsheet et création du Makefile pour sa compilation
 - **2026-05-29** : Amélioration et complétion de cette documentation

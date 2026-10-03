@@ -37,15 +37,19 @@ void printHelp() {
   std::cout << "b           colorize the cell bars" << std::endl;
   std::cout << "c           show/hide the cells" << std::endl;
   std::cout << "f           show/hide the forces" << std::endl;
+  std::cout << "e           show/hide the nodal velocity arrows" << std::endl;
   std::cout << "g           show/hide the glue points" << std::endl;
   std::cout << "r           show/hide the crack path (broken links up to current time)" << std::endl;
-  std::cout << "h           print this help" << std::endl;
+  std::cout << "d           show/hide the background gradient" << std::endl;
+  std::cout << "i           show/hide the state panel (HUD)" << std::endl;
+  std::cout << "h           show/hide the on-screen help (and print it here)" << std::endl;
   std::cout << "n           show/hide cell contours" << std::endl;
   std::cout << "v           show/hide nodes (points)" << std::endl;
   std::cout << "p           show/hide pressure" << std::endl;
   std::cout << "q           quit" << std::endl;
   std::cout << "s/S         force-chain lines thinner/thicker" << std::endl;
   std::cout << "t/T         force filter lower/higher (show more/fewer chains)" << std::endl;
+  std::cout << "y/Y         velocity arrows shorter/longer (vScale)" << std::endl;
   std::cout << "z/Z         zoom in/out" << std::endl;
   std::cout << "->          load next configuration file" << std::endl;
   std::cout << "<-          load previous configuration file" << std::endl;
@@ -95,7 +99,32 @@ void keyboard(GLFWwindow *window, int key, int /*scancode*/, int action, int mod
   } break;
 
   case GLFW_KEY_H: {
+    show_help = 1 - show_help;
     printHelp();
+  } break;
+
+  case GLFW_KEY_I: {
+    show_hud = 1 - show_hud;
+    textZone.addLine("show_hud = %d", show_hud);
+  } break;
+
+  case GLFW_KEY_D: {
+    show_background = 1 - show_background;
+    textZone.addLine("show_background = %d", show_background);
+  } break;
+
+  case GLFW_KEY_E: {
+    show_velocities = 1 - show_velocities;
+    textZone.addLine("show_velocities = %d", show_velocities);
+  } break;
+
+  case GLFW_KEY_Y: {
+    if (mods == GLFW_MOD_SHIFT) {
+      vScale *= 1.25;
+    } else {
+      vScale *= 0.8;
+    }
+    textZone.addLine("vScale = %g", vScale);
   } break;
 
   case GLFW_KEY_SPACE: {
@@ -316,12 +345,22 @@ void display(GLFWwindow *window) {
   if (show_inter_cells_forces) {
     drawForces();
   }
+  if (show_velocities) {
+    drawVelocities();
+  }
 
   if (show_control_boxes) {
     drawControlBoxes();
   }
 
   textZone.draw();
+
+  if (show_hud) {
+    drawHUD();
+  }
+  if (show_help) {
+    drawHelpOverlay();
+  }
 
   glFlush();
   glfwSwapBuffers(window);
@@ -372,6 +411,20 @@ void reshape(GLFWwindow *window, int w, int h) {
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
   gluOrtho2D(left, right, bottom, top);
+}
+
+// Callback de redimensionnement du framebuffer.
+// On redessine ici même plutôt que de se contenter de lever needsRedraw : sous macOS,
+// le glissement de la bordure enferme l'application dans une boucle d'événements Cocoa
+// modale d'où glfwWaitEvents() ne revient pas, donc la boucle principale ne tournerait
+// qu'au relâchement de la souris.
+void framebuffer_size(GLFWwindow *window, int w, int h) {
+  if (w <= 0 || h <= 0) {
+    return; // fenêtre réduite : reshape() diviserait par zéro
+  }
+  reshape(window, w, h);
+  display(window);
+  needsRedraw = false;
 }
 
 void drawCircle(double xc, double yc, double radius, int nbDiv) {
@@ -831,6 +884,10 @@ void drawCrackPath() {
  * @param x1  x-coordinate of the ending point
  * @param y1  y-coordinate of the ending point
  */
+// Trace une flèche (hampe + 2 barbules) sous forme de segments.
+// À appeler entre glBegin(GL_LINES) et glEnd().
+// Les barbules mesurent arrowSize * (longueur de la flèche) : elles restent donc
+// proportionnées quelle que soit la longueur, contrairement à une taille absolue.
 void arrow(double x0, double y0, double x1, double y1) {
 
   double nx = x1 - x0;
@@ -846,16 +903,17 @@ void arrow(double x0, double y0, double x1, double y1) {
 
   double c = cos(arrowAngle);
   double s = sin(arrowAngle);
+  double barb = arrowSize * len;
 
   double ex = c * nx - s * ny;
   double ey = s * nx + c * ny;
   glVertex2d(x1, y1);
-  glVertex2d(x1 - arrowSize * ex, y1 - arrowSize * ey);
+  glVertex2d(x1 - barb * ex, y1 - barb * ey);
 
   ex = c * nx + s * ny;
   ey = -s * nx + c * ny;
   glVertex2d(x1, y1);
-  glVertex2d(x1 - arrowSize * ex, y1 - arrowSize * ey);
+  glVertex2d(x1 - barb * ex, y1 - barb * ey);
 }
 
 /**
@@ -931,6 +989,43 @@ void drawForces() {
   glLineWidth(1.0f);
 }
 
+// Flèches de vitesse aux noeuds.
+// Comme drawForces(), on normalise par la vitesse max : la flèche la plus longue mesure
+// vScale * (rayon moyen des cellules). L'affichage est donc lisible quel que soit l'ordre
+// de grandeur des vitesses, et indépendant du zoom. vScale se règle avec 'y'/'Y'.
+void drawVelocities() {
+  double max_v = 0.0;
+  double sum_radius = 0.0;
+  size_t n_cell = Conf.cells.size();
+  if (n_cell == 0) return;
+
+  for (size_t ci = 0; ci < n_cell; ++ci) {
+    sum_radius += Conf.cells[ci].radius;
+    for (size_t in = 0; in < Conf.cells[ci].nodes.size(); ++in) {
+      double v = Conf.cells[ci].nodes[in].vel.length();
+      if (v > max_v) max_v = v;
+    }
+  }
+  if (max_v == 0.0) return;
+
+  double refLen = sum_radius / (double)n_cell;
+  double scale  = vScale * refLen / max_v;
+
+  glColor4f(0.10f, 0.20f, 0.85f, 0.9f);
+  glLineWidth(1.5f);
+
+  glBegin(GL_LINES);
+  for (size_t ci = 0; ci < n_cell; ++ci) {
+    for (size_t in = 0; in < Conf.cells[ci].nodes.size(); ++in) {
+      const Node &N = Conf.cells[ci].nodes[in];
+      arrow(N.pos.x, N.pos.y, N.pos.x + scale * N.vel.x, N.pos.y + scale * N.vel.y);
+    }
+  }
+  glEnd();
+
+  glLineWidth(1.0f);
+}
+
 void drawControlBoxes() {
   glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
   glLineWidth(2.0f);
@@ -950,6 +1045,167 @@ void drawControlBoxes() {
     glVertex2d(Conf.controlBoxAreas[i].xmin, Conf.controlBoxAreas[i].ymax);
     glEnd();
   }
+}
+
+// Panneau d'état permanent (coin haut-gauche) : liste des toggles et leur état.
+void drawHUD() {
+  struct Item {
+    const char *key;
+    const char *name;
+    int state;
+  };
+  // NB: labels de touches en AZERTY, comme dans printHelp()
+  Item items[] = {
+      {"c", "cells", show_cells},
+      {"n", "contours", show_contours},
+      {"v", "nodes", show_nodes},
+      {"p", "pressure", show_pressure},
+      {"f", "forces", show_inter_cells_forces},
+      {"e", "velocities", show_velocities},
+      {"g", "glue", show_glue_points},
+      {"r", "crack path", show_crack_path},
+      {"b", "bar colors", show_bar_colors},
+      {"a", "ctrl boxes", show_control_boxes},
+      {"d", "background", show_background},
+  };
+  const int n = (int)(sizeof(items) / sizeof(items[0]));
+
+  const int nInfo  = 4; // conf/temps + les trois réglages continus
+  const int glyphH = 13;
+  const int lineH  = 16;
+  const int padX   = 8;
+  const int padY   = 8;
+  const int panelW = 250;
+  const int panelH = padY * 2 + (n + 1 + 1 + nInfo) * lineH; // titre + toggles + séparateur + infos
+
+  const int x0 = 6;
+  const int y1 = height - 6;   // bord haut du panneau
+  const int y0 = y1 - panelH;  // bord bas
+
+  switch2D::go(width, height);
+
+  // Fond translucide
+  glColor4f(0.0f, 0.0f, 0.0f, 0.3f);
+  glBegin(GL_QUADS);
+  glVertex2i(x0, y0);
+  glVertex2i(x0 + panelW, y0);
+  glVertex2i(x0 + panelW, y1);
+  glVertex2i(x0, y1);
+  glEnd();
+
+  int ty = y1 - padY - glyphH;
+  glColor3f(0.85f, 0.85f, 0.90f);
+  glText::print(x0 + padX, ty, "display    i:hud  h:help");
+  ty -= lineH;
+
+  for (int i = 0; i < n; ++i) {
+    if (items[i].state) {
+      glColor3f(0.35f, 0.95f, 0.45f);
+    } else {
+      //glColor3f(0.55f, 0.55f, 0.55f);
+      glColor3f(0.95f, 0.35f, 0.35f);
+    }
+    glText::print(x0 + padX, ty, "%s  %-11s %s", items[i].key, items[i].name, items[i].state ? "ON" : "off");
+    ty -= lineH;
+  }
+
+  // Séparateur
+  ty -= lineH / 2;
+  glColor4f(0.7f, 0.7f, 0.75f, 0.5f);
+  glBegin(GL_LINES);
+  glVertex2i(x0 + padX, ty + 4);
+  glVertex2i(x0 + panelW - padX, ty + 4);
+  glEnd();
+  ty -= lineH / 2;
+
+  // Valeurs courantes des réglages continus
+  glColor3f(0.85f, 0.85f, 0.90f);
+  glText::print(x0 + padX, ty, "conf %-4d t = %.4g", confNum, Conf.t);
+  ty -= lineH;
+  glText::print(x0 + padX, ty, "s/S fn width  %.3g", fnWidthFactor);
+  ty -= lineH;
+  glText::print(x0 + padX, ty, "t/T filter    %.3g", forceFilter);
+  ty -= lineH;
+  glText::print(x0 + padX, ty, "y/Y vel scale %.3g", vScale);
+
+  switch2D::back();
+}
+
+// Overlay d'aide (touche 'h') : rappel de tous les raccourcis clavier.
+void drawHelpOverlay() {
+  const char *lines[] = {
+      "Keyboard shortcuts",
+      "",
+      "a           show/hide control area boxes",
+      "b           colorize the cell bars",
+      "c           show/hide the cells",
+      "f           show/hide the forces",
+      "e           show/hide the nodal velocity arrows",
+      "g           show/hide the glue points",
+      "r           show/hide the crack path",
+      "n           show/hide cell contours",
+      "v           show/hide nodes (points)",
+      "p           show/hide pressure",
+      "d           show/hide the background gradient",
+      "i           show/hide this state panel (HUD)",
+      "h           show/hide this help",
+      "q           quit",
+      "s/S         force-chain lines thinner/thicker",
+      "t/T         force filter lower/higher",
+      "y/Y         velocity arrows shorter/longer (vScale)",
+      "z/Z         zoom in/out",
+      "->  / <-    load next / previous configuration",
+      "Shift+<-    jump to conf 0",
+      "=           fit the view",
+      "x           save screenshot.png",
+      "Shift+x     batch screenshots of all confs",
+      "space       save options to see2-options.toml",
+      "Shift+space reload options from see2-options.toml",
+  };
+  const int n = (int)(sizeof(lines) / sizeof(lines[0]));
+
+  const int glyphH  = 13;
+  const int glyphW  = 10;
+  const int lineH   = 16;
+  const int padX    = 14;
+  const int padY    = 12;
+  const int panelW  = 50 * glyphW + 2 * padX;
+  const int panelH  = 2 * padY + n * lineH;
+
+  const int x0 = (width - panelW) / 2;
+  const int y0 = (height - panelH) / 2;
+  const int y1 = y0 + panelH;
+
+  switch2D::go(width, height);
+
+  // Fond translucide + liseré
+  glColor4f(0.05f, 0.05f, 0.08f, 0.82f);
+  glBegin(GL_QUADS);
+  glVertex2i(x0, y0);
+  glVertex2i(x0 + panelW, y0);
+  glVertex2i(x0 + panelW, y1);
+  glVertex2i(x0, y1);
+  glEnd();
+  glColor4f(0.6f, 0.6f, 0.7f, 0.9f);
+  glBegin(GL_LINE_LOOP);
+  glVertex2i(x0, y0);
+  glVertex2i(x0 + panelW, y0);
+  glVertex2i(x0 + panelW, y1);
+  glVertex2i(x0, y1);
+  glEnd();
+
+  int ty = y1 - padY - glyphH;
+  for (int i = 0; i < n; ++i) {
+    if (i == 0) {
+      glColor3f(0.95f, 0.85f, 0.35f);
+    } else {
+      glColor3f(0.92f, 0.92f, 0.92f);
+    }
+    glText::print(x0 + padX, ty, "%s", lines[i]);
+    ty -= lineH;
+  }
+
+  switch2D::back();
 }
 
 bool try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
@@ -1000,6 +1256,8 @@ void readTomlOptions() {
     show_control_boxes      = tbl["display"]["show_control_boxes"].value_or(show_control_boxes);
     show_background         = tbl["display"]["show_background"].value_or(show_background);
     show_crack_path         = tbl["display"]["show_crack_path"].value_or(show_crack_path);
+    show_velocities         = tbl["display"]["show_velocities"].value_or(show_velocities);
+    show_hud                = tbl["display"]["show_hud"].value_or(show_hud);
 
     if (tbl["display"].as_table()->contains("bottom_color")) {
       auto arr = tbl["display"]["bottom_color"].as_array();
@@ -1034,6 +1292,8 @@ void readTomlOptions() {
 
   if (tbl.contains("arrows")) {
     vScale         = tbl["arrows"]["vScale"].value_or(vScale);
+    arrowSize      = tbl["arrows"]["arrowSize"].value_or(arrowSize);
+    arrowAngle     = tbl["arrows"]["arrowAngle"].value_or(arrowAngle);
     fnWidthFactor  = tbl["arrows"]["fnWidthFactor"].value_or(fnWidthFactor);
     forceFilter    = tbl["arrows"]["forceFilter"].value_or(forceFilter);
   }
@@ -1053,6 +1313,8 @@ void saveTomlOptions() {
       {"show_control_boxes",      show_control_boxes},
       {"show_background",         show_background},
       {"show_crack_path",         show_crack_path},
+      {"show_velocities",         show_velocities},
+      {"show_hud",                show_hud},
       {"bottom_color", toml::array{bottom_r, bottom_g, bottom_b}},
       {"top_color",    toml::array{top_r,    top_g,    top_b}},
     }},
@@ -1069,6 +1331,8 @@ void saveTomlOptions() {
     }},
     {"arrows", toml::table{
       {"vScale",        vScale},
+      {"arrowSize",     arrowSize},
+      {"arrowAngle",    arrowAngle},
       {"fnWidthFactor", fnWidthFactor},
       {"forceFilter",   forceFilter},
     }},
@@ -1124,6 +1388,9 @@ int main(int argc, char *argv[]) {
   // Désactive le support Retina (force une fenêtre en résolution 1x)
   glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_FALSE);
 
+  // Anti-aliasing (MSAA 4x) pour des contours et chaînes de force plus nets
+  glfwWindowHint(GLFW_SAMPLES, 4);
+
   GLFWwindow *window = glfwCreateWindow(width, height, "see2", NULL, NULL);
   if (!window) {
     fprintf(stderr, "Failed to create GLFW window\n");
@@ -1137,7 +1404,8 @@ int main(int argc, char *argv[]) {
   glfwSetKeyCallback(window, keyboard);
   glfwSetMouseButtonCallback(window, mouse_button);
   glfwSetCursorPosCallback(window, cursor_pos);
-  glfwSetFramebufferSizeCallback(window, reshape);
+  glfwSetFramebufferSizeCallback(window, framebuffer_size);
+  glfwSetWindowRefreshCallback(window, display); // ré-exposition (dé-minimisation, passage au 1er plan)
 
   mouse_mode = MouseMode::NOTHING;
 
@@ -1145,6 +1413,13 @@ int main(int argc, char *argv[]) {
   glEnable(GL_BLEND);
   glBlendEquation(GL_FUNC_ADD);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+  // Anti-aliasing : MSAA + lissage des lignes/points
+  glEnable(GL_MULTISAMPLE);
+  glEnable(GL_LINE_SMOOTH);
+  glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+  glEnable(GL_POINT_SMOOTH);
+  glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 
   // ==== Other initialisations
   glText::init();

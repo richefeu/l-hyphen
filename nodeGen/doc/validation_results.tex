@@ -1,0 +1,31 @@
+% Résultats des calculs de validation (input de Frank-ouverture-fissure, dt = 5e-8 s, 0.045 s simulées)
+\begin{center}
+\begin{tabular}{lccc}
+  \toprule
+  & Frank (\code{cellPrepro}) & \toolgen{} aléatoire & \toolgen{} hexagonal \\
+  \midrule
+  force au pic (\si{mN}) & \num{-44.6} & \num{-44.2} & \num{-41.8} \\
+  ouverture au pic (\si{\micro m}) & \num{17.6} & \num{15.7} & \num{15.6} \\
+  première rupture (\si{ms}) & \num{29.33} & \num{18.94} (isolée), puis \num{26.21} & \num{26.15} \\
+  fin de la propagation (\si{ms}) & \num{36.59} & \num{33.25} & \num{27.10} \\
+  ruptures & 141 & 94 & 86 \\
+  énergie rompue (\si{\micro J}) & 177 & 119 & 109 \\
+  longueur rompue (\si{mm}) & \num{25.9} & \num{17.4} & \num{16.3} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+La référence « Frank » est le calcul sur le nodeFile de \code{cellPrepro} au pas $\Delta t=\SI{1.75e-8}{s}$ ; les
+deux maillages \toolgen{} sont calculés à $\Delta t=\SI{5e-8}{s}$ sans aucun nettoyage, avec l'amortissement de flexion
+$\alpha_b=0.1$. Les maillages et les pré-fissures n'étant pas identiques, seule une comparaison qualitative a du
+sens :
+\begin{itemize}[nosep]
+  \item avec les deux maillages \toolgen, la rupture s'amorce à la pointe de la pré-fissure ; avec le réseau hexagonal,
+    les premiers liens rompus sont ceux de l'interface qui prolonge la fissure (à \SI{0.16}{mm} puis
+    \SI{0.36}{mm} de la pointe) ;
+  \item la fissure traverse l'échantillon en un seul chemin, sans bifurcation ; elle est sinueuse avec les germes
+    aléatoires, mais suit en zigzag une rangée du réseau hexagonal et traverse l'échantillon en moins de
+    \SI{1}{ms} : c'est l'anisotropie discutée à la section suivante ;
+  \item le chemin plus direct explique l'énergie et la longueur rompues plus faibles qu'avec le maillage de Frank,
+    dont la fissure bifurque.
+\end{itemize}

@@ -1,0 +1,36 @@
+# nodegen : petite éprouvette fissurée (2.8 mm x 3.5 mm, ~80 cellules) pour tester
+# l'événement stopAfterStressDrop (arrêt après une chute de contrainte)
+
+# Domaine
+xmin 0.0
+ymin 0.0
+Lx   0.0028
+Ly   0.0035
+
+# Cellules
+cellSize        3.53e-4   # diamètre équivalent visé
+barWidth        2e-6      # écart entre parois voisines (= barWidth de readNodeFile)
+lattice         hex
+disorder        0.3
+lloydIterations 5
+minEdgeRatio    0.33
+minSides        5
+seed            1
+
+# Pré-fissure depuis le bord gauche, à mi-hauteur (environ 2 cellules)
+crack   0.0 0.00175  0.0007 0.00175
+tipInterface 1
+opening 2e-6
+distGlue 2e-7
+
+# Propriétés (celles de Frank-ouverture-fissure)
+cellProperties  2000.0  7.928638584420448e-4  79286385.84420447  0   # Kn Kr Mz_max p_int
+glueProperties  26373.626373626375  26373.626373626375  1.2575114788066131e-06   # kn_coh kt_coh Gc
+grips           4e-4  3e-4      # mors haut et bas : hauteur, vitesse imposée
+nodeMass        8e-8
+
+# Sorties
+output nodefile.txt
+svg    nodefile.svg
+input  nodegen_input.txt
+inputTemplate  input_modele.txt  input.txt

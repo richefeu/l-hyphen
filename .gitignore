@@ -46,3 +46,18 @@ cheatsheets/lhyphen_cheatsheet.pdf
 */.DS_Store
 Icon*
 *.zip
+# Éditeur terminal
+lhedit/lhedit
+
+# nodeGen
+nodeGen/nodegen
+nodeGen/nodeview
+nodeGen/example/nodefile.txt
+
+# nodeGen doc
+nodeGen/doc/work/
+nodeGen/example/nodegen_input.txt
+nodeGen/example/input.txt
+
+# crackwatch
+crackwatch

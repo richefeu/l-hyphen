@@ -57,6 +57,7 @@ using ExpressionParser = exprParser<double>;
 #include "Bar.hpp"
 #include "Cell.hpp"
 #include "Control.hpp"
+#include "Event.hpp"
 #include "Neighbor.hpp"
 #include "Node.hpp"
 
@@ -145,6 +146,9 @@ public:
 
   std::vector<size_t> followedCells; ///< cellules suivies
 
+  std::vector<std::unique_ptr<Event>> events; ///< événements vérifiés à chaque pas (voir Event.hpp)
+  bool stopRequested{false};                  ///< mis à true (par un événement) pour arrêter la simulation
+
   int nbThreads{1};
 
   // Limites de dessin pour les sorties SVG
@@ -185,6 +189,9 @@ public:
   double mu{0.0};             ///< coefficient de frottement (entre les cellules)
   double fadh{0.0};           ///< force normale d'adhésion au contact
   int adaptativeStiffness{0}; ///< adaptativeStiffness
+
+  double momentForceMax{0.0}; ///< force max pour transmettre un moment nodal (le moment transmis, pas
+                              ///< l'état mz, est limité à momentForceMax * min(l_prev, l_next)) ; 0 = pas de limite
 
   int nstep{0};             ///< nombre de pas
   int nstepPeriodVerlet{0}; ///< nombre de pas entre mise à jour des voisins
@@ -242,6 +249,7 @@ public:
   void addNodeToBarNeighbor(size_t ci, size_t cj, size_t in, size_t jn, double epsilonEnds = 0.0);
   double getMinimumNodeDistance();
   void readNodeFile(const char *name, double barWidth, double Kn, double Kr, double Mz_max, double p_int);
+  void cleanShortBars(double ratio);
 
   std::function<void()> updateNeighbors;
   void updateNeighbors_brute_force();
@@ -266,6 +274,7 @@ public:
   void computeNodeForces();
   void nodeAccelerations();
   void SingleStep();
+  void checkEvents();
   void integrate();
 
   void saveCONF(const char *fname);

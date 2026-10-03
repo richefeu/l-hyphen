@@ -1,0 +1,537 @@
+# lhyphen.lang -- coloration syntaxique, documentation en ligne et snippets
+# pour les fichiers d'entrée de l-hyphen (input.txt et fichiers conf*).
+#
+# Lu au démarrage par lhedit ; l'éditer suffit pour documenter un nouveau
+# mot-clé, sans recompiler. La liste des mots-clés suit Lhyphen::loadCONF().
+#
+# Format
+#   [keyword] nom     un mot de commande, coloré comme mot-clé
+#   [type] nom        une valeur énumérée, colorée comme type
+#   [doc] nom         documenté mais non coloré
+#   [snippet] Titre   un modèle ; son corps va jusqu'au prochain [ ]
+#   doc: première ligne   documentation de l'entrée juste au-dessus ; les
+#     lignes suivantes sont indentées de deux espaces, les lignes vides gardées
+#
+# Hors d'une doc ou d'un snippet, une ligne commençant par '#' est un
+# commentaire et les lignes vides sont ignorées.
+
+
+# ===========================================================================
+# Constantes et expressions
+# ===========================================================================
+
+[keyword] define
+doc: define [(string) NOM] [(double) valeur]
+
+  Définit une constante nommée, utilisable ensuite dans les expressions.
+  Une expression s'écrit entre deux '$', espaces permis :
+
+    define L 0.5
+    dt $ 1e-3 * L / 100 $
+
+# ===========================================================================
+# Temps
+# ===========================================================================
+
+[keyword] dt
+doc: dt [(double) valeur]
+
+  Pas de temps. Comparer avec les dt_crit de diagnostic.txt (dt_crit/dt > 1).
+
+[keyword] nstep
+doc: nstep [(int) valeur]
+
+  Nombre de pas de temps à simuler.
+
+[keyword] t
+doc: t [(double) valeur]
+
+  Temps courant (temps initial dans un fichier d'entrée).
+
+[keyword] cyclicVelPeriod
+doc: cyclicVelPeriod [(double) durée]
+
+  Période d'un chargement cyclique : les vitesses imposées changent de signe
+  pendant la seconde moitié de chaque période (0 = désactivé).
+
+# ===========================================================================
+# Dissipation
+# ===========================================================================
+
+[keyword] numericalDissipation
+doc: numericalDissipation [(double) valeur]
+
+  Dissipation purement numérique : les vitesses sont multipliées par
+  (1 - valeur) à chaque pas.
+
+[keyword] globalViscosity
+doc: globalViscosity [(double) valeur]
+
+  Viscosité globale appliquée aux nœuds.
+
+[keyword] setCellWallDampingRates
+doc: setCellWallDampingRates [(double) alpha_s] [(double) alpha_b]
+
+  Taux d'amortissement des parois : axial (alpha_s) et en flexion (alpha_b),
+  relatifs à l'amortissement critique.
+
+[keyword] setCellWallDampings
+doc: setCellWallDampings [(double) nu_s] [(double) nu_b]
+
+  Coefficients d'amortissement directs des parois : axial (nu_s) et en
+  flexion (nu_b).
+
+# ===========================================================================
+# Forces volumiques
+# ===========================================================================
+
+[keyword] gravity
+doc: gravity [(double) gx] [(double) gy]
+
+  Composantes de la gravité.
+
+# ===========================================================================
+# Détection des voisins
+# ===========================================================================
+
+[keyword] distVerlet
+doc: distVerlet [(double) distance]
+
+  Épaisseur de la zone tampon de Verlet : les paires plus proches que cette
+  distance sont gardées dans la liste de voisins.
+
+[keyword] nstepPeriodVerlet
+doc: nstepPeriodVerlet [(int) valeur]
+
+  Nombre de pas entre deux mises à jour de la liste de voisins.
+
+[keyword] linkCells
+doc: linkCells
+
+  Recherche des voisins par link-cells, en O(N), au lieu de la force brute
+  en O(N²). La taille des cellules est automatique ; d'éventuelles valeurs
+  restées sur la ligne (anciens fichiers) sont ignorées.
+
+[keyword] checkNeighbors
+doc: checkNeighbors
+
+  Au démarrage, compare la liste obtenue par link-cells à celle de la force
+  brute (vérification).
+
+# ===========================================================================
+# Contact
+# ===========================================================================
+
+[keyword] kn
+doc: kn [(double) valeur]
+
+  Raideur normale de contact.
+
+[keyword] kt
+doc: kt [(double) valeur]
+
+  Raideur tangentielle de contact.
+
+[keyword] viscnrate
+doc: viscnrate [(double) valeur]
+
+  Viscosité normale au contact, en fraction de l'amortissement critique :
+  cn = viscnrate * 2 * sqrt(m_eff * kn).
+
+[keyword] mu
+doc: mu [(double) valeur]
+
+  Coefficient de frottement de Coulomb.
+
+[keyword] fadh
+doc: fadh [(double) valeur]
+
+  Force d'adhésion normale au contact.
+
+[keyword] adaptativeStiffness
+doc: adaptativeStiffness [0/1]
+
+  Raideur de contact adaptative (0 = désactivée, 1 = activée).
+
+# ===========================================================================
+# Cohésion (glue)
+# ===========================================================================
+
+[keyword] glue
+doc: glue [(double) distance]
+
+  Colle les nœuds de cellules différentes distants de moins de 'distance'.
+  Modèle à force maximale : voir setGlueSameProperties.
+
+[keyword] GcGlue
+doc: GcGlue [(double) distance]
+
+  Comme glue, avec le modèle à énergie de rupture critique Gc :
+  voir setGcGlueSameProperties.
+
+[keyword] distGcGlue
+doc: distGcGlue [(double) distance]
+
+  Synonyme de GcGlue.
+
+[keyword] setGlueSameProperties
+doc: setGlueSameProperties [kn_coh] [kt_coh] [fn_coh_max] [ft_coh_max] [yieldPower]
+
+  Mêmes propriétés cohésives pour tous les points de colle (modèle à force
+  maximale) : raideurs normale et tangentielle, forces maximales normale et
+  tangentielle, et exposant du critère de rupture.
+
+[keyword] setGcGlueSameProperties
+doc: setGcGlueSameProperties [kn_coh] [kt_coh] [Gc]
+
+  Mêmes propriétés cohésives pour tous les points de colle (modèle Gc) :
+  raideurs normale et tangentielle, énergie de rupture critique Gc.
+
+# ===========================================================================
+# Construction de l'échantillon
+# ===========================================================================
+
+[keyword] readNodeFile
+doc: readNodeFile [(string) fichier] [barWidth] [Kn] [Kr] [Mz_max] [p_int]
+
+  Lit un fichier de nœuds (lignes 'x y idCellule', produit par cellPrepro).
+  barWidth < 0 : estimation automatique (moitié de la distance minimale entre
+  nœuds de cellules différentes). Kn : raideur axiale des barres, Kr : raideur
+  en flexion, Mz_max : moment maximal, p_int : pression interne.
+
+[keyword] cleanShortBars
+doc: cleanShortBars [(double) ratio]
+
+  Fusionne les barres plus courtes que ratio × longueur moyenne (typiquement
+  0.2 à 0.3), car elles imposent un pas de temps minuscule (Kr/l0²).
+  À placer juste après readNodeFile, AVANT masses, amortissements, contrôles,
+  captureNodes et glue.
+
+[keyword] momentForceMax
+doc: momentForceMax [(double) Fmax]
+
+  Seulement si une force qui transmet le moment d'un nœud (m/l) dépasse Fmax
+  (bras de levier trop court), le moment transmis est réduit à
+  ±Fmax × min(l_prev, l_next). Réversible (l'état mz n'est pas modifié), sans
+  couple parasite. À associer à alpha_b > 0. 0 (défaut) : pas de limite.
+
+[keyword] reorder
+doc: reorder [0/1]
+
+  Ré-ordonnancement des nœuds à la lecture par readNodeFile (1 par défaut).
+
+[keyword] addRegularPolygonalCell
+doc: addRegularPolygonalCell [nbFaces] [x] [y] [rot] [Rext] [barWidth] [kn] [kr] [mz_max]
+
+  Ajoute une cellule en forme de polygone régulier de nbFaces côtés, centrée
+  en (x, y), tournée de rot, de rayon extérieur Rext.
+
+[keyword] addSquareBrickWallCells
+doc: addSquareBrickWallCells [nx] [ny] [hdist] [xleft] [ybottom] [barWidth] [kn] [kr] [mz_max]
+
+  Ajoute nx × ny cellules carrées arrangées en mur de briques, à partir du
+  coin (xleft, ybottom).
+
+[keyword] addMultiLine
+doc: addMultiLine [xo] [yo] [xe] [ye] [barWidth] [n] [kn] [kr] [mz_max]
+
+  Ajoute une ligne ouverte de n barres, de (xo, yo) à (xe, ye).
+
+[keyword] setCellAsOpen
+doc: setCellAsOpen [(int) idCellule]
+
+  Marque la cellule comme ouverte (pas de barre de fermeture).
+
+[keyword] setClose
+doc: setClose [(int) idCellule]
+
+  Marque la cellule comme fermée.
+
+# ===========================================================================
+# Masses
+# ===========================================================================
+
+[keyword] setNodeMasses
+doc: setNodeMasses [(double) masse]
+
+  Même masse pour tous les nœuds.
+
+[keyword] setCellMasses
+doc: setCellMasses [(double) masse]
+
+  Masse totale de chaque cellule, répartie sur ses nœuds.
+
+[keyword] setCellWallDensities
+doc: setCellWallDensities [(double) rho] [(double) épaisseur]
+
+  Masse des nœuds calculée à partir de la densité des parois.
+
+[keyword] setCellDensities
+doc: setCellDensities [(double) rho] [(double) épaisseur]
+
+  Comme setCellWallDensities, en incluant la contribution de la surface
+  intérieure des cellules.
+
+# ===========================================================================
+# Contenu des cellules (pression)
+# ===========================================================================
+
+[keyword] cellContent
+doc: cellContent [0/1/2]
+
+  Contenu des cellules :
+    0 = vide
+    1 = PV constant (gaz)
+    2 = PV élastique (liquide), voir compressFactor
+
+[keyword] compressFactor
+doc: compressFactor [(double) valeur]
+
+  Raideur K du contenu élastique (cellContent 2) :
+  p = -K (S - S0) / S0, S étant la surface de la cellule.
+
+[keyword] setCellInternalPressure
+doc: setCellInternalPressure [(int) idCellule] [(double) p]
+
+  Pression interne initiale d'une cellule.
+
+[keyword] enablePressures
+doc: enablePressures
+
+  OBSOLÈTE : remplacé par cellContent.
+
+[keyword] disablePressures
+doc: disablePressures
+
+  OBSOLÈTE : remplacé par cellContent.
+
+# ===========================================================================
+# Conditions aux limites
+# ===========================================================================
+
+[keyword] setNodeControl
+doc: setNodeControl [idCellule] [idNœud] [xmode] [xvalue] [ymode] [yvalue]
+
+  Impose le mouvement d'un nœud. Mode 0 = vitesse imposée, 1 = force imposée.
+
+[keyword] setNodeControlInBox
+doc: setNodeControlInBox [xmin] [xmax] [ymin] [ymax] [xmode] [xvalue] [ymode] [yvalue]
+
+  Impose le mouvement de tous les nœuds situés dans le rectangle.
+  Mode 0 = vitesse imposée, 1 = force imposée.
+
+[keyword] setCellControl
+doc: setCellControl [idCellule] [xmode] [xvalue] [ymode] [yvalue]
+
+  Impose le mouvement de tous les nœuds d'une cellule.
+  Mode 0 = vitesse imposée, 1 = force imposée.
+
+# ===========================================================================
+# Sorties
+# ===========================================================================
+
+[keyword] nstepPeriodConf
+doc: nstepPeriodConf [(int) valeur]
+
+  Nombre de pas entre deux fichiers conf (0 = aucun).
+
+[keyword] iconf
+doc: iconf [(int) valeur]
+
+  Numéro du prochain fichier conf.
+
+[keyword] nstepPeriodSVG
+doc: nstepPeriodSVG [(int) valeur]
+
+  Nombre de pas entre deux fichiers sample####.svg (0 = aucun).
+
+[keyword] isvg
+doc: isvg [(int) valeur]
+
+  Numéro du prochain fichier SVG.
+
+[keyword] nstepPeriodRecord
+doc: nstepPeriodRecord [(int) valeur]
+
+  Nombre de pas entre deux enregistrements des données scalaires.
+
+[keyword] captureNodes
+doc: captureNodes [(string) fichier] [xmin] [xmax] [ymin] [ymax]
+
+  Enregistre dans 'fichier' les données des nœuds présents dans le rectangle
+  au moment de la lecture de cette ligne.
+
+[keyword] followCell
+doc: followCell [(int) idCellule]
+
+  Suit une cellule particulière (données de suivi).
+
+[keyword] findDisplayArea
+doc: findDisplayArea [(double) facteur]
+
+  Calcule les limites d'affichage à partir de l'échantillon, agrandies
+  par 'facteur' (>= 1).
+
+[keyword] limits
+doc: limits [xmin] [xmax] [ymin] [ymax]
+
+  Limites d'affichage.
+
+# ===========================================================================
+# Événements
+# ===========================================================================
+
+[keyword] event
+doc: event [(string) type] [paramètres...]
+
+  Événement vérifié au début de chaque pas de temps ; quand sa condition
+  est remplie, il fait son action une seule fois. Les événements pas
+  encore déclenchés sont réécrits dans les fichiers conf*.
+
+  event saveConfAtTime [t]
+    sauvegarde une conf quand le temps atteint t
+  event saveConfAtBrokenLength [L]
+    sauvegarde une conf quand la longueur rompue cumulée dépasse L
+    (0 = dès la première rupture)
+  event stopAtBrokenLength [L]
+    sauvegarde une conf puis arrête la simulation quand la longueur
+    rompue cumulée dépasse L
+  event stopAfterStressDrop [ictrl] [x|y] [chute%] [délai] [tStart] [tau]
+    sauvegarde une conf puis arrête la simulation 'délai' après une
+    chute de 'chute%' (par rapport au pic) de la force de réaction sur
+    les noeuds du contrôle 'ictrl' (numérotés à partir de 0 dans l'ordre
+    des setNodeControl, setCellControl, setNodeControlInBox).
+    Force lissée sur un temps tau (0 = aucun lissage), pic suivi
+    à partir de tStart.
+
+[type] saveConfAtTime
+[type] saveConfAtBrokenLength
+[type] stopAtBrokenLength
+[type] stopAfterStressDrop
+
+# ===========================================================================
+# Divers
+# ===========================================================================
+
+[keyword] nbThreads
+doc: nbThreads [(int) n]
+
+  Nombre de threads OpenMP (ignoré sans OpenMP).
+
+# ===========================================================================
+# Blocs écrits par saveCONF (fichiers conf*)
+# ===========================================================================
+
+[keyword] cells
+doc: cells [(int) nbCellules]
+
+  Bloc écrit par saveCONF. Pour chaque cellule :
+    radius nbNodes nbBars p_int surface surface0 close
+  puis une ligne par nœud :
+    mass pos vel force ictrl prevNode nextNode kr mz mz_max
+  puis une ligne par barre :
+    i j l0 kn fn
+
+[keyword] neighbors
+doc: neighbors
+
+  Bloc écrit par saveCONF : pour chaque cellule, le nombre de voisins puis
+    ic jc in jn n contactState fn ft glueState [données de colle]
+  glueState 1 : fn_coh ft_coh kn_coh kt_coh fn_coh_max ft_coh_max yieldPower
+  glueState 2 : fn_coh ft_coh kn_coh kt_coh Gc
+
+[keyword] controlBoxAreas
+doc: controlBoxAreas [(int) nb]
+
+  Bloc écrit par saveCONF : les zones de setNodeControlInBox, une par ligne :
+    xmin xmax ymin ymax xmode xvalue ymode yvalue
+
+
+# ===========================================================================
+# Snippets
+# ===========================================================================
+
+[snippet] Constante nommée
+define _NOM_ _valeur_
+
+[snippet] Temps
+dt _valeur_
+nstep _valeur_
+
+[snippet] Dissipation
+numericalDissipation _valeur_
+globalViscosity _valeur_
+setCellWallDampingRates _alpha_s_ _alpha_b_
+
+[snippet] Gravité
+gravity _gx_ _gy_
+
+[snippet] Voisins (Verlet + link-cells)
+distVerlet _distance_
+nstepPeriodVerlet _valeur_
+linkCells
+
+[snippet] Contact
+kn _valeur_
+kt _valeur_
+mu _valeur_
+fadh _valeur_
+adaptativeStiffness _0/1_
+
+[snippet] Colle (force maximale)
+glue _distance_
+setGlueSameProperties _kn_coh_ _kt_coh_ _fn_coh_max_ _ft_coh_max_ _yieldPower_
+
+[snippet] Colle (énergie Gc)
+GcGlue _distance_
+setGcGlueSameProperties _kn_coh_ _kt_coh_ _Gc_
+
+[snippet] Lire un fichier de nœuds
+readNodeFile _fichier_ _barWidth_ _Kn_ _Kr_ _Mz_max_ _p_int_
+cleanShortBars _ratio_
+
+[snippet] Polygone régulier
+addRegularPolygonalCell _nbFaces_ _x_ _y_ _rot_ _Rext_ _barWidth_ _kn_ _kr_ _mz_max_
+
+[snippet] Mur de briques
+addSquareBrickWallCells _nx_ _ny_ _hdist_ _xleft_ _ybottom_ _barWidth_ _kn_ _kr_ _mz_max_
+
+[snippet] Ligne multi-barres
+addMultiLine _xo_ _yo_ _xe_ _ye_ _barWidth_ _n_ _kn_ _kr_ _mz_max_
+
+[snippet] Masses des nœuds
+setNodeMasses _masse_
+
+[snippet] Densité des parois
+setCellWallDensities _rho_ _épaisseur_
+
+[snippet] Contenu des cellules
+cellContent _0/1/2_
+compressFactor _valeur_
+
+[snippet] Contrôle dans une boîte
+setNodeControlInBox _xmin_ _xmax_ _ymin_ _ymax_ _xmode_ _xvalue_ _ymode_ _yvalue_
+
+[snippet] Contrôle d'un nœud
+setNodeControl _idCellule_ _idNœud_ _xmode_ _xvalue_ _ymode_ _yvalue_
+
+[snippet] Contrôle d'une cellule
+setCellControl _idCellule_ _xmode_ _xvalue_ _ymode_ _yvalue_
+
+[snippet] Sorties
+iconf 0
+nstepPeriodConf _valeur_
+isvg 0
+nstepPeriodSVG _valeur_
+nstepPeriodRecord _valeur_
+findDisplayArea 1.1
+
+[snippet] Événements (rupture)
+event saveConfAtBrokenLength 0
+event stopAtBrokenLength _longueur_
+
+[snippet] Arrêt après chute de contrainte
+event stopAfterStressDrop _ictrl_ _x/y_ _chute%_ _délai_ _tStart_ _tau_
+
+[snippet] Capture de nœuds
+captureNodes _fichier_ _xmin_ _xmax_ _ymin_ _ymax_

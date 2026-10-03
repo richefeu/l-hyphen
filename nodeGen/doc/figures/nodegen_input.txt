@@ -1,0 +1,23 @@
+# ===== Lignes d'input générées par nodegen (tutorial_params.txt) =====
+# Domaine [0.0032, 0.0168] x [0.002, 0.018], 2222 cellules, 13084 noeuds
+# Barres : l_moy = 0.0001986, l_min = 7.861e-05 (l_min/l_moy = 0.3957) : cleanShortBars est inutile
+# Pré-fissure : de (0.0032, 0.01) à la pointe effective (0.004381, 0.01), lèvres écartées de barWidth + opening = 4e-06
+# Les lignes commentées contiennent des valeurs <...> à compléter (ou à fournir dans le fichier de
+# paramètres de nodegen : cellProperties, glueProperties).
+
+# --- Échantillon (section SAMPLE)
+#             fichier        barWidth   Kn   Kr   Mz_max   p_int
+readNodeFile  work/nodefile.txt  2e-06  2000  0.000792863858442045  79286385.8442045  0
+# setNodeMasses 8e-08  ->  dt_crit(flexion) = l_min * sqrt(m/Kr) = 7.896e-07 s (dt <= 7.896e-08 conseillé)
+# (masses, amortissements, cellContent... ici)
+
+# --- Chargement : mors bas et haut, libres en x (mode 1 = force nulle), vitesse imposée en y (mode 0)
+#                    xmin  xmax  ymin  ymax  xmode xvalue ymode yvalue
+setNodeControlInBox  0.0032  0.0168  0.002  0.0024  1 0.0  0 -0.0003    # bas  : 312 noeuds
+setNodeControlInBox  0.0032  0.0168  0.0176  0.018  1 0.0  0 0.0003    # haut : 316 noeuds
+captureNodes  bottom.txt  0.0032  0.0168  0.002  0.0024
+captureNodes  top.txt     0.0032  0.0168  0.0176  0.018
+
+# --- Collage (après les contrôles) : distGcGlue doit rester inférieur à opening = 2e-06
+distGcGlue 2e-07
+setGcGlueSameProperties  26373.6263736264  26373.6263736264  1.25751147880661e-06

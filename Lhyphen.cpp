@@ -38,6 +38,7 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <unordered_map>
 
 /// Construct a new Lhyphen object
 ///
@@ -93,11 +94,14 @@ void Lhyphen::diagnostics() {
   const double INF = std::numeric_limits<double>::max();
 
   // ---- Comptages ----
-  size_t totalNodes = 0, totalBars = 0, totalNeighbors = 0;
+  size_t totalNodes = 0, totalBars = 0, totalNeighbors = 0, totalGlued = 0;
   for (auto &c : cells) {
     totalNodes += c.nodes.size();
     totalBars += c.bars.size();
     totalNeighbors += c.neighbors.size();
+    for (auto &inter : c.neighbors)
+      if (inter.glueState != GLUE_NONE)
+        totalGlued++;
   }
 
   // ---- Masses ----
@@ -159,6 +163,31 @@ void Lhyphen::diagnostics() {
   if (nBarCount > 0)
     lBarMean /= (double)nBarCount;
 
+  // ---- dt critique des barres (axial et flexion) ----
+  // Axial : raideur kn de la barre.
+  // Flexion : le moment mz = kr*dtheta est transmis par une force mz/l0², la raideur
+  // effective est donc kr/l0² : elle explose pour les barres très courtes.
+  double lBarMin = INF;
+  double dtCritBar = INF, dtCritFlex = INF;
+  double kFlexMax = 0.0;
+  for (auto &c : cells)
+    for (auto &b : c.bars) {
+      if (b.l0 <= 0.0)
+        continue;
+      lBarMin = std::min(lBarMin, b.l0);
+      double m = std::min(c.nodes[b.i].mass, c.nodes[b.j].mass);
+      if (m <= 0.0)
+        continue;
+      if (b.kn > 0.0)
+        dtCritBar = std::min(dtCritBar, std::sqrt(m / b.kn));
+      double kr = std::max(c.nodes[b.i].kr, c.nodes[b.j].kr);
+      if (kr > 0.0) {
+        double kFlex = kr / (b.l0 * b.l0);
+        kFlexMax = std::max(kFlexMax, kFlex);
+        dtCritFlex = std::min(dtCritFlex, std::sqrt(m / kFlex));
+      }
+    }
+
   // ====================================================================
   // Préparation du texte de diagnostic
   // ====================================================================
@@ -201,6 +230,7 @@ void Lhyphen::diagnostics() {
   oss << "  Noeuds             : " << totalNodes << "\n";
   oss << "  Barres             : " << totalBars << "\n";
   oss << "  Paires de voisins  : " << totalNeighbors / 2 << "\n";
+  oss << "  Liens collés       : " << totalGlued << "\n";
 
   if (mMin < INF) {
     oss << "\n  Masses des noeuds  : min = " << std::scientific << std::setprecision(3) << mMin << "   max = " << mMax
@@ -213,7 +243,13 @@ void Lhyphen::diagnostics() {
   }
 
   if (lBarMean > 0.0) {
-    oss << "\n  Longueur de barre (moyenne) : " << std::fixed << std::setprecision(6) << lBarMean << "\n";
+    oss << "\n  Longueur de barre (moyenne) : " << std::scientific << std::setprecision(3) << lBarMean << "\n";
+    oss << "  Longueur de barre (minimum) : " << lBarMin << "   (l_min/l_moy = " << std::fixed << std::setprecision(4)
+        << lBarMin / lBarMean << ")\n";
+  }
+  if (kFlexMax > 0.0) {
+    oss << "  Raideur de flexion max kr/l_min² : " << std::scientific << std::setprecision(3) << kFlexMax
+        << " N/m\n";
   }
 
   if (rMax > 0.0) {
@@ -236,6 +272,20 @@ void Lhyphen::diagnostics() {
     oss << contactLine << "\n";
   if (!cohesionLine.empty())
     oss << cohesionLine << "\n";
+  std::string barLine = formatDtLine("barre", dtCritBar);
+  std::string flexLine = formatDtLine("flexion", dtCritFlex);
+  if (!barLine.empty())
+    oss << barLine << "\n";
+  if (!flexLine.empty())
+    oss << flexLine << "\n";
+  if (momentForceMax > 0.0 && lBarMin < INF) {
+    oss << "    momentForceMax = " << std::scientific << std::setprecision(3) << momentForceMax
+        << " N : moment limité à " << momentForceMax * lBarMin << " N.m sur la barre la plus courte\n";
+    oss << "    (le dt_crit flexion ci-dessus ignore cette limite, réversible, qui borne les forces des\n"
+        << "     noeuds à bras de levier court ; associer alpha_b > 0 pour amortir leur bruit résiduel)\n";
+  }
+  if (dt > 0.0 && dtCritFlex < 20.0 * dt && lBarMean > 0.0 && lBarMin < 0.1 * lBarMean)
+    oss << "    -> flexion limitée par des barres très courtes : envisager 'cleanShortBars 0.3' après readNodeFile\n";
 
   // --- Sorties ---
   oss << "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
@@ -585,6 +635,285 @@ void Lhyphen::readNodeFile(const char *name, double barWidth, double Kn, double 
       cells[i].connectOrderedNodes(barWidth, Kn, Kr, Mz_max, p_int, true);
     }
   }
+}
+
+///  Décale chaque côté d'un polygone fermé de h selon sa normale extérieure (h < 0 : vers l'intérieur),
+///  les nouveaux sommets étant les intersections des côtés décalés consécutifs.
+///  C'est la construction utilisée par cellPrepro pour placer les noeuds à barWidth/2 des parois.
+static std::vector<vec2r> offsetPolygon(const std::vector<vec2r> &p, double h) {
+  size_t n = p.size();
+  double area2 = 0.0;
+  for (size_t k = 0; k < n; k++) {
+    const vec2r &a = p[k];
+    const vec2r &b = p[(k + 1) % n];
+    area2 += a.x * b.y - b.x * a.y;
+  }
+  if (area2 < 0.0) {
+    h = -h; // polygone orienté dans le sens horaire
+  }
+  std::vector<vec2r> out(n);
+  for (size_t k = 0; k < n; k++) {
+    const vec2r &a = p[(k + n - 1) % n];
+    const vec2r &b = p[k];
+    const vec2r &c = p[(k + 1) % n];
+    vec2r t1 = b - a;
+    t1.normalize();
+    vec2r t2 = c - b;
+    t2.normalize();
+    vec2r n1(t1.y, -t1.x);
+    vec2r n2(t2.y, -t2.x);
+    double A1 = (b + h * n1) * n1;
+    double A2 = (b + h * n2) * n2;
+    double cross = n1.x * n2.y - n1.y * n2.x;
+    if (fabs(cross) < 1e-8) { // côtés quasi alignés
+      out[k] = b + h * n1;
+    } else {
+      out[k].set((n2.y * A1 - n1.y * A2) / cross, (n1.x * A2 - n2.x * A1) / cross);
+    }
+  }
+  return out;
+}
+
+///  Nettoie le maillage en supprimant les barres trop courtes (l0 < ratio * longueur moyenne des barres).
+///
+///  Les barres très courtes imposent une raideur de flexion effective kr/l0² très élevée, et donc
+///  un pas de temps critique très petit.
+///  Les noeuds d'un nodeFile (cellPrepro) sont placés à barWidth/2 des parois du pavage d'origine.
+///  On reconstruit donc d'abord les sommets du pavage (côtés décalés de +barWidth/2), qui sont
+///  communs aux cellules voisines. Les deux sommets d'une barre courte sont fusionnés en leur milieu
+///  (pour toutes les cellules qui les partagent), puis les cellules concernées sont reconstruites
+///  (côtés décalés de -barWidth/2). L'écartement entre parois voisines reste donc exactement
+///  barWidth, ce qui préserve le collage. Les autres cellules ne sont pas modifiées, et une cellule
+///  ne descend jamais sous 3 noeuds.
+///
+///  À utiliser juste après readNodeFile, AVANT les commandes qui dépendent des noeuds
+///  (masses, amortissements, contrôles, captureNodes, glue).
+///
+///  @param ratio  seuil relatif à la longueur moyenne des barres (typiquement 0.2 à 0.4)
+///
+void Lhyphen::cleanShortBars(double ratio) {
+  // Numérotation globale des noeuds et sommets du pavage d'origine (W)
+  std::vector<size_t> offset(cells.size() + 1, 0);
+  for (size_t c = 0; c < cells.size(); c++) {
+    offset[c + 1] = offset[c] + cells[c].nodes.size();
+  }
+  const size_t N = offset.back();
+  std::vector<size_t> owner(N);
+  std::vector<vec2r> W(N);
+  double lMean = 0.0;
+  size_t nbBars = 0;
+  double rMax = 0.0;
+  for (size_t c = 0; c < cells.size(); c++) {
+    std::vector<vec2r> p;
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      owner[offset[c] + n] = c;
+      p.push_back(cells[c].nodes[n].pos);
+    }
+    if (cells[c].close && p.size() >= 3) {
+      p = offsetPolygon(p, cells[c].radius);
+    }
+    for (size_t n = 0; n < p.size(); n++) {
+      W[offset[c] + n] = p[n];
+    }
+    for (size_t b = 0; b < cells[c].bars.size(); b++) {
+      lMean += cells[c].bars[b].l0;
+      nbBars++;
+    }
+    rMax = std::max(rMax, cells[c].radius);
+  }
+  if (nbBars == 0) {
+    std::cout << "@Lhyphen::cleanShortBars, no bar to clean\n";
+    return;
+  }
+  lMean /= (double)nbBars;
+  const double lCrit = ratio * lMean;
+  const double tol = 2.0 * rMax; // tolérance de coïncidence des sommets (= barWidth)
+
+  // Union-find avec la liste des membres de chaque groupe
+  std::vector<size_t> parent(N);
+  std::vector<std::vector<size_t>> members(N);
+  for (size_t k = 0; k < N; k++) {
+    parent[k] = k;
+    members[k].push_back(k);
+  }
+  auto find = [&](size_t k) -> size_t {
+    while (parent[k] != k) {
+      parent[k] = parent[parent[k]];
+      k = parent[k];
+    }
+    return k;
+  };
+  auto nbGroupsInCell = [&](size_t c) -> size_t {
+    std::set<size_t> roots;
+    for (size_t n = 0; n < cells[c].nodes.size(); n++) {
+      roots.insert(find(offset[c] + n));
+    }
+    return roots.size();
+  };
+  // Fusionne deux groupes, sauf si une cellule présente dans les deux tomberait sous 3 noeuds
+  // (les cellules ouvertes ne sont jamais modifiées)
+  auto unite = [&](size_t a, size_t b) -> bool {
+    size_t ra = find(a);
+    size_t rb = find(b);
+    if (ra == rb) {
+      return true;
+    }
+    std::set<size_t> cellsA;
+    for (size_t k : members[ra]) {
+      cellsA.insert(owner[k]);
+    }
+    std::set<size_t> checked;
+    for (size_t k : members[rb]) {
+      size_t c = owner[k];
+      if (cellsA.count(c) && checked.insert(c).second && (!cells[c].close || nbGroupsInCell(c) <= 3)) {
+        return false;
+      }
+    }
+    if (members[ra].size() < members[rb].size()) {
+      std::swap(ra, rb);
+    }
+    parent[rb] = ra;
+    members[ra].insert(members[ra].end(), members[rb].begin(), members[rb].end());
+    members[rb].clear();
+    return true;
+  };
+
+  // 1. Sommets communs : sommets W de cellules différentes qui coïncident (grille de pas tol)
+  std::unordered_map<long long, std::vector<size_t>> grid;
+  auto key = [&](long long ix, long long iy) -> long long { return ix * 2000003LL + iy; };
+  for (size_t k = 0; k < N; k++) {
+    grid[key((long long)std::floor(W[k].x / tol), (long long)std::floor(W[k].y / tol))].push_back(k);
+  }
+  for (size_t k = 0; k < N; k++) {
+    long long ix = (long long)std::floor(W[k].x / tol);
+    long long iy = (long long)std::floor(W[k].y / tol);
+    for (long long dx = -1; dx <= 1; dx++) {
+      for (long long dy = -1; dy <= 1; dy++) {
+        auto it = grid.find(key(ix + dx, iy + dy));
+        if (it == grid.end()) {
+          continue;
+        }
+        for (size_t j : it->second) {
+          if (j > k && owner[j] != owner[k] && norm(W[j] - W[k]) < tol) {
+            unite(k, j);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Barres courtes, de la plus courte à la plus longue
+  struct shortBar {
+    double l;
+    size_t a, b;
+  };
+  std::vector<shortBar> shortBars;
+  for (size_t c = 0; c < cells.size(); c++) {
+    if (!cells[c].close) {
+      continue;
+    }
+    for (size_t b = 0; b < cells[c].bars.size(); b++) {
+      if (cells[c].bars[b].l0 < lCrit) {
+        shortBars.push_back({cells[c].bars[b].l0, offset[c] + cells[c].bars[b].i, offset[c] + cells[c].bars[b].j});
+      }
+    }
+  }
+  std::sort(shortBars.begin(), shortBars.end(), [](const shortBar &x, const shortBar &y) { return x.l < y.l; });
+  size_t nbRefused = 0;
+  for (auto &sb : shortBars) {
+    if (!unite(sb.a, sb.b)) {
+      nbRefused++;
+    }
+  }
+
+  // 3. Groupes fusionnés (une même cellule y a plusieurs noeuds) : nouveau sommet au barycentre
+  //    des sommets W, et repérage des cellules à reconstruire
+  std::vector<bool> merged(N, false);
+  std::vector<vec2r> M(N);
+  std::vector<bool> affected(cells.size(), false);
+  for (size_t r = 0; r < N; r++) {
+    if (members[r].size() < 2) {
+      continue;
+    }
+    std::set<size_t> cellSet;
+    bool hasDuplicate = false;
+    for (size_t k : members[r]) {
+      M[r] += W[k];
+      if (!cellSet.insert(owner[k]).second) {
+        hasDuplicate = true;
+      }
+    }
+    if (!hasDuplicate) {
+      continue; // simple sommet commun, rien à fusionner
+    }
+    M[r] /= (double)members[r].size();
+    merged[r] = true;
+    for (size_t c : cellSet) {
+      affected[c] = true;
+    }
+  }
+
+  // 4. Reconstruction des cellules concernées : les noeuds consécutifs d'un même groupe sont
+  //    fusionnés, puis les noeuds sont replacés à barWidth/2 des côtés du nouveau polygone
+  size_t nbNodesBefore = N;
+  size_t nbNodesAfter = 0;
+  size_t nbAffected = 0;
+  double lMinBefore = std::numeric_limits<double>::max();
+  double lMinAfter = std::numeric_limits<double>::max();
+  for (size_t c = 0; c < cells.size(); c++) {
+    for (auto &b : cells[c].bars) {
+      lMinBefore = std::min(lMinBefore, b.l0);
+    }
+    size_t n = cells[c].nodes.size();
+    if (affected[c] && cells[c].close && !cells[c].bars.empty()) {
+      nbAffected++;
+
+      // Départ sur un noeud qui n'est pas au milieu d'une séquence fusionnée
+      size_t start = 0;
+      while (start < n && find(offset[c] + start) == find(offset[c] + (start + n - 1) % n)) {
+        start++;
+      }
+      if (start == n) {
+        start = 0;
+      }
+
+      std::vector<Node> newNodes;
+      std::vector<vec2r> vertices;
+      size_t lastRoot = null_size_t;
+      for (size_t s = 0; s < n; s++) {
+        size_t k = offset[c] + (start + s) % n;
+        const Node &old = cells[c].nodes[(start + s) % n];
+        size_t root = find(k);
+        if (newNodes.empty() || root != lastRoot) {
+          newNodes.push_back(old);
+          vertices.push_back(merged[root] ? M[root] : W[k]);
+          lastRoot = root;
+        } else {
+          newNodes.back().mass += old.mass; // conserve la masse totale si elle a déjà été définie
+        }
+      }
+      std::vector<vec2r> pos = offsetPolygon(vertices, -cells[c].radius);
+      for (size_t i = 0; i < newNodes.size(); i++) {
+        newNodes[i].pos = pos[i];
+      }
+
+      double kn_bar = cells[c].bars[0].kn;
+      double kr = cells[c].nodes[0].kr;
+      double mz_max = cells[c].nodes[0].mz_max;
+      cells[c].nodes = newNodes;
+      cells[c].connectOrderedNodes(2.0 * cells[c].radius, kn_bar, kr, mz_max, cells[c].p_int, true);
+    }
+    nbNodesAfter += cells[c].nodes.size();
+    for (auto &b : cells[c].bars) {
+      lMinAfter = std::min(lMinAfter, b.l0);
+    }
+  }
+
+  std::cout << "@Lhyphen::cleanShortBars, l_crit = " << lCrit << " (" << ratio << " x l_mean), " << shortBars.size()
+            << " short bars, " << nbRefused << " not merged (cell with 3 nodes), " << nbAffected
+            << " cells rebuilt\n";
+  std::cout << "    nodes: " << nbNodesBefore << " -> " << nbNodesAfter << ",  l_min: " << lMinBefore << " -> "
+            << lMinAfter << " (l_min/l_mean = " << lMinAfter / lMean << ")\n";
 }
 
 // ======================================================================================================
@@ -2271,13 +2600,8 @@ void Lhyphen::computeNodeForces() {
         vec2r TPrev(-prevDir.y, prevDir.x);
         double omegaPrev = ((cells[c].nodes[prev].vel - cells[c].nodes[n].vel) * TPrev * lPrevSqrInv);
 
+        // mz est l'état élastique (incrémental) du moment, borné par le seuil plastique physique mz_max
         cells[c].nodes[n].mz += -cells[c].nodes[n].kr * (omegaNext - omegaPrev) * dt;
-
-        // viscosité en rotation
-        if (cells[c].nodes[n].visc > 0.0) {
-          double vtheta = (omegaNext - omegaPrev);
-          cells[c].nodes[n].mz += -cells[c].nodes[n].visc * vtheta;
-        }
 
         // TODO: ajouter la possibilité de désactiver la plasticité (?)
         if (cells[c].nodes[n].mz > cells[c].nodes[n].mz_max) {
@@ -2286,14 +2610,35 @@ void Lhyphen::computeNodeForces() {
           cells[c].nodes[n].mz = -cells[c].nodes[n].mz_max;
         }
 
-        // mz sur next
-        double F = cells[c].nodes[n].mz * lNextSqrInv;
+        // Moment transmis = moment élastique + viscosité en rotation.
+        // La part visqueuse est recalculée à chaque pas : elle ne doit pas s'accumuler dans l'état mz
+        // (sinon elle se comporte comme une raideur supplémentaire visc/dt et non comme un amortissement).
+        double mzT = cells[c].nodes[n].mz;
+        if (cells[c].nodes[n].visc > 0.0) {
+          mzT += -cells[c].nodes[n].visc * (omegaNext - omegaPrev);
+        }
+
+        // Le moment est transmis par les forces mzT/l_next et mzT/l_prev. Avec momentForceMax, si l'une
+        // d'elles dépasse le seuil (bras de levier trop court), le moment transmis est réduit pour que
+        // les deux forces restent sous le seuil. L'état mz n'est pas modifié : la limitation est
+        // réversible (aucune rotation résiduelle), et les couples +mzT / -mzT restent équilibrés.
+        if (momentForceMax > 0.0) {
+          double mzLim = momentForceMax / sqrt(std::max(lNextSqrInv, lPrevSqrInv));
+          if (mzT > mzLim) {
+            mzT = mzLim;
+          } else if (mzT < -mzLim) {
+            mzT = -mzLim;
+          }
+        }
+
+        // mzT sur next
+        double F = mzT * lNextSqrInv;
         vec2r finc = F * TNext;
         cells[c].nodes[next].force += finc;
         cells[c].nodes[n].force -= finc;
 
-        // -mz sur prev
-        F = cells[c].nodes[n].mz * lPrevSqrInv;
+        // -mzT sur prev
+        F = mzT * lPrevSqrInv;
         finc = -F * TPrev;
         cells[c].nodes[prev].force += finc;
         cells[c].nodes[n].force -= finc;
@@ -2431,6 +2776,23 @@ void Lhyphen::SingleStep() {
   }
 }
 
+///  Vérifie les événements (voir Event.hpp) et fait leur action s'ils se déclenchent.
+///  Un événement ne se déclenche qu'une seule fois.
+///
+void Lhyphen::checkEvents() {
+  for (auto &ev : events) {
+    if (ev->done) {
+      continue;
+    }
+    ev->check(this);
+    if (ev->active) {
+      ev->active = false;
+      ev->done = true; // avant l'action, pour qu'une conf sauvegardée par l'action ne le contienne plus
+      ev->action(this);
+    }
+  }
+}
+
 ///  Run the simulation!
 ///
 void Lhyphen::integrate() {
@@ -2463,6 +2825,11 @@ void Lhyphen::integrate() {
 
   // === START THE LOOP ===
   for (int step = 0; step < nstep; step++) {
+
+    checkEvents();
+    if (stopRequested) {
+      break;
+    }
 
     if (step % nstepPeriodVerlet == 0) {
       updateNeighbors();
@@ -2589,6 +2956,8 @@ void Lhyphen::saveCONF(const char *fname) {
   file << "kn " << kn << '\n';
   file << "kt " << kt << '\n';
   file << "adaptativeStiffness " << adaptativeStiffness << '\n';
+  if (momentForceMax > 0.0)
+    file << "momentForceMax " << momentForceMax << '\n';
   file << "mu " << mu << '\n';
   file << "gravity " << gravity << '\n';
   file << "numericalDissipation " << numericalDissipation << '\n';
@@ -2670,6 +3039,16 @@ void Lhyphen::saveCONF(const char *fname) {
            << controlBoxAreas[i].ymode << ' ' << controlBoxAreas[i].yvalue << std::endl;
     }
   }
+
+  // les événements pas encore déclenchés
+  for (size_t i = 0; i < events.size(); i++) {
+    if (events[i]->done) {
+      continue;
+    }
+    file << "event " << events[i]->name() << ' ';
+    events[i]->write(file);
+    file << '\n';
+  }
 }
 
 ///  Saves the CONF file.
@@ -2698,6 +3077,7 @@ void Lhyphen::loadCONF(const char *fname) {
 
   int modelGc = 0;
   controlBoxAreas.clear();
+  events.clear();
 
   std::string token;
   file >> token;
@@ -2826,6 +3206,10 @@ void Lhyphen::loadCONF(const char *fname) {
       exprParser->addConstant(name, value);
       if (firstLoad)
         std::cout << "* Parameter defined as a constant: " << name << " " << value << std::endl;
+    } else if (token == "momentForceMax") {
+      exprParser->getValue(file, momentForceMax);
+      if (firstLoad)
+        std::cout << "> momentForceMax = " << momentForceMax << std::endl;
     } else if (token == "adaptativeStiffness") {
       exprParser->getValue(file, adaptativeStiffness);
       if (firstLoad)
@@ -3058,6 +3442,22 @@ void Lhyphen::loadCONF(const char *fname) {
         }
       }
       capturedNodes.push_back(CN);
+    } else if (token == "event") {
+      std::string eventName;
+      file >> eventName;
+      std::unique_ptr<Event> ev = Event::create(eventName);
+      if (ev == nullptr) {
+        std::cout << "@Lhyphen::loadCONF, this event is not known: " << eventName << std::endl;
+        std::getline(file, token); // ignore the rest of the current line
+      } else {
+        ev->read(file, exprParser);
+        if (firstLoad) {
+          std::cout << "* event " << ev->name() << ' ';
+          ev->write(std::cout);
+          std::cout << std::endl;
+        }
+        events.push_back(std::move(ev));
+      }
     } else if (token == "followCell") {
       size_t cid;
       exprParser->getValue(file, cid);
@@ -3092,6 +3492,13 @@ void Lhyphen::loadCONF(const char *fname) {
         std::cout << "    |    p_int = " << p_int << std::endl;
       }
       readNodeFile(fileName.c_str(), barWidth, Kn, Kr, Mz_max, p_int);
+    } else if (token == "cleanShortBars") {
+      double ratio;
+      exprParser->getValue(file, ratio);
+      if (firstLoad) {
+        std::cout << "* cleanShortBars: ratio = " << ratio << std::endl;
+      }
+      cleanShortBars(ratio);
     } else if (token == "setCellInternalPressure") {
       double p_int;
       size_t c;
