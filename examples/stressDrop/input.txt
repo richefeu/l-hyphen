@@ -27,7 +27,7 @@ adaptativeStiffness 1
 
 # SAMPLE ===================================================                            
 #             filename      barWidth  ks    kb                    my_max            pressure
-readNodeFile  nodefile.txt  2e-06     2000  0.000792863858442045  79286385.8442045  0    # [nodegen]
+readNodeFile  nodefile.txt  2e-06     2000  0.0000792863858442045  79286385.8442045  0    # [nodegen]
 # fusion des barres plus courtes que 0.3 x longueur moyenne
 # (doit précéder masses, amortissements, contrôles et glue)
 # cleanShortBars 0.3    # [nodegen] inutile : l_min/l_moy = 0.333
