@@ -61,13 +61,19 @@ endif
 SOURCES = Neighbor.cpp Control.cpp Event.cpp Node.cpp Bar.cpp Cell.cpp Lhyphen.cpp
 OBJECTS = $(SOURCES:%.cpp=%.o)
 
+# Dépendances aux en-têtes générées par le compilateur (fichiers .d) : modifier un .hpp recompile tous les
+# objets qui l'incluent (sinon, par exemple, un membre ajouté à Lhyphen.hpp laisse Event.o lire les membres
+# de Lhyphen à leurs anciennes positions).
+DEPFLAGS = -MMD -MP
+-include $(OBJECTS:.o=.d)
+
 .PHONY: all clean clone_toofus lhedit
 
 all: run see2 crackwatch lhedit
 
 clean:
 	@echo "\033[0;32m-> Remove object files\033[0m"
-	rm -f *.o
+	rm -f *.o *.d
 	@echo "\033[0;32m-> Remove compiled applications\033[0m"
 	rm -f run see see2 crackwatch
 	$(MAKE) -C lhyphen-edit clean
@@ -86,7 +92,7 @@ clone_toofus:
 
 %.o: %.cpp 
 	@echo "\033[0;32m-> COMPILING OBJECT" $@ "\033[0m"
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 
 liblhyphen.a: $(OBJECTS)
 	@echo "\033[0;32m-> BUILDING LIBRARY" $@ "\033[0m"
@@ -107,7 +113,7 @@ see: see.cpp liblhyphen.a
 	$(CXX) $(CXXFLAGS) -c $< -o see.o -I/usr/local/include
 	$(CXX) $(LDFLAGS) -o $@ see.o liblhyphen.a /usr/local/lib/libglut.a -framework Cocoa -framework CoreVideo -framework OpenGL -framework IOKit
 	
-see2: see2.cpp liblhyphen.a
+see2: see2.cpp see2.hpp liblhyphen.a
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
 	$(CXX) $(CXXFLAGS) -c $< -o see2.o $(GLFWFLAGS) -Wno-missing-field-initializers
 	$(CXX) $(LDFLAGS) -o $@ see2.o liblhyphen.a $(GLFWLINK) -framework OpenGL
