@@ -1,0 +1,81 @@
+# =====================================================================================================
+# Modèle d'input de l'étude paramétrique (xi, zeta) -- échantillon echantillon/nodefile.txt
+#
+#   xi    = kb / (ks l^2)                  rapport des raideurs de flexion et axiale des parois
+#   zeta  = kc / Kcell                     rapport de la raideur de cohésion et de la raideur d'une cellule
+#   Kcell = 12 xi ks / (1 + 9 xi)
+#
+# ks est fixé ; kb est déduit de xi, puis kc de zeta. Le générateur de cas (étape 3) ne modifie que les
+# deux lignes marquées PARAMETRE ; tout le reste est calculé ici par l-hyphen (constantes et expressions).
+# Ce fichier est un input complet : il peut être lancé tel quel (xi = zeta = 10, comme Frank).
+# =====================================================================================================
+
+# --- Paramètres de l'étude
+define XI    10      # PARAMETRE
+define ZETA  10      # PARAMETRE
+
+# --- Grandeurs fixes
+define KS    2000                    # raideur axiale des barres (N/m), valeur de Frank-ouverture-fissure
+define L     2.169325e-4             # longueur moyenne des barres de echantillon/nodefile.txt (m)
+define BW    2e-6                    # barWidth : doit être celui utilisé par nodegen
+define MASS  8e-8                    # masse des noeuds (kg)
+define GC    1.2575114788066131e-06  # énergie de rupture des liens cohésifs (J/m)
+
+# --- Grandeurs déduites
+define KB     $XI*KS*L*L$            # raideur de flexion (N.m/rad)
+define KCELL  $12*XI*KS/(1+9*XI)$    # raideur d'une cellule (N/m)
+define KC     $ZETA*KCELL$           # raideur des liens cohésifs (N/m)
+
+# --- Temps
+# dt est stable pour toute la grille xi, zeta dans {0.1, 0.5, 1, 5, 10} (dt_crit/dt >= 16, cas xi = 10).
+# Le calcul s'arrête peu après la rupture (événement stopAfterStressDrop en fin de fichier) ;
+# TFINAL n'est qu'une durée maximale de sécurité.
+define DT      5e-8
+define TFINAL  0.1                   # sur les coins de la grille, l'arrêt a lieu entre 11 et 20 ms
+define TOUT    5e-4                  # période des sorties conf / svg / top.txt / bottom.txt (s)
+dt     $DT$
+nstep  $TFINAL/DT$
+numericalDissipation 0.0
+globalViscosity      0.0
+gravity 0 0
+distVerlet        2e-5
+nstepPeriodVerlet 2000
+isvg              0
+nstepPeriodSVG    $TOUT/DT$
+iconf             0
+nstepPeriodConf   $TOUT/DT$
+nstepPeriodRecord 100
+
+# --- Contact entre cellules (même raideur que la cohésion, comme dans Frank-ouverture-fissure)
+kn  $KC$
+kt  $KC$
+mu  0.0
+adaptativeStiffness 1
+
+# --- Échantillon
+#             fichier       barWidth  ks    kb    Mz_max (pas de plasticité)  p_int
+readNodeFile  nodefile.txt  $BW$      $KS$  $KB$  $1e11*KB$                   0
+setNodeMasses $MASS$
+setCellWallDampingRates 0.5 0.1
+viscnrate 0.5
+cellContent 2
+compressFactor 0.0
+
+# --- Mors (lignes produites par nodegen : une rangée de noeuds en bas et en haut), vitesse imposée 0.3 mm/s
+#     (setNodeControlInBox et captureNodes n'acceptent pas d'expression : valeurs numériques uniquement)
+#                    xmin  xmax    ymin                  ymax                  xmode xvalue ymode yvalue
+setNodeControlInBox  0     0.0032  0                     0.000102021228287203  1     0.0    0     -3e-4  # contrôle 0 : bas
+setNodeControlInBox  0     0.0032  0.00314340034615586   0.0032                1     0.0    0     3e-4   # contrôle 1 : haut
+captureNodes  bottom.txt  0  0.0032  0                    0.000102021228287203
+captureNodes  top.txt     0  0.0032  0.00314340034615586  0.0032
+
+# --- Cohésion (après les contrôles) ; distGcGlue doit rester inférieur à l'ouverture de l'entaille (2e-6)
+distGcGlue 2e-7
+setGcGlueSameProperties  $KC$  $KC$  $GC$
+
+findDisplayArea 2.0
+
+# --- Arrêt : 1 ms après une chute de 30 % de la force du mors haut (contrôle 1, composante y),
+#     pic suivi à partir de t = 0.5 ms, force lissée sur 0.1 ms
+#                         ictrl  comp  chute%  délai   tStart   tau
+event stopAfterStressDrop 1      y     30      0.001   0.0005   1e-4

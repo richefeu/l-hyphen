@@ -62,3 +62,12 @@ nodeGen/example/input.txt
 
 # crackwatch
 crackwatch
+
+# etude-param-model : tout ce qui est généré (binaire, cas et résultats, sous-produits de nodegen)
+etude-param-model/generate_cases
+etude-param-model/cases/*
+!etude-param-model/cases/plot_maps.py
+!etude-param-model/cases/plot_curves.py
+!etude-param-model/cases/plot_snapshots.py
+etude-param-model/echantillon/nodegen_input.txt
+etude-param-model/run_cases.log

@@ -1,0 +1,10 @@
+# Plan de l'étude paramétrique : toutes les combinaisons des valeurs ci-dessous sont générées
+# Usage : ./generate_cases plan.txt
+
+model   input_model.txt              # modèle d'input (les paramètres y sont des lignes « define NOM valeur »)
+copy    echantillon/nodefile.txt     # copié dans chaque cas, pour que chaque répertoire soit autonome
+output  cases                        # répertoire des cas
+
+# paramètre  valeurs
+XI      0.1  0.5  1  5  10
+ZETA    0.1  0.5  1  5  10

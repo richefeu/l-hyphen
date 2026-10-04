@@ -1,0 +1,33 @@
+# Échantillon de l'étude paramétrique : carré de 3.2 mm, ~100 cellules, pré-entaille de 0.8 mm
+# Génération : ../../nodeGen/nodegen params.txt   (voir ../README.md)
+
+# Domaine (m)
+xmin 0
+ymin 0
+Lx   3.2e-3
+Ly   3.2e-3
+
+# Cellules
+cellSize        3.53e-4   # diamètre équivalent visé (comme Frank-ouverture-fissure)
+barWidth        2e-6      # écart entre parois voisines (= barWidth de readNodeFile)
+lattice         hex       # réseau hexagonal perturbé : surtout des hexagones
+disorder        0.3       # perturbation des germes (fraction du pas du réseau)
+lloydIterations 5         # régularisation de Lloyd
+minEdgeRatio    0.4       # arêtes plus courtes que 0.4 x longueur moyenne : fusionnées ou étirées
+minSides        5         # une fusion ne fait jamais passer une cellule sous 5 côtés
+seed            1         # changer la graine donne un autre échantillon de même statistique
+
+# Pré-entaille : depuis le milieu du bord gauche, longueur 0.8 mm
+crack        0  1.6e-3  0.8e-3  1.6e-3
+tipInterface 1            # interface collée prolongeant l'entaille au-delà de la pointe (en cellules)
+opening      2e-6         # écart supplémentaire entre les lèvres (doit dépasser distGlue)
+distGlue     2e-7         # valeur de distGcGlue prévue dans l'input
+
+# Mors haut et bas (lignes setNodeControlInBox / captureNodes)
+gripRows     1            # une rangée de noeuds : celle du bord
+pullVelocity 3e-4         # vitesse imposée (bas : -v, haut : +v)
+
+# Sorties
+output nodefile.txt
+svg    nodefile.svg
+input  nodegen_input.txt
