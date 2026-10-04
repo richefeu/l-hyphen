@@ -408,11 +408,14 @@ void display(GLFWwindow *window) {
   if (show_cells) {
     drawCells();
   }
+  lastDirsName = nullptr;
   if (show_strain_dirs) {
-    drawTensorDirections(cellStrains);
+    lastDirsMax = drawTensorDirections(cellStrains, strainDirsMax);
+    lastDirsName = "strain";
   }
   if (show_stress_dirs) {
-    drawTensorDirections(cellStresses);
+    lastDirsMax = drawTensorDirections(cellStresses, stressDirsMax);
+    lastDirsName = "stress";
   }
   if (show_glue_points) {
     drawGluePoints();
@@ -431,9 +434,16 @@ void display(GLFWwindow *window) {
     drawControlBoxes();
   }
 
-  textZone.draw();
+  if (!snapshotMode) {
+    textZone.draw();
+  }
 
-  if (show_strain) {
+  lastFieldName = show_strain ? strainModeNames[show_strain] : (show_stress ? stressModeNames[show_stress] : nullptr);
+  lastFieldBound = colorBound;
+  lastFieldDivergent = colorField.divergent;
+  if (!show_colorbar) {
+    // barre de couleur masquée (images assemblées avec une barre commune)
+  } else if (show_strain) {
     char extra[64];
     snprintf(extra, 64, "  ref conf%d", refConfNum);
     drawTensorColorBar(strainModeNames[show_strain], colorField.divergent ? -colorBound : 0.0, colorBound,
@@ -451,7 +461,9 @@ void display(GLFWwindow *window) {
   }
 
   glFlush();
-  glfwSwapBuffers(window);
+  if (!snapshotMode) { // en mode instantané, l'image est lue dans le tampon arrière avant tout échange
+    glfwSwapBuffers(window);
+  }
 }
 
 void fit_view(GLFWwindow *window) {
@@ -1442,19 +1454,24 @@ void drawCellScalars(const CellScalarField &field, double vmax) {
 }
 
 // Directions principales : un trait centré sur la cellule pour chaque direction (épais = majeure v1,
-// fin = mineure v2), de demi-longueur eScale * R * |v_i| / max|v|. Le plus grand trait mesure donc
-// eScale rayons de sa cellule ; les longueurs sont comparables entre cellules de même taille.
+// fin = mineure v2), de demi-longueur eScale * R * |v_i| / vmax. Par défaut vmax = max|v| de la conf : le plus
+// grand trait mesure alors eScale rayons de sa cellule ; les longueurs sont comparables entre cellules de même
+// taille. Avec fixedMax > 0 (strain_dirsMax, stress_dirsMax), vmax = fixedMax : les longueurs sont aussi
+// comparables d'une conf ou d'un calcul à l'autre. Retourne vmax.
 // Couleur selon le signe (convention tension positive) : rouge = tension (v_i > 0),
 // bleu = compression (v_i < 0).
-void drawTensorDirections(const std::vector<CellTensor> &tensors) {
+double drawTensorDirections(const std::vector<CellTensor> &tensors, double fixedMax) {
   double vmax = 0.0;
   for (size_t c = 0; c < tensors.size(); c++) {
     if (tensors[c].ok) {
       vmax = std::max(vmax, std::max(fabs(tensors[c].v1), fabs(tensors[c].v2)));
     }
   }
+  if (fixedMax > 0.0) {
+    vmax = fixedMax;
+  }
   if (vmax == 0.0) {
-    return;
+    return 0.0;
   }
 
   glDisable(GL_DEPTH_TEST);
@@ -1483,6 +1500,7 @@ void drawTensorDirections(const std::vector<CellTensor> &tensors) {
     glEnd();
   }
   glLineWidth(1.0f);
+  return vmax;
 }
 
 // Barre de couleur (coin bas-droit) ; vmin < 0 pour la partie sphérique (échelle divergente)
@@ -1747,6 +1765,7 @@ bool try_to_readConf(int num, Lhyphen &CF, int &OKNum) {
 void captureScreenshot(const char *filename) {
   unsigned char *pixels  = new unsigned char[width * height * 3];
   unsigned char *flipped = new unsigned char[width * height * 3];
+  glPixelStorei(GL_PACK_ALIGNMENT, 1); // lignes non alignées sur 4 octets si la largeur n'est pas multiple de 4
   glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
   for (int y = 0; y < height; y++) {
     memcpy(flipped + (height - 1 - y) * width * 3, pixels + y * width * 3, width * 3);
@@ -1756,17 +1775,64 @@ void captureScreenshot(const char *filename) {
   delete[] flipped;
 }
 
+// Rendu hors écran (--snapshot) : la conf est dessinée dans un framebuffer de la taille exacte demandée
+// (multiéchantillonné puis résolu), indépendamment de la fenêtre, qui reste cachée, et de la résolution de
+// l'écran (sous macOS, une fenêtre cachée annonce un framebuffer Retina qu'elle n'a pas).
+bool renderOffscreen(GLFWwindow *window, int w, int h, const char *filename) {
+  GLint maxSamples = 0;
+  glGetIntegerv(GL_MAX_SAMPLES_EXT, &maxSamples);
+  GLint samples = std::min(4, (int)maxSamples);
+
+  GLuint fboMS = 0, rbMS = 0, fbo = 0, rb = 0;
+  glGenFramebuffersEXT(1, &fboMS);
+  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fboMS);
+  glGenRenderbuffersEXT(1, &rbMS);
+  glBindRenderbufferEXT(GL_RENDERBUFFER_EXT, rbMS);
+  glRenderbufferStorageMultisampleEXT(GL_RENDERBUFFER_EXT, samples, GL_RGBA8, w, h);
+  glFramebufferRenderbufferEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_RENDERBUFFER_EXT, rbMS);
+  if (glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT) != GL_FRAMEBUFFER_COMPLETE_EXT) {
+    std::cerr << "see2 : framebuffer hors écran incomplet" << std::endl;
+    return false;
+  }
+
+  reshape(nullptr, w, h); // fixe width, height, la vue et la projection
+  display(window);        // en mode instantané : pas d'échange de tampons
+
+  // résolution du multiéchantillonnage dans un framebuffer simple, puis lecture
+  glGenFramebuffersEXT(1, &fbo);
+  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo);
+  glGenRenderbuffersEXT(1, &rb);
+  glBindRenderbufferEXT(GL_RENDERBUFFER_EXT, rb);
+  glRenderbufferStorageEXT(GL_RENDERBUFFER_EXT, GL_RGBA8, w, h);
+  glFramebufferRenderbufferEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_RENDERBUFFER_EXT, rb);
+  glBindFramebufferEXT(GL_READ_FRAMEBUFFER_EXT, fboMS);
+  glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT, fbo);
+  glBlitFramebufferEXT(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo);
+  glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+  captureScreenshot(filename);
+
+  glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+  glDeleteRenderbuffersEXT(1, &rb);
+  glDeleteFramebuffersEXT(1, &fbo);
+  glDeleteRenderbuffersEXT(1, &rbMS);
+  glDeleteFramebuffersEXT(1, &fboMS);
+  return true;
+}
+
 // =====================================================================
 // Main function
 // =====================================================================
 
 void readTomlOptions() {
-  if (!fileTool::fileExists("see2-options.toml")) {
-    saveTomlOptions();
+  if (!fileTool::fileExists(optionsFile.c_str())) {
+    if (!snapshotMode) { // en mode instantané, on n'écrit rien dans le répertoire du calcul
+      saveTomlOptions();
+    }
     return;
   }
 
-  toml::table tbl = toml::parse_file("see2-options.toml");
+  toml::table tbl = toml::parse_file(optionsFile);
 
   if (tbl.contains("display")) {
     show_cells              = tbl["display"]["show_cells"].value_or(show_cells);
@@ -1890,22 +1956,177 @@ void saveTomlOptions() {
   };
   // clang-format on
 
-  std::ofstream file("see2-options.toml");
+  std::ofstream file(optionsFile);
   file << tbl << "\n";
+}
+
+// ---------------------------------------------------------------------
+// Ligne de commande
+// ---------------------------------------------------------------------
+
+void printUsage() {
+  std::cout << "Usage : see2 [conf] [options]\n"
+               "  conf                 numéro N (fichier confN), nom de fichier, ou « last » (dernier conf) ; défaut : 0\n"
+               "  --options FICHIER    fichier d'options (défaut : see2-options.toml)\n"
+               "  --set NOM=VALEUR     surcharge une option après lecture du fichier (répétable), ex. :\n"
+               "                       show_crack_path=1  show_hud=0  show_strain=eps_yy  strain_colorMax=0.01\n"
+               "  --size LxH           taille de la fenêtre / de l'image en pixels\n"
+               "  --snapshot IMAGE.png rend la conf dans IMAGE.png (fenêtre cachée) puis quitte\n"
+               "  --list-options       liste les noms utilisables avec --set\n"
+               "  -h, --help           cette aide\n";
+}
+
+// Options modifiables par --set (mêmes noms que dans see2-options.toml)
+struct SetOption {
+  const char *name;
+  int *i;
+  double *d;
+  const char *help;
+};
+
+std::vector<SetOption> setOptions() {
+  return {
+      {"show_cells", &show_cells, nullptr, "cellules (0/1)"},
+      {"show_contours", &show_contours, nullptr, "contours des cellules (0/1)"},
+      {"show_nodes", &show_nodes, nullptr, "noeuds (0/1)"},
+      {"show_pressure", &show_pressure, nullptr, "pression interne (0/1)"},
+      {"show_inter_cells_forces", &show_inter_cells_forces, nullptr, "forces entre cellules (0/1)"},
+      {"show_velocities", &show_velocities, nullptr, "vitesses (0/1)"},
+      {"show_glue_points", &show_glue_points, nullptr, "points de colle (0/1)"},
+      {"show_crack_path", &show_crack_path, nullptr, "chemin de fissure, liens rompus (0/1)"},
+      {"show_strain", &show_strain, nullptr, "déformation : off eps_v eps_q eps_xx eps_yy eps_xy (nom ou 0-5)"},
+      {"show_strain_dirs", &show_strain_dirs, nullptr, "directions principales de déformation (0/1)"},
+      {"show_stress", &show_stress, nullptr, "contrainte : off sig_m sig_q p p+sig_m sig_xx sig_yy sig_xy (nom ou 0-7)"},
+      {"show_stress_dirs", &show_stress_dirs, nullptr, "directions principales de contrainte (0/1)"},
+      {"show_bar_colors", &show_bar_colors, nullptr, "couleur des barres selon l'effort (0/1)"},
+      {"show_control_boxes", &show_control_boxes, nullptr, "boîtes de contrôle (0/1)"},
+      {"show_background", &show_background, nullptr, "fond en dégradé (0/1)"},
+      {"show_hud", &show_hud, nullptr, "panneau d'état des options (0/1)"},
+      {"show_colorbar", &show_colorbar, nullptr, "barre de couleur du champ affiché (0/1)"},
+      {"fit_at_loading", &fit_at_loading, nullptr, "cadrage automatique sur l'échantillon (0/1)"},
+      {"refConf", &refConfNum, nullptr, "conf de référence des déformations"},
+      {"eScale", nullptr, &eScale, "longueur des traits de directions principales"},
+      {"strain_colorMax", nullptr, &strainColorMax, "borne de l'échelle de déformation (0 = automatique)"},
+      {"strain_dirsMax", nullptr, &strainDirsMax, "déformation principale du plus grand trait (0 = max de la conf)"},
+      {"stress_dirsMax", nullptr, &stressDirsMax, "contrainte principale du plus grand trait (0 = max de la conf)"},
+      {"stress_colorMax", nullptr, &stressColorMax, "borne de l'échelle de contrainte (0 = automatique)"},
+      {"xmin", nullptr, &worldBox.min.x, "fenêtre affichée (avec fit_at_loading=0)"},
+      {"xmax", nullptr, &worldBox.max.x, ""},
+      {"ymin", nullptr, &worldBox.min.y, ""},
+      {"ymax", nullptr, &worldBox.max.y, ""},
+  };
+}
+
+bool applySetOption(const std::string &arg) {
+  auto eq = arg.find('=');
+  if (eq == std::string::npos) {
+    std::cerr << "see2 : --set attend NOM=VALEUR (reçu « " << arg << " »)" << std::endl;
+    return false;
+  }
+  std::string name = arg.substr(0, eq), value = arg.substr(eq + 1);
+  // les champs de déformation et de contrainte peuvent être donnés par leur nom
+  if (name == "show_strain" || name == "show_stress") {
+    const char **names = (name == "show_strain") ? strainModeNames : stressModeNames;
+    int nb = (name == "show_strain") ? nbStrainModes : nbStressModes;
+    for (int k = 0; k < nb; k++) {
+      if (value == names[k]) {
+        value = std::to_string(k);
+      }
+    }
+  }
+  for (auto &o : setOptions()) {
+    if (name != o.name) {
+      continue;
+    }
+    try {
+      size_t pos = 0;
+      if (o.i) {
+        *o.i = std::stoi(value, &pos);
+      } else {
+        *o.d = std::stod(value, &pos);
+      }
+      if (pos != value.size()) {
+        throw std::invalid_argument(value);
+      }
+    } catch (...) {
+      std::cerr << "see2 : valeur invalide pour " << name << " : « " << value << " »" << std::endl;
+      return false;
+    }
+    if (show_strain < 0 || show_strain >= nbStrainModes) show_strain = 0;
+    if (show_stress < 0 || show_stress >= nbStressModes) show_stress = 0;
+    return true;
+  }
+  std::cerr << "see2 : option inconnue pour --set : « " << name << " » (voir --list-options)" << std::endl;
+  return false;
 }
 
 int main(int argc, char *argv[]) {
 
-  if (argc == 1) {
+  // --- ligne de commande
+  std::string confArg, snapshotFile;
+  std::vector<std::string> sets;
+  int cliWidth = 0, cliHeight = 0;
+  for (int a = 1; a < argc; a++) {
+    std::string arg = argv[a];
+    auto need = [&]() {
+      if (a + 1 >= argc) {
+        std::cerr << "see2 : valeur manquante après " << arg << std::endl;
+        exit(1);
+      }
+      return std::string(argv[++a]);
+    };
+    if (arg == "-h" || arg == "--help") {
+      printUsage();
+      return 0;
+    } else if (arg == "--list-options") {
+      for (auto &o : setOptions()) {
+        printf("  %-24s %s\n", o.name, o.help);
+      }
+      return 0;
+    } else if (arg == "--options") {
+      optionsFile = need();
+    } else if (arg == "--set") {
+      sets.push_back(need());
+    } else if (arg == "--snapshot") {
+      snapshotFile = need();
+      snapshotMode = true;
+    } else if (arg == "--size") {
+      std::string v = need();
+      if (sscanf(v.c_str(), "%dx%d", &cliWidth, &cliHeight) != 2 || cliWidth <= 0 || cliHeight <= 0) {
+        std::cerr << "see2 : --size attend LxH, par exemple 800x600" << std::endl;
+        return 1;
+      }
+    } else if (!arg.empty() && arg[0] == '-') {
+      std::cerr << "see2 : option inconnue « " << arg << " »" << std::endl;
+      printUsage();
+      return 1;
+    } else {
+      confArg = arg;
+    }
+  }
+
+  // --- conf à afficher
+  if (confArg.empty()) {
     confNum = 0;
     try_to_readConf(confNum, Conf, confNum);
-  } else if (argc == 2) {
-    if (fileTool::fileExists(argv[1])) {
-      std::cout << "Read " << argv[1] << std::endl;
-      Conf.loadCONF(argv[1]);
-    } else {
-      confNum = atoi(argv[1]);
-      try_to_readConf(confNum, Conf, confNum);
+  } else if (confArg == "last") {
+    int n = 0;
+    char name[256];
+    do {
+      snprintf(name, 256, "conf%d", n + 1);
+    } while (fileTool::fileExists(name) && ++n);
+    if (!try_to_readConf(n, Conf, confNum)) {
+      return 1;
+    }
+  } else if (fileTool::fileExists(confArg.c_str())) {
+    std::cout << "Read " << confArg << std::endl;
+    Conf.loadCONF(confArg.c_str());
+  } else {
+    char *end = nullptr;
+    long n = strtol(confArg.c_str(), &end, 10);
+    if (*end != '\0' || !try_to_readConf((int)n, Conf, confNum)) {
+      std::cerr << "see2 : conf introuvable : " << confArg << std::endl;
+      return 1;
     }
   }
 
@@ -1916,6 +2137,15 @@ int main(int argc, char *argv[]) {
   readBreakHistory();
 
   readTomlOptions();
+  for (auto &a : sets) {
+    if (!applySetOption(a)) {
+      return 1;
+    }
+  }
+  if (cliWidth > 0) {
+    width = cliWidth;
+    height = cliHeight;
+  }
 
   // init color tables
   BarRedTable.setSize(128);
@@ -1946,6 +2176,11 @@ int main(int argc, char *argv[]) {
 
   // Anti-aliasing (MSAA 4x) pour des contours et chaînes de force plus nets
   glfwWindowHint(GLFW_SAMPLES, 4);
+
+  const int imageWidth = width, imageHeight = height; // taille demandée (reshape la remplace par celle du framebuffer)
+  if (snapshotMode) {
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // fenêtre cachée : rendu hors écran puis lecture de l'image
+  }
 
   GLFWwindow *window = glfwCreateWindow(width, height, "see2", NULL, NULL);
   if (!window) {
@@ -1984,6 +2219,24 @@ int main(int argc, char *argv[]) {
   // ==== mainloop
   if (fit_at_loading) fit_view(window);
   updateTextLine();
+
+  if (snapshotMode) {
+    if (!renderOffscreen(window, imageWidth, imageHeight, snapshotFile.c_str())) {
+      glfwTerminate();
+      return 1;
+    }
+    std::cout << "snapshot " << snapshotFile << " : conf" << confNum << ", t = " << Conf.t << ", " << width << "x"
+              << height << std::endl;
+    if (lastFieldName) {
+      std::cout << "field " << lastFieldName << " bound " << lastFieldBound << " divergent " << lastFieldDivergent
+                << std::endl;
+    }
+    if (lastDirsName) {
+      std::cout << "dirs " << lastDirsName << " max " << lastDirsMax << std::endl;
+    }
+    glfwTerminate();
+    return 0;
+  }
 
   while (!glfwWindowShouldClose(window)) {
     glfwWaitEvents();

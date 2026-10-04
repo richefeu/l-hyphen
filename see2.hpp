@@ -38,6 +38,7 @@
 #include <GLFW/glfw3.h>
 
 #include <OpenGL/gl.h>
+#include <OpenGL/glext.h>
 #include <OpenGL/glu.h>
 
 #include <cmath>
@@ -92,6 +93,18 @@ GLFWwindow *g_window{nullptr};
 
 // redraw flag (avoids busy-loop CPU waste)
 bool needsRedraw{true};
+
+// Mode instantané (--snapshot) : rendu d'une seule image dans une fenêtre cachée, puis sortie
+bool snapshotMode{false};
+std::string optionsFile{"see2-options.toml"}; // fichier d'options (--options)
+const char *lastFieldName{nullptr};           // champ coloré lors du dernier rendu (nullptr : aucun)
+double lastFieldBound{0.0};                   // borne de son échelle de couleur
+bool lastFieldDivergent{false};               // échelle signée (bleu-blanc-rouge) ou non (blanc-jaune-rouge)
+int show_colorbar{1};                         // barre de couleur du champ affiché (--set show_colorbar=0)
+double strainDirsMax{0.0};  // valeur principale donnant le plus grand trait (0 = maximum de la conf affichée)
+double stressDirsMax{0.0};
+const char *lastDirsName{nullptr}; // directions tracées lors du dernier rendu (« strain » ou « stress »)
+double lastDirsMax{0.0};           // valeur principale de référence utilisée
 
 // flags
 int show_cells = 1;
@@ -197,7 +210,7 @@ CellScalarField strainField(int mode);
 CellScalarField stressField(int mode);
 double fieldColorBound(const CellScalarField &field, double fixedMax);
 void drawCellScalars(const CellScalarField &field, double vmax);
-void drawTensorDirections(const std::vector<CellTensor> &tensors);
+double drawTensorDirections(const std::vector<CellTensor> &tensors, double fixedMax = 0.0);
 void drawTensorColorBar(const char *name, double vmin, double vmax, bool autoBound, const char *extra);
 void drawHUD();
 void drawHelpOverlay();

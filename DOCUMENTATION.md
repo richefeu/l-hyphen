@@ -46,6 +46,26 @@ make                  # ou : cd lhyphen-edit && make ; lhedit est copié à la r
 ./see2                  # charge conf0 par défaut
 ./see2 <numéro>         # charge confN
 ./see2 <nom_de_fichier> # charge un fichier conf nommé
+./see2 last             # charge le dernier conf disponible
+```
+
+Options de la ligne de commande (`./see2 --help`) :
+
+| Option | Rôle |
+|--------|------|
+| `--options FICHIER` | fichier d'options (défaut : `see2-options.toml`) |
+| `--set NOM=VALEUR` | surcharge une option après lecture du fichier (répétable) ; `./see2 --list-options` donne les noms : `show_crack_path`, `show_strain` (nom du champ, ex. `eps_yy`, ou numéro), `show_stress` (ex. `sig_yy`), `show_strain_dirs`, `show_stress_dirs`, `show_hud`, `show_colorbar`, `strain_colorMax`, `strain_dirsMax`, `stress_dirsMax`, `refConf`, `xmin`… |
+| `--size LxH` | taille de la fenêtre ou de l'image, en pixels |
+| `--snapshot IMAGE.png` | rend la conf dans une image PNG sans fenêtre visible (rendu hors écran à la taille exacte demandée), puis quitte ; n'écrit pas de `see2-options.toml` |
+
+En mode `--snapshot`, `see2` affiche sur la sortie standard la conf et le temps rendus et, si un champ est
+coloré, sa borne d'échelle : `field eps_yy bound 0.000479 divergent 1` ; si des directions principales sont
+tracées, la valeur principale qui donne le plus grand trait : `dirs strain max 0.00174`. En imposant ces valeurs
+(`strain_colorMax`, `strain_dirsMax`…), on obtient la même échelle pour plusieurs calculs. Exemple (faciès de rupture du dernier
+conf, sans panneau d'état) :
+
+```bash
+./see2 last --snapshot rupture.png --size 800x800 --set show_hud=0 --set show_crack_path=1
 ```
 
 ---
