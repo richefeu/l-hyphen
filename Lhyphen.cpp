@@ -2847,8 +2847,11 @@ void Lhyphen::integrate() {
       breakEvol << t << ' ' << cumulatedG << ' ' << cumulatedL << std::endl;
     }
 
-    if (nstepPeriodSVG > 0 && step % nstepPeriodSVG == 0) {
-
+    // Données des noeuds capturés (captureNodes) : à la période nstepPeriodCapture si elle est donnée, sinon à
+    // chaque sauvegarde SVG (comportement historique)
+    const bool svgStep = (nstepPeriodSVG > 0 && step % nstepPeriodSVG == 0);
+    const bool captureStep = (nstepPeriodCapture > 0) ? (step % nstepPeriodCapture == 0) : svgStep;
+    if (captureStep) {
       for (size_t c = 0; c < capturedNodes.size(); c++) {
         vec2r meanPos, sumForce, meanForce;
         for (size_t cn = 0; cn < capturedNodes[c].cellNodeIDs.size(); cn++) {
@@ -2863,7 +2866,9 @@ void Lhyphen::integrate() {
         }
         of[c] << meanPos << ' ' << sumForce << ' ' << meanForce << '\n' << std::flush;
       }
+    }
 
+    if (svgStep) {
       saveSVG(isvg);
       isvg++;
     }
@@ -2969,6 +2974,8 @@ void Lhyphen::saveCONF(const char *fname) {
   file << "nstep " << nstep << '\n';
   file << "nstepPeriodVerlet " << nstepPeriodVerlet << '\n';
   file << "nstepPeriodSVG " << nstepPeriodSVG << '\n';
+  if (nstepPeriodCapture > 0)
+    file << "nstepPeriodCapture " << nstepPeriodCapture << '\n';
   file << "nstepPeriodRecord " << nstepPeriodRecord << '\n';
   file << "nstepPeriodConf " << nstepPeriodConf << '\n';
   file << "isvg " << isvg << '\n';
@@ -3162,6 +3169,11 @@ void Lhyphen::loadCONF(const char *fname) {
       exprParser->getValue(file, nstepPeriodSVG);
       if (firstLoad) {
         std::cout << "> nstepPeriodSVG = " << nstepPeriodSVG << std::endl;
+      }
+    } else if (token == "nstepPeriodCapture") {
+      exprParser->getValue(file, nstepPeriodCapture);
+      if (firstLoad) {
+        std::cout << "> nstepPeriodCapture = " << nstepPeriodCapture << std::endl;
       }
     } else if (token == "nstepPeriodRecord") {
       exprParser->getValue(file, nstepPeriodRecord);

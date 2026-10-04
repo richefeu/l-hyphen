@@ -345,6 +345,13 @@ doc: nstepPeriodSVG [(int) valeur]
 
   Nombre de pas entre deux fichiers sample####.svg (0 = aucun).
 
+[keyword] nstepPeriodCapture
+doc: nstepPeriodCapture [(int) valeur]
+
+  Nombre de pas entre deux écritures des fichiers de captureNodes. 0 (défaut) :
+  à chaque fichier svg. Permet de désactiver les svg (nstepPeriodSVG 0) en
+  gardant les fichiers de captureNodes.
+
 [keyword] isvg
 doc: isvg [(int) valeur]
 

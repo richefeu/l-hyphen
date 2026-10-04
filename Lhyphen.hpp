@@ -196,6 +196,7 @@ public:
   int nstep{0};             ///< nombre de pas
   int nstepPeriodVerlet{0}; ///< nombre de pas entre mise à jour des voisins
   int nstepPeriodSVG{0};    ///< nombre de pas entre sauvegardes SVG
+  int nstepPeriodCapture{0}; ///< nombre de pas entre écritures de captureNodes (0 : à chaque sauvegarde SVG)
   int nstepPeriodRecord{0}; ///< nombre de pas entre chaque ligne d'enregistrement de données
   int nstepPeriodConf{0};   ///< nombre de pas entre sauvegardes de configuration
   int isvg{0};              ///< numéro actuel de sauvegarde SVG

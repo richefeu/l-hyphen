@@ -263,6 +263,7 @@ Applique le contrôle à tous les nœuds de la cellule.
 | `nstepPeriodConf <valeur>` | Fréquence de sauvegarde des configurations (en pas ; 0 = désactivé) |
 | `nstepPeriodRecord <valeur>` | Fréquence d'enregistrement des données scalaires |
 | `captureNodes <fichier> <xmin> <xmax> <ymin> <ymax>` | Enregistre les positions des nœuds dans la zone en post-traitement |
+| `nstepPeriodCapture <valeur>` | Fréquence d'écriture des fichiers de `captureNodes` (en pas) ; 0 (défaut) = à chaque sauvegarde SVG. Permet de désactiver les SVG (`nstepPeriodSVG 0`) tout en gardant ces fichiers |
 | `followCell <id_cellule>` | Suit une cellule particulière (données de suivi) |
 | `findDisplayArea <facteur>` | Calcule automatiquement les limites d'affichage (facteur ≥ 1) |
 | `limits <xmin> <xmax> <ymin> <ymax>` | Définit manuellement les limites d'affichage |

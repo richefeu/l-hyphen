@@ -37,6 +37,7 @@
   - #command("nstep <value>") ~Total number of time-steps.
   - #command("cyclicVelPeriod <value>") ~Cyclic loading: imposed velocities change sign during the second half of each period (0 = off).
   - #command("nstepPeriodSVG <value>") ~Number of time-steps between SVG dumps.
+  - #command("nstepPeriodCapture <value>") ~Number of time-steps between writes of the captureNodes files (0 = with each SVG dump).
   - #command("nstepPeriodRecord <value>") ~Number of time-steps between records in some files.
   - #command("nstepPeriodConf <value>") ~Number of time-steps between conf-file dumps.
   - #command("isvg <value>") ~Current SVG file id-number.
