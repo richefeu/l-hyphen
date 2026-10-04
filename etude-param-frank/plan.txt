@@ -1,0 +1,10 @@
+# Plan de l'étude paramétrique « Frank » : toutes les combinaisons des valeurs ci-dessous (11 x 11 = 121 cas)
+# Usage : ./generate_cases plan.txt
+
+model   input_model.txt              # modèle d'input (les paramètres y sont des lignes « define NOM valeur »)
+copy    echantillon/nodefile.txt     # copié dans chaque cas, pour que chaque répertoire soit autonome
+output  cases                        # répertoire des cas
+
+# paramètre  valeurs
+XI      0.1  0.25  0.5  0.75  1  2  3  4  5  7.5  10
+ZETA    0.1  0.25  0.5  0.75  1  2  3  4  5  7.5  10

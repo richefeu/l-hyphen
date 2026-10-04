@@ -71,3 +71,15 @@ etude-param-model/cases/*
 !etude-param-model/cases/plot_snapshots.py
 etude-param-model/echantillon/nodegen_input.txt
 etude-param-model/run_cases.log
+
+# etude-param-frank : tout ce qui est généré (binaire, cas et résultats, sous-produits de nodegen)
+etude-param-frank/generate_cases
+etude-param-frank/cases/*
+!etude-param-frank/cases/plot_maps.py
+!etude-param-frank/cases/plot_curves.py
+!etude-param-frank/cases/plot_snapshots.py
+etude-param-frank/echantillon/nodegen_input.txt
+etude-param-frank/run_cases.log
+
+# dépendances générées par le compilateur (-MMD)
+*.d
