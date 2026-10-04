@@ -41,9 +41,11 @@ struct Params {
   // Valeurs facultatives reportées dans les lignes d'input (sinon lignes commentées avec des repères <...>)
   bool hasCellProps{false};
   double Kn{0}, Kr{0}, MzMax{0}, pInt{0};
-  double gripHeight{-1.0};   // hauteur des mors haut et bas (< 0 : une taille de cellule)
+  int gripRows{1};           // nombre de rangées de noeuds attrapées par chaque mors (défaut : la rangée du bord)
+  bool hasGripRows{false};
+  double gripHeight{-1.0};   // hauteur explicite des mors (prioritaire sur gripRows si gripRows n'est pas donné)
   double pullVelocity{3e-4}; // vitesse imposée aux mors (bas : -v, haut : +v)
-  bool hasGrips{false};
+  bool hasVelocity{false};   // sinon, en mode inputTemplate, modes et vitesses sont repris du modèle
   std::string inputTemplate;           // input l-hyphen existant servant de modèle
   std::string inputDeck{"input.txt"};  // input complet produit à partir du modèle
   bool hasGlueProps{false};
@@ -93,9 +95,16 @@ static Params readParams(const std::string &name) {
     else if (k == "cellProperties") {
       is >> p.Kn >> p.Kr >> p.MzMax >> p.pInt;
       p.hasCellProps = true;
-    } else if (k == "grips") {
+    } else if (k == "grips") { // forme historique : hauteur et vitesse
       is >> p.gripHeight >> p.pullVelocity;
-      p.hasGrips = true;
+      p.hasVelocity = true;
+    } else if (k == "gripRows") {
+      is >> p.gripRows;
+      p.hasGripRows = true;
+    } else if (k == "gripHeight") is >> p.gripHeight;
+    else if (k == "pullVelocity") {
+      is >> p.pullVelocity;
+      p.hasVelocity = true;
     } else if (k == "inputTemplate") {
       is >> p.inputTemplate;
       std::string out;
@@ -688,6 +697,7 @@ int main(int argc, char *argv[]) {
     return std::min(aa, ab) >= startAlong - tol && std::max(aa, ab) <= tipAlong + tol;
   };
   std::vector<Polygon> cells;
+  std::vector<std::vector<int>> cellRoots; // sommet du pavage de chaque noeud (même ordre que cells)
   size_t nCrackEdges = 0, nBad = 0;
   for (size_t c = 0; c < poly.size(); c++) {
     auto &ids = poly[c];
@@ -733,9 +743,107 @@ int main(int argc, char *argv[]) {
       }
     }
     cells.push_back(out);
+    cellRoots.push_back(ids);
   }
 
   writeNodeFile(P.output, cells);
+
+  // Mors : hauteur des boîtes de contrôle. Les rangées de noeuds sont définies topologiquement : la rangée 1 est
+  // formée des sommets du bord, la rangée k des sommets à k-1 barres du bord. Une boîte ne sélectionne que par
+  // la hauteur : elle s'arrête à mi-distance entre le noeud le plus haut des gripRows premières rangées et le noeud
+  // suivant. La rangée 1 est ainsi attrapée exactement ; au-delà, les rangées d'un pavage de Voronoï ne sont pas
+  // horizontales et la boîte peut attraper en plus quelques noeuds des rangées suivantes (comptés dans nExtra).
+  struct Grip {
+    double h{0.0};
+    size_t nNodes{0}, nExtra{0};
+    bool byRows{false};
+  };
+  const bool gripsByRows = P.hasGripRows || !(P.gripHeight > 0.0);
+  const int nRows = std::max(1, P.gripRows);
+  auto gripBox = [&](int sideFlag, bool bottom) {
+    const double Yb = bottom ? P.ymin : P.ymin + P.Ly;
+    auto depth = [&](const V &q) { return bottom ? q.y - Yb : Yb - q.y; };
+    Grip g;
+    std::vector<std::vector<char>> inRows(cells.size());
+    if (gripsByRows) {
+      g.byRows = true;
+      std::map<int, std::set<int>> adj;
+      for (auto &ids : cellRoots) {
+        for (size_t k = 0; k < ids.size(); k++) {
+          int a = ids[k], b = ids[(k + 1) % ids.size()];
+          adj[a].insert(b);
+          adj[b].insert(a);
+        }
+      }
+      std::map<int, int> dist;
+      std::vector<int> front;
+      for (auto &kv : adj) {
+        if (rflags[kv.first] & sideFlag) {
+          dist[kv.first] = 0;
+          front.push_back(kv.first);
+        }
+      }
+      for (int d = 1; d < nRows && !front.empty(); d++) {
+        std::vector<int> next;
+        for (int u : front) {
+          for (int v : adj[u]) {
+            if (!dist.count(v)) {
+              dist[v] = d;
+              next.push_back(v);
+            }
+          }
+        }
+        front = next;
+      }
+      double hIn = 0.0, hNext = std::numeric_limits<double>::max();
+      for (size_t c = 0; c < cells.size(); c++) {
+        inRows[c].assign(cells[c].size(), 0);
+        for (size_t k = 0; k < cells[c].size(); k++) {
+          if (dist.count(cellRoots[c][k])) {
+            inRows[c][k] = 1;
+            hIn = std::max(hIn, depth(cells[c][k]));
+          }
+        }
+      }
+      for (size_t c = 0; c < cells.size(); c++) {
+        for (size_t k = 0; k < cells[c].size(); k++) {
+          double dq = depth(cells[c][k]);
+          if (!inRows[c][k] && dq > hIn) {
+            hNext = std::min(hNext, dq);
+          }
+        }
+      }
+      g.h = (hNext < std::numeric_limits<double>::max()) ? 0.5 * (hIn + hNext) : hIn + P.barWidth;
+    } else {
+      g.h = P.gripHeight;
+    }
+    for (size_t c = 0; c < cells.size(); c++) {
+      for (size_t k = 0; k < cells[c].size(); k++) {
+        if (depth(cells[c][k]) <= g.h) {
+          g.nNodes++;
+          if (g.byRows && !inRows[c][k]) {
+            g.nExtra++;
+          }
+        }
+      }
+    }
+    return g;
+  };
+  const Grip gBot = gripBox(BOTTOM, true), gTop = gripBox(TOP, false);
+  auto gripText = [&](const Grip &g) {
+    std::ostringstream o;
+    o << g.nNodes << " noeuds";
+    if (g.byRows) {
+      o << " (" << nRows << (nRows > 1 ? " rangées" : " rangée");
+      if (g.nExtra > 0) {
+        o << " + " << g.nExtra << " noeuds des rangées suivantes";
+      }
+      o << ")";
+    } else {
+      o << " (hauteur imposée " << std::setprecision(4) << g.h << ")";
+    }
+    return o.str();
+  };
 
   ViewOptions vo;
   vo.barWidth = P.barWidth;
@@ -789,19 +897,7 @@ int main(int argc, char *argv[]) {
   // 6. Lignes d'input l-hyphen
   {
     const double X0 = P.xmin, X1 = P.xmin + P.Lx, Y0 = P.ymin, Y1 = P.ymin + P.Ly;
-    const double grip = P.gripHeight > 0.0 ? P.gripHeight : P.cellSize;
-    auto countIn = [&](double ya, double yb) {
-      size_t nb = 0;
-      for (auto &c : cells) {
-        for (auto &q : c) {
-          if (q.x >= X0 && q.x <= X1 && q.y >= ya && q.y <= yb) {
-            nb++;
-          }
-        }
-      }
-      return nb;
-    };
-    size_t nBottom = countIn(Y0, Y0 + grip), nTop = countIn(Y1 - grip, Y1);
+    const size_t nBottom = gBot.nNodes, nTop = gTop.nNodes;
 
     std::ofstream in(P.input);
     in << std::setprecision(15);
@@ -844,12 +940,12 @@ int main(int argc, char *argv[]) {
 
     in << "# --- Chargement : mors bas et haut, libres en x (mode 1 = force nulle), vitesse imposée en y (mode 0)\n";
     in << "#                    xmin  xmax  ymin  ymax  xmode xvalue ymode yvalue\n";
-    in << "setNodeControlInBox  " << X0 << "  " << X1 << "  " << Y0 << "  " << num(Y0 + grip) << "  1 0.0  0 "
-       << -P.pullVelocity << "    # bas  : " << nBottom << " noeuds\n";
-    in << "setNodeControlInBox  " << X0 << "  " << X1 << "  " << num(Y1 - grip) << "  " << Y1 << "  1 0.0  0 "
-       << P.pullVelocity << "    # haut : " << nTop << " noeuds\n";
-    in << "captureNodes  bottom.txt  " << X0 << "  " << X1 << "  " << Y0 << "  " << num(Y0 + grip) << "\n";
-    in << "captureNodes  top.txt     " << X0 << "  " << X1 << "  " << num(Y1 - grip) << "  " << Y1 << "\n\n";
+    in << "setNodeControlInBox  " << X0 << "  " << X1 << "  " << Y0 << "  " << num(Y0 + gBot.h) << "  1 0.0  0 "
+       << -P.pullVelocity << "    # bas  : " << gripText(gBot) << "\n";
+    in << "setNodeControlInBox  " << X0 << "  " << X1 << "  " << num(Y1 - gTop.h) << "  " << Y1 << "  1 0.0  0 "
+       << P.pullVelocity << "    # haut : " << gripText(gTop) << "\n";
+    in << "captureNodes  bottom.txt  " << X0 << "  " << X1 << "  " << Y0 << "  " << num(Y0 + gBot.h) << "\n";
+    in << "captureNodes  top.txt     " << X0 << "  " << X1 << "  " << num(Y1 - gTop.h) << "  " << Y1 << "\n\n";
 
     in << "# --- Collage (après les contrôles) : distGcGlue doit rester inférieur à opening = " << P.opening << "\n";
     in << "distGcGlue " << P.distGlue << "\n";
@@ -859,12 +955,13 @@ int main(int argc, char *argv[]) {
        << "\n";
 
     if (P.inputTemplate.empty()) {
-    std::cout << "  lignes d'input    : " << P.input << " (mors de " << grip << " : " << nBottom << " noeuds en bas, "
-              << nTop << " en haut)\n";
+    std::cout << "  lignes d'input    : " << P.input << "\n";
+    std::cout << "  mors bas          : " << gripText(gBot) << "\n";
+    std::cout << "  mors haut         : " << gripText(gTop) << "\n";
     if (nBottom == 0 || nTop == 0) {
       std::cout << "  ATTENTION         : un mors ne contient aucun noeud (augmenter la hauteur des mors : grips)\n";
     }
-    if (P.hasCrack && (std::min(P.c0.y, P.c1.y) < Y0 + grip || std::max(P.c0.y, P.c1.y) > Y1 - grip)) {
+    if (P.hasCrack && (std::min(P.c0.y, P.c1.y) < Y0 + gBot.h || std::max(P.c0.y, P.c1.y) > Y1 - gTop.h)) {
       std::cout << "  ATTENTION         : la pré-fissure entre dans un mors\n";
     }
     if (!P.hasCellProps) {
@@ -944,13 +1041,7 @@ int main(int argc, char *argv[]) {
     const bool doCtrl = ctrl.size() == 2, doCapt = capt.size() == 2;
 
     const double X0 = P.xmin, X1 = P.xmin + P.Lx, Y0 = P.ymin, Y1 = P.ymin + P.Ly;
-    double hBot = P.gripHeight > 0.0 ? P.gripHeight : P.cellSize, hTop = hBot;
-    if (!P.hasGrips && doCtrl) { // hauteur des mors reprise du modèle
-      auto tb = tokens(lines[ctrl[0]]), tt = tokens(lines[ctrl[1]]);
-      double a, b;
-      if (toNum(tb[3], a) && toNum(tb[4], b) && b > a) hBot = b - a;
-      if (toNum(tt[3], a) && toNum(tt[4], b) && b > a) hTop = b - a;
-    }
+    const double hBot = gBot.h, hTop = gTop.h; // hauteurs des mors (gripRows / gripHeight), pas celles du modèle
     // chemin du nodeFile relatif au répertoire de l'input produit (run est lancé dans ce répertoire)
     fs::path deckDir = fs::absolute(P.inputDeck).parent_path();
     std::string nodePath = fs::relative(fs::absolute(P.output), deckDir, ec).generic_string();
@@ -979,7 +1070,7 @@ int main(int argc, char *argv[]) {
       } else if (k == "setNodeControlInBox" && doCtrl && (i == ctrl[0] || i == ctrl[1])) {
         bool bottom = (i == ctrl[0]);
         double ya = bottom ? Y0 : Y1 - hTop, yb = bottom ? Y0 + hBot : Y1;
-        std::string modes = P.hasGrips ? std::string("1 0.0  0 ") + num(bottom ? -P.pullVelocity : P.pullVelocity)
+        std::string modes = P.hasVelocity ? std::string("1 0.0  0 ") + num(bottom ? -P.pullVelocity : P.pullVelocity)
                                        : t[5] + " " + t[6] + "  " + t[7] + " " + t[8];
         out << "setNodeControlInBox  " << num(X0) << "  " << num(X1) << "  " << num(ya) << "  " << num(yb) << "  "
             << modes << tag << (bottom ? " mors bas" : " mors haut") << "\n";
@@ -1012,22 +1103,11 @@ int main(int argc, char *argv[]) {
       notes.push_back(std::to_string(capt.size()) +
                       " captureNodes dans le modèle (2 attendus : bas et haut) : lignes recopiées sans modification");
     }
-    auto countIn = [&](double ya, double yb) {
-      size_t nb = 0;
-      for (auto &c : cells) {
-        for (auto &q : c) {
-          if (q.x >= X0 && q.x <= X1 && q.y >= ya && q.y <= yb) {
-            nb++;
-          }
-        }
-      }
-      return nb;
-    };
     std::cout << "  input complet     : " << P.inputDeck << " (modèle " << P.inputTemplate << ", fragments dans "
               << P.input << ")\n";
     if (doCtrl) {
-      std::cout << "                      mors : " << countIn(Y0, Y0 + hBot) << " noeuds en bas (hauteur " << hBot
-                << "), " << countIn(Y1 - hTop, Y1) << " en haut (hauteur " << hTop << ")\n";
+      std::cout << "  mors bas          : " << gripText(gBot) << "\n";
+      std::cout << "  mors haut         : " << gripText(gTop) << "\n";
     }
     double m = P.nodeMass > 0.0 ? P.nodeMass : tplMass;
     double kr = P.hasCellProps ? P.Kr : tplKr;

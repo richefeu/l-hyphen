@@ -10,5 +10,6 @@ nodegen
   pré-fissure       : 8 parois ouvertes (barWidth + 2e-06), pointe effective en (0.004381, 0.01) au lieu de (0.0044, 0.01)
   fichiers          : work/nodefile.txt, work/nodefile.svg, work/nodegen_input.txt
   input complet     : work/input.txt (modèle modele_input.txt, fragments dans work/nodegen_input.txt)
-                      mors : 312 noeuds en bas (hauteur 0.0004), 316 en haut (hauteur 0.0004)
+  mors bas          : 82 noeuds (1 rangée)
+  mors haut         : 79 noeuds (1 rangée)
                       dt_crit(flexion) = 7.896e-07

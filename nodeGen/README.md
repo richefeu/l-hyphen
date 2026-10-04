@@ -97,7 +97,10 @@ quelconque.
 | `distGlue` | 2e-7 | valeur de `distGcGlue` / `glue` de l'input (contrôle et SVG) |
 | `cellProperties Kn Kr Mz_max p_int` | — | propriétés reportées dans la ligne `readNodeFile` générée |
 | `glueProperties kn_coh kt_coh Gc` | — | propriétés reportées dans la ligne `setGcGlueSameProperties` générée |
-| `grips hauteur vitesse` | cellSize, 3e-4 | mors bas et haut : hauteur et vitesse imposée (bas −v, haut +v) |
+| `gripRows n` | 1 | nombre de rangées de nœuds attrapées par chacun des mors bas et haut |
+| `gripHeight h` | — | hauteur explicite des mors (utilisée si `gripRows` n'est pas donné) |
+| `pullVelocity v` | 3e-4 | vitesse imposée aux mors (bas −v, haut +v) |
+| `grips h v` | — | forme historique de `gripHeight h` + `pullVelocity v` |
 | `nodeMass m` | — | masse des nœuds, pour estimer le pas de temps critique de flexion |
 | `input` | nodegen_input.txt | lignes d'input l-hyphen produites |
 | `inputTemplate modèle [sortie]` | —, input.txt | input complet produit à partir d'un input existant |
@@ -144,6 +147,19 @@ distGcGlue 2e-07
 setGcGlueSameProperties  26373.6263736264  26373.6263736264  1.25751147880661e-06
 ```
 
+### Mors : rangées de nœuds attrapées
+
+Par défaut (`gripRows 1`), chaque mors attrape **une seule rangée de nœuds** : les nœuds du bord du domaine,
+tous à `barWidth/2` du bord. Les rangées sont définies topologiquement : la rangée k est formée des sommets
+situés à k−1 barres du bord. Une boîte de `setNodeControlInBox` ne sélectionne que par la hauteur ; `nodegen` la
+fait s'arrêter à mi-distance entre le nœud le plus haut des `gripRows` premières rangées et le nœud suivant.
+
+- `gripRows 1` : la rangée du bord est attrapée exactement (le nœud suivant est à environ un quart de cellule) ;
+- `gripRows n` (n ≥ 2) : toutes les rangées demandées sont attrapées, mais un pavage de Voronoï n'a pas de rangées
+  horizontales au-delà de la première ; la boîte attrape donc aussi quelques nœuds plus bas des rangées suivantes.
+  Leur nombre est affiché (par exemple `253 noeuds (2 rangées + 45 noeuds des rangées suivantes)`) ;
+- `gripHeight h` impose une hauteur de boîte.
+
 ### Input complet à partir d'un modèle
 
 Avec `inputTemplate modele.txt input.txt`, `nodegen` recopie un input l-hyphen existant (par exemple celui d'une
@@ -154,7 +170,7 @@ maillage ; elles sont marquées `# [nodegen]` :
 |---|---|
 | `readNodeFile` | nouveau nodeFile (chemin relatif au répertoire de `input.txt`) et `barWidth` ; `Kn Kr Mz_max p_int` de `cellProperties`, sinon recopiés du modèle |
 | `cleanShortBars` | commentée (inutile) |
-| 2 × `setNodeControlInBox` | boîtes recalculées sur le nouveau domaine ; hauteur, modes et valeurs repris du modèle, sauf si `grips` est donné |
+| 2 × `setNodeControlInBox` | boîtes recalculées sur le nouveau domaine, de hauteur `gripRows` (ou `gripHeight`) ; modes et valeurs repris du modèle, sauf si `pullVelocity` est donné |
 | 2 × `captureNodes` | boîtes recalculées, noms de fichiers conservés |
 | `setGcGlueSameProperties` | remplacée si `glueProperties` est donné, sinon recopiée |
 | `distGcGlue` / `GcGlue` / `glue` | recopiée ; `nodegen` vérifie qu'elle reste inférieure à `opening` |

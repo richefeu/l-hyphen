@@ -25,7 +25,8 @@ distGlue 2e-7             # valeur de distGcGlue dans l'input (contrôle du coll
 # Lignes d'input l-hyphen (valeurs de Frank-ouverture-fissure)
 cellProperties  2000.0  7.928638584420448e-4  79286385.84420447  0   # Kn Kr Mz_max p_int de readNodeFile
 glueProperties  26373.626373626375  26373.626373626375  1.2575114788066131e-06   # setGcGlueSameProperties
-grips           4e-4  3e-4      # mors haut et bas : hauteur, vitesse imposée
+gripRows        1               # mors haut et bas : nombre de rangées de noeuds attrapées
+pullVelocity    3e-4            # vitesse imposée aux mors (bas : -v, haut : +v)
 nodeMass        8e-8            # setNodeMasses (estimation du pas de temps critique)
 
 # Sorties

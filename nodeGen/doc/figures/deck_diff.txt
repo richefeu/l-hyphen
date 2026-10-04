@@ -13,14 +13,14 @@
 < setNodeControlInBox 0.0032085515974282354       0.01679607384100938     0.002   0.0024009500000000002      1        0.0       0      -3e-04
 < setNodeControlInBox 0.0032085515974282354       0.01679607384100938    0.017599049999999998    0.018      1        0.0       0      3e-04
 ---
-> setNodeControlInBox  0.0032  0.0168  0.002  0.0024  1 0.0  0 -0.0003    # [nodegen] mors bas
-> setNodeControlInBox  0.0032  0.0168  0.0176  0.018  1 0.0  0 0.0003    # [nodegen] mors haut
+> setNodeControlInBox  0.0032  0.0168  0.002  0.00203869896891767  1 0.0  0 -0.0003    # [nodegen] mors bas
+> setNodeControlInBox  0.0032  0.0168  0.0179594987793753  0.018  1 0.0  0 0.0003    # [nodegen] mors haut
 45,46c47,48
 < captureNodes      bottom.txt 0.0032085515974282354       0.01679607384100938       0.002     0.0024009500000000002
 < captureNodes      top.txt    0.0032085515974282354       0.01679607384100938       0.017599049999999998     0.018
 ---
-> captureNodes  bottom.txt  0.0032  0.0168  0.002  0.0024    # [nodegen]
-> captureNodes  top.txt  0.0032  0.0168  0.0176  0.018    # [nodegen]
+> captureNodes  bottom.txt  0.0032  0.0168  0.002  0.00203869896891767    # [nodegen]
+> captureNodes  top.txt  0.0032  0.0168  0.0179594987793753  0.018    # [nodegen]
 53c55
 < setGcGlueSameProperties 26373.626373626375 26373.626373626375 1.2575114788066131e-06                               
 ---

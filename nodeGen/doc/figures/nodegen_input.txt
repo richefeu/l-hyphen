@@ -13,10 +13,10 @@ readNodeFile  work/nodefile.txt  2e-06  2000  0.000792863858442045  79286385.844
 
 # --- Chargement : mors bas et haut, libres en x (mode 1 = force nulle), vitesse imposée en y (mode 0)
 #                    xmin  xmax  ymin  ymax  xmode xvalue ymode yvalue
-setNodeControlInBox  0.0032  0.0168  0.002  0.0024  1 0.0  0 -0.0003    # bas  : 312 noeuds
-setNodeControlInBox  0.0032  0.0168  0.0176  0.018  1 0.0  0 0.0003    # haut : 316 noeuds
-captureNodes  bottom.txt  0.0032  0.0168  0.002  0.0024
-captureNodes  top.txt     0.0032  0.0168  0.0176  0.018
+setNodeControlInBox  0.0032  0.0168  0.002  0.00203869896891767  1 0.0  0 -0.0003    # bas  : 82 noeuds (1 rangée)
+setNodeControlInBox  0.0032  0.0168  0.0179594987793753  0.018  1 0.0  0 0.0003    # haut : 79 noeuds (1 rangée)
+captureNodes  bottom.txt  0.0032  0.0168  0.002  0.00203869896891767
+captureNodes  top.txt     0.0032  0.0168  0.0179594987793753  0.018
 
 # --- Collage (après les contrôles) : distGcGlue doit rester inférieur à opening = 2e-06
 distGcGlue 2e-07

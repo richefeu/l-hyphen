@@ -141,7 +141,9 @@ Le fichier de paramètres contient un mot-clé par ligne ; tout ce qui suit \cod
   \midrule
   \code{cellProperties} & --- & \code{Kn Kr Mz\_max p\_int} reportés dans \code{readNodeFile} \\
   \code{glueProperties} & --- & \code{kn\_coh kt\_coh Gc} reportés dans \code{setGcGlueSameProperties} \\
-  \code{grips} & \code{cellSize}, 3e-4 & hauteur des mors haut et bas, vitesse imposée \\
+  \code{gripRows} & 1 & nombre de rangées de nœuds attrapées par chacun des mors bas et haut \\
+  \code{gripHeight} & --- & hauteur explicite des mors (si \code{gripRows} n'est pas donné) \\
+  \code{pullVelocity} & 3e-4 & vitesse imposée aux mors (bas $-v$, haut $+v$) \\
   \code{nodeMass} & --- & masse des nœuds, pour estimer le pas de temps critique de flexion \\
   \midrule
   \code{inputTemplate} & --- & \code{modèle [sortie]} : input complet produit à partir d'un input existant
@@ -250,8 +252,8 @@ amortissements, sorties\dots) sont conservés, y compris les constantes \code{de
   \code{readNodeFile} & nouveau nodeFile (chemin relatif au répertoire de l'input produit) et \code{barWidth} ;
     \code{Kn Kr Mz\_max p\_int} de \code{cellProperties}, sinon recopiés du modèle \\
   \code{cleanShortBars} & commentée (inutile) \\
-  2 \code{setNodeControlInBox} & boîtes recalculées sur le nouveau domaine ; hauteur, modes et valeurs repris du
-    modèle, sauf si \code{grips} est donné \\
+  2 \code{setNodeControlInBox} & boîtes recalculées sur le nouveau domaine, de hauteur fixée par \code{gripRows}
+    (section~\ref{sec:grips}) ; modes et valeurs repris du modèle, sauf si \code{pullVelocity} est donné \\
   2 \code{captureNodes} & boîtes recalculées, noms de fichiers conservés \\
   \code{setGcGlueSameProperties} & remplacée si \code{glueProperties} est donné, sinon recopiée \\
   \code{distGcGlue}, \code{glue} & recopiée ; \toolgen{} vérifie qu'elle reste inférieure à \code{opening} \\
@@ -279,7 +281,7 @@ Sans modèle, \toolgen{} écrit toujours dans le fichier \code{input} (défaut \
 lignes d'input qui dépendent du maillage, à copier dans un fichier d'input aux endroits indiqués :
 \begin{itemize}[nosep]
   \item \code{readNodeFile} avec le bon \code{barWidth} et les propriétés de \code{cellProperties} ;
-  \item les mors : deux \code{setNodeControlInBox} sur toute la largeur, de hauteur \code{grips}, libres en $x$
+  \item les mors : deux \code{setNodeControlInBox} sur toute la largeur (section~\ref{sec:grips}), libres en $x$
     (mode 1, force nulle) et à vitesse imposée $\mp v$ en $y$ (mode 0), avec le nombre de nœuds de chaque mors,
     et les deux \code{captureNodes} correspondants ;
   \item \code{distGcGlue} et \code{setGcGlueSameProperties} (propriétés de \code{glueProperties}) ;
@@ -296,9 +298,42 @@ les contrôles et \code{captureNodes} suivent, et le collage vient en dernier, u
 Le nombre de nœuds de chaque mors permet de vérifier que la hauteur des mors est adaptée ; \toolgen{} signale un
 mors vide ou une pré-fissure qui entrerait dans un mors.
 
+\subsection{Mors : rangées de nœuds attrapées}
+\label{sec:grips}
+
+Les mors bas et haut sont deux boîtes \code{setNodeControlInBox} de toute la largeur du domaine. Par défaut
+(\code{gripRows 1}), chacune attrape \textbf{une seule rangée de nœuds} : les nœuds du bord, tous situés à
+\code{barWidth}/2 du bord du domaine. Les parois des cellules de bord restent alors libres de se déformer ; seuls
+leurs nœuds sur le bord sont pilotés.
+
+Les rangées sont définies topologiquement : la rangée~1 est formée des sommets du bord, la rangée~$k$ des sommets
+situés à $k-1$ barres du bord (les nœuds des cellules voisines au même sommet comptant pour un seul sommet). Une
+boîte ne sélectionne que par la hauteur ; \toolgen{} la fait s'arrêter à mi-distance entre le nœud le plus haut
+des \code{gripRows} premières rangées et le nœud suivant. Sur l'échantillon du tutoriel :
+
+\begin{center}
+\begin{tabular}{lccc}
+  \toprule
+  Mors bas & hauteur de la boîte & nœuds attrapés & dont nœuds des rangées suivantes \\
+  \midrule
+  \code{gripRows 1} (défaut) & \SI{39}{\micro m} & 82 & 0 \\
+  \code{gripRows 2} & \SI{354}{\micro m} & 253 & 45 \\
+  \code{gripRows 3} & \SI{819}{\micro m} & 651 & 303 \\
+  \code{gripHeight 4e-4} & \SI{400}{\micro m} & 312 & --- \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+La première rangée est attrapée exactement : le nœud suivant est à environ \SI{78}{\micro m} du bord. Au-delà,
+un pavage de Voronoï n'a pas de rangées horizontales (le nœud le plus haut de la rangée~2 est plus haut que le
+nœud le plus bas de la rangée~3) : la boîte attrape toutes les rangées demandées, plus quelques nœuds bas des
+rangées suivantes, dont \toolgen{} affiche le nombre. \code{gripHeight} impose directement une hauteur de boîte.
+
 \subsection{Vérifications}
 
-\code{cleanShortBars} est inutile avec un nodeFile produit par \toolgen. Après un premier lancement, vérifier dans
+\code{cleanShortBars} est inutile avec un nodeFile produit par \toolgen. Avec les mors d'une rangée, l'input du
+tutoriel a été lancé sur \num{20000} pas : aucune rupture, et des forces égales et opposées sur les deux mors
+(\SI{-1.405}{mN} en haut, \SI{1.403}{mN} en bas à $t=\SI{1}{ms}$). Après un premier lancement, vérifier dans
 \code{diagnostic.txt} que le nombre de « liens collés » est égal au nombre de parois collées de \toolview, et que le
 rapport $\Delta t_{\text{crit}}/\Delta t$ de la ligne « flexion » est confortable. Sur l'échantillon du tutoriel,
 avec les paramètres mécaniques de \code{Frank-ouverture-fissure} :
