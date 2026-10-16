@@ -127,6 +127,10 @@ struct ViewOptions {
   double barWidth{-1.0};   // < 0 : estimée (distance minimale entre noeuds de cellules différentes)
   double distGlue{2e-7};   // tolérance de collage (distGcGlue / glue dans l'input)
   double shortRatio{0.3};  // barres plus courtes que shortRatio * longueur moyenne mises en évidence
+  double shortLength{-1.0}; // > 0 : seuil absolu des barres courtes (remplace shortRatio)
+  // Non vide : barres courtes désignées par l'appelant (shortBars[c][k] pour la barre k -> k+1 de la cellule c), par
+  // exemple d'après les arêtes du pavage avant décalage des parois ; shortLength n'est alors que le seuil affiché
+  std::vector<std::vector<char>> shortBars;
   bool showNodes{false};   // dessiner les noeuds
   bool useBox{false};      // ne dessiner qu'une fenêtre [bx0, bx1] x [by0, by1]
   double bx0{0}, bx1{0}, by0{0}, by1{0};
@@ -139,9 +143,55 @@ struct ViewOptions {
 struct MeshStats {
   size_t nCells{0}, nNodes{0}, nBars{0};
   size_t nGlued{0}, nFree{0}, nShort{0};
+  size_t nJunction4{0};      // jonctions où se rejoignent au moins 4 cellules (dont la pointe de fissure)
+  size_t nBorderJunction3{0}; // jonctions de bord à 3 cellules : 4 branches avec le bord
   double lMean{0.0}, lMin{0.0}, barWidth{0.0};
-  std::map<size_t, size_t> sides; // nombre de cellules par nombre de côtés
+  std::map<size_t, size_t> sides;  // nombre de cellules par nombre de côtés
+  std::map<size_t, size_t> junctions; // nombre de jonctions par nombre de cellules
 };
+
+// Répartition des jonctions par nombre de cellules, ex. "2: 150  3: 4000  4: 1"
+inline std::string junctionsHistogram(const MeshStats &st) {
+  std::ostringstream os;
+  for (auto &kv : st.junctions) {
+    os << kv.first << ": " << kv.second << "  ";
+  }
+  return os.str();
+}
+
+// Tableau du nombre de cellules par nombre de côtés, une colonne (effectif et pourcentage) par jeu de cellules,
+// ex. sidesTable({{"toutes", st}, {"intérieures", inner}}, "    ")
+inline std::string sidesTable(const std::vector<std::pair<std::string, MeshStats>> &cols, const std::string &indent) {
+  std::map<size_t, bool> rows;
+  for (auto &c : cols) {
+    for (auto &kv : c.second.sides) {
+      rows[kv.first] = true;
+    }
+  }
+  std::ostringstream os;
+  os << indent << std::setw(5) << "côtés";
+  for (auto &c : cols) {
+    os << "  " << std::setw(19) << c.first;
+  }
+  os << "\n";
+  for (auto &r : rows) {
+    os << indent << std::setw(5) << r.first;
+    for (auto &c : cols) {
+      auto it = c.second.sides.find(r.first);
+      size_t n = it == c.second.sides.end() ? 0 : it->second;
+      double pct = c.second.nCells ? 100.0 * (double)n / (double)c.second.nCells : 0.0;
+      os << "  " << std::setw(9) << n << " (" << std::fixed << std::setprecision(1) << std::setw(5) << pct << " %)";
+      os.unsetf(std::ios::fixed);
+    }
+    os << "\n";
+  }
+  os << indent << std::setw(5) << "total";
+  for (auto &c : cols) {
+    os << "  " << std::setw(9) << c.second.nCells << std::string(10, ' ');
+  }
+  os << "\n";
+  return os.str();
+}
 
 // Répartition des cellules par nombre de côtés, ex. "4: 2.1%  5: 30.2%  6: 60.0%  7: 7.7%"
 inline std::string sidesHistogram(const MeshStats &st) {
@@ -225,6 +275,7 @@ inline MeshStats analyseAndWriteSVG(const std::vector<Polygon> &cells, ViewOptio
     int cell;
     int cls; // 0 collée, 1 libre
     bool isShort;
+    int partner{-1}; // cellule à laquelle la paroi est collée
   };
   std::vector<Seg> segs;
   double lMax = 0.0;
@@ -233,7 +284,9 @@ inline MeshStats analyseAndWriteSVG(const std::vector<Polygon> &cells, ViewOptio
     for (size_t i = 0; i < p.size(); i++) {
       V a = p[i], b = p[(i + 1) % p.size()];
       lMax = std::max(lMax, norm(b - a));
-      segs.push_back({a, b, (int)c, 1, norm(b - a) < opt.shortRatio * st.lMean});
+      double lShort = opt.shortLength > 0.0 ? opt.shortLength : opt.shortRatio * st.lMean;
+      bool isShort = opt.shortBars.empty() ? norm(b - a) < lShort : (bool)opt.shortBars[c][i];
+      segs.push_back({a, b, (int)c, 1, isShort});
     }
   }
   const double h = st.lMean;
@@ -256,6 +309,7 @@ inline MeshStats analyseAndWriteSVG(const std::vector<Polygon> &cells, ViewOptio
         for (int o : it->second) {
           if (segs[o].cell != sg.cell && distPointSegment(m, segs[o].a, segs[o].b) < reach) {
             sg.cls = 0;
+            sg.partner = segs[o].cell;
             break;
           }
         }
@@ -264,6 +318,89 @@ inline MeshStats analyseAndWriteSVG(const std::vector<Polygon> &cells, ViewOptio
     (sg.cls == 0 ? st.nGlued : st.nFree)++;
     if (sg.isShort) {
       st.nShort++;
+    }
+  }
+
+  // Jonctions : chaque extrémité d'une paroi collée est rattachée au noeud le plus proche de la cellule
+  // partenaire (union-find sur les noeuds). Une jonction regroupe ainsi les noeuds de toutes les cellules qui
+  // se rejoignent en un sommet du pavage ; les lèvres d'une fissure, libres, ne sont pas rattachées entre elles.
+  std::vector<size_t> first(cells.size() + 1, 0);
+  for (size_t c = 0; c < cells.size(); c++) {
+    first[c + 1] = first[c] + cells[c].size();
+  }
+  std::vector<size_t> uf(first.back());
+  for (size_t k = 0; k < uf.size(); k++) {
+    uf[k] = k;
+  }
+  auto ufFind = [&](size_t k) {
+    while (uf[k] != k) {
+      uf[k] = uf[uf[k]];
+      k = uf[k];
+    }
+    return k;
+  };
+  std::vector<char> nodeFree(uf.size(), 0);
+  for (size_t c = 0, s = 0; c < cells.size(); c++) {
+    size_t n = cells[c].size();
+    for (size_t i = 0; i < n; i++, s++) {
+      const Seg &sg = segs[s];
+      size_t ka = first[c] + i, kb = first[c] + (i + 1) % n;
+      if (sg.cls == 1) {
+        nodeFree[ka] = nodeFree[kb] = 1;
+        continue;
+      }
+      const Polygon &q = cells[sg.partner];
+      double lim = 0.5 * norm(sg.b - sg.a);
+      for (size_t kk : {ka, kb}) {
+        const V &p = (kk == ka) ? sg.a : sg.b;
+        size_t best = 0;
+        double dBest = std::numeric_limits<double>::max();
+        for (size_t j = 0; j < q.size(); j++) {
+          double d = norm(q[j] - p);
+          if (d < dBest) {
+            dBest = d;
+            best = j;
+          }
+        }
+        if (dBest < lim) {
+          uf[ufFind(kk)] = ufFind(first[sg.partner] + best);
+        }
+      }
+    }
+  }
+  struct Junction {
+    std::vector<int> cells;
+    bool free{false};
+    V pos;
+    size_t n{0};
+  };
+  std::map<size_t, Junction> jmap;
+  for (size_t c = 0; c < cells.size(); c++) {
+    for (size_t i = 0; i < cells[c].size(); i++) {
+      size_t k = first[c] + i;
+      Junction &J = jmap[ufFind(k)];
+      if (std::find(J.cells.begin(), J.cells.end(), (int)c) == J.cells.end()) {
+        J.cells.push_back((int)c);
+      }
+      J.free = J.free || nodeFree[k];
+      J.pos += cells[c][i];
+      J.n++;
+    }
+  }
+  std::vector<V> badJunctions;
+  for (auto &kv : jmap) {
+    Junction &J = kv.second;
+    st.junctions[J.cells.size()]++;
+    bool bad = false;
+    if (J.cells.size() >= 4) {
+      st.nJunction4++;
+      bad = true;
+    } else if (J.cells.size() == 3 && J.free) {
+      st.nBorderJunction3++;
+      bad = true;
+    }
+    if (bad) {
+      badJunctions.push_back(J.pos * (1.0 / (double)J.n));
     }
   }
 
@@ -315,9 +452,18 @@ inline MeshStats analyseAndWriteSVG(const std::vector<Polygon> &cells, ViewOptio
     legend("#eb6834", 2.0, "paroi libre : bord / pré-fissure (" + std::to_string(st.nFree) + ")");
     {
       std::ostringstream s;
-      s << "barre &lt; " << opt.shortRatio << " l_moy (" << st.nShort << ")";
+      if (opt.shortLength > 0.0) {
+        s << std::setprecision(3) << (opt.shortBars.empty() ? "barre" : "arête du pavage") << " &lt; "
+          << opt.shortLength << " (" << st.nShort << ")";
+      } else {
+        s << "barre &lt; " << opt.shortRatio << " l_moy (" << st.nShort << ")";
+      }
       legend("#2a78d6", 3.0, s.str());
     }
+    f << "<circle cx=\"" << lx + 6 << "\" cy=\"" << ly << "\" r=\"5\" fill=\"none\" stroke=\"#c8102e\" "
+      << "stroke-width=\"1.6\"/><text x=\"" << lx + 16 << "\" y=\"" << ly + 4
+      << "\" font-size=\"12\" fill=\"#3b3a35\">jonction à 4 branches ou plus ("
+      << st.nJunction4 + st.nBorderJunction3 << ")</text>\n";
   }
 
   f << "<g clip-path=\"url(#win)\" fill=\"none\" stroke-linecap=\"round\">\n";
@@ -338,6 +484,17 @@ inline MeshStats analyseAndWriteSVG(const std::vector<Polygon> &cells, ViewOptio
     V A = px(g.first), B = px(g.second);
     f << "<line x1=\"" << A.x << "\" y1=\"" << A.y << "\" x2=\"" << B.x << "\" y2=\"" << B.y
       << "\" stroke=\"#1f1e1b\" stroke-width=\"0.8\" stroke-dasharray=\"4 4\"/>\n";
+  }
+  {
+    double r = std::max(5.0, 0.15 * st.lMean * sc);
+    f << "<g fill=\"none\" stroke=\"#c8102e\" stroke-width=\"1.6\">";
+    for (auto &q : badJunctions) {
+      if (!opt.useBox || (q.x >= X0 && q.x <= X1 && q.y >= Y0 && q.y <= Y1)) {
+        V Q = px(q);
+        f << "<circle cx=\"" << Q.x << "\" cy=\"" << Q.y << "\" r=\"" << r << "\"/>";
+      }
+    }
+    f << "</g>\n";
   }
   if (opt.showNodes) {
     double r = std::max(0.8, 0.5 * opt.barWidth * sc);

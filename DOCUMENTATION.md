@@ -54,7 +54,7 @@ Options de la ligne de commande (`./see2 --help`) :
 | Option | Rôle |
 |--------|------|
 | `--options FICHIER` | fichier d'options (défaut : `see2-options.toml`) |
-| `--set NOM=VALEUR` | surcharge une option après lecture du fichier (répétable) ; `./see2 --list-options` donne les noms : `show_crack_path`, `show_strain` (nom du champ, ex. `eps_yy`, ou numéro), `show_stress` (ex. `sig_yy`), `show_strain_dirs`, `show_stress_dirs`, `show_hud`, `show_colorbar`, `strain_colorMax`, `strain_dirsMax`, `stress_dirsMax`, `refConf`, `xmin`… |
+| `--set NOM=VALEUR` | surcharge une option après lecture du fichier (répétable) ; `./see2 --list-options` donne les noms : `show_crack_path`, `show_strain` (nom du champ, ex. `eps_yy`, ou numéro), `show_stress` (ex. `sig_yy`), `show_strain_dirs`, `show_stress_dirs`, `show_hud`, `show_colorbar`, `show_bbox` (cadre de l'échantillon), `strain_colorMax`, `strain_dirsMax`, `stress_dirsMax`, `refConf`, `xmin`… |
 | `--size LxH` | taille de la fenêtre ou de l'image, en pixels |
 | `--snapshot IMAGE.png` | rend la conf dans une image PNG sans fenêtre visible (rendu hors écran à la taille exacte demandée), puis quitte ; n'écrit pas de `see2-options.toml` |
 

@@ -32,11 +32,13 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap, Normalize
+from matplotlib.colors import LinearSegmentedColormap, LogNorm, Normalize
 
 # palette séquentielle à une teinte (bleu), clair -> foncé
 CMAP = LinearSegmentedColormap.from_list("bleu", ["#cde2fb", "#86b6ef", "#3987e5", "#256abf", "#184f95", "#0d366b"])
 INK, INK2, GRID, SURFACE = "#1f1e1b", "#5f5e57", "#e6e5df", "#fcfcfb"
+# rampe des courbes paramétrées (une teinte, clair -> foncé, sans les pas trop proches du fond)
+RAMP = LinearSegmentedColormap.from_list("rampe", ["#86b6ef", "#3987e5", "#256abf", "#184f95", "#0d366b"])
 
 
 def read_cases(path="cases.txt"):
@@ -156,6 +158,68 @@ def heatmap(ax, xs, ys, Z, title, unit, fmt, norm=None):
     cb.ax.tick_params(colors=INK2)
 
 
+def param_curves(axs, xs, ys, Z, label, px="xi", py="zeta", zero=False):
+    """Grandeur Z[j, i] (j : ys = zeta, i : xs = xi) tracée en fonction de xi pour chaque zeta (axs[0]) et en fonction
+    de zeta pour chaque xi (axs[1]). La couleur suit le paramètre fixé (échelle logarithmique, barre de couleur).
+    zero=True ajoute le point (0, 0) : pour xi = 0 ou zeta = 0, kc = 0 (pas de cohésion) et la grandeur est nulle. Ce
+    point n'est pas simulé : il est relié au premier point calculé par un trait en tirets et marqué en creux, et
+    l'abscisse passe en échelle « symlog » (linéaire sous le plus petit paramètre, logarithmique au-delà)."""
+    sym = {"xi": r"$\xi$", "zeta": r"$\zeta$"}
+    for ax, (abscissa, family, along_x) in zip(axs, ((xs, ys, True), (ys, xs, False))):
+        norm = LogNorm(min(family), max(family))
+        for k, v in enumerate(family):
+            vals = Z[k, :] if along_x else Z[:, k]
+            ok = np.isfinite(vals)
+            if ok.sum() == 0:
+                continue
+            color = RAMP(norm(v))
+            ax.plot(np.asarray(abscissa)[ok], vals[ok], "-o", color=color, linewidth=1.4, markersize=3)
+            if zero:
+                i0 = int(np.argmax(ok))
+                ax.plot([0.0, abscissa[i0]], [0.0, vals[i0]], "--", color=color, linewidth=1.0)
+        if zero:
+            ax.plot([0.0], [0.0], "o", markersize=6, markerfacecolor=SURFACE, markeredgecolor=INK2, zorder=5,
+                    clip_on=False)
+            ax.set_xscale("symlog", linthresh=min(abscissa), linscale=0.6)
+            ax.set_xticks([0.0] + list(abscissa), ["0"] + [f"{a:g}" for a in abscissa])
+            ax.set_xlim(left=0.0)
+            ax.set_ylim(bottom=0.0)
+        else:
+            ax.set_xscale("log")
+            ax.set_xticks(abscissa, [f"{a:g}" for a in abscissa])
+        ax.minorticks_off()
+        name_x, name_f = (px, py) if along_x else (py, px)
+        ax.set_xlabel(sym.get(name_x, name_x), color=INK)
+        ax.set_ylabel(label, color=INK)
+        ax.grid(True, color=GRID, linewidth=0.6)
+        ax.tick_params(colors=INK2, labelsize=8)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        cb = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=RAMP), ax=ax, fraction=0.05, pad=0.02)
+        cb.set_ticks(family, labels=[f"{v:g}" for v in family])
+        cb.minorticks_off()
+        cb.set_label(sym.get(name_f, name_f) + " (une courbe par valeur)", color=INK2)
+        cb.outline.set_visible(False)
+        cb.ax.tick_params(colors=INK2, labelsize=7)
+
+
+def param_curves_figure(rows, xs, ys, filename, title, zero=False):
+    """Une ligne de deux panneaux (fonction de xi, fonction de zeta) par grandeur : rows = [(Z, label), ...]."""
+    fig, axs = plt.subplots(len(rows), 2, figsize=(13, 3.6 * len(rows)), squeeze=False)
+    for r, (Z, label) in enumerate(rows):
+        param_curves(axs[r], xs, ys, Z, label, zero=zero)
+    fig.suptitle(title, color=INK, fontsize=12)
+    bottom = 0.0
+    if zero:
+        bottom = 0.03
+        fig.text(0.5, 0.008, "point creux en 0 : limite sans cohésion (xi = 0 ou zeta = 0 donnent kc = 0), non simulée ; "
+                 "reliée au premier point calculé par un trait en tirets", ha="center", va="bottom", fontsize=9,
+                 color=INK2)
+    fig.tight_layout(rect=(0, bottom, 1, 0.98))
+    fig.savefig(filename, dpi=150)
+    plt.close(fig)
+
+
 def main():
     if not os.path.exists("cases.txt"):
         sys.exit("plot_maps.py : cases.txt introuvable (lancer le script dans le répertoire des cas)")
@@ -212,8 +276,13 @@ def main():
     fig.tight_layout()
     fig.savefig("carte_forces_rupture.png", dpi=150)
 
+    param_curves_figure([(grids["K"], "K (N/m)"), (grids["F_pic"], "force au pic (mN)"),
+                         (grids["F_1re"], "force max. avant 1re rupture (mN)")], xs, ys, "courbes_parametres.png",
+                        "Raideur et forces à la rupture en fonction de chaque paramètre", zero=True)
+
     ok = [r for _, _, r in results if r is not None]
-    print(f"{len(ok)} cas exploités sur {len(results)} -> resultats.csv, carte_raideur.png, carte_forces_rupture.png")
+    print(f"{len(ok)} cas exploités sur {len(results)} -> resultats.csv, carte_raideur.png, carte_forces_rupture.png, "
+          "courbes_parametres.png")
     ecart = [abs(r["F_pic"] - r["F_pic_log"]) / r["F_pic_log"] for r in ok if np.isfinite(r["F_pic_log"])]
     if ecart:
         print(f"écart entre le pic échantillonné et le pic lissé de log.txt : {100*np.median(ecart):.1f} % "

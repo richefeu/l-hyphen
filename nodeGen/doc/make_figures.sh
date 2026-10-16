@@ -35,15 +35,15 @@ EOF
 }
 
 # Étapes : Voronoï brut, Lloyd + fusion seule, réseau hexagonal + fusion/étirement
-demo stage_raw      lattice=random lloydIterations=0  minEdgeRatio=0   minSides=3
-demo stage_lloyd    lattice=random lloydIterations=10 minEdgeRatio=0.3 minSides=3
-demo stage_hex      lattice=hex disorder=0.3 lloydIterations=5 minEdgeRatio=0.4 minSides=5
+demo stage_raw      lattice=random lloydIterations=0  minEdgeFactor=0   minSides=3
+demo stage_lloyd    lattice=random lloydIterations=10 minEdgeFactor=0.19 minSides=3
+demo stage_hex      lattice=hex disorder=0.3 lloydIterations=5 minEdgeFactor=0.25 minSides=5
 
 # Désordre du réseau hexagonal
-for d in 0 0.3 0.5; do demo disorder_$d lattice=hex disorder=$d lloydIterations=5 minEdgeRatio=0.4 minSides=5; done
+for d in 0 0.3 0.5; do demo disorder_$d lattice=hex disorder=$d lloydIterations=5 minEdgeFactor=0.25 minSides=5; done
 
 # Longueur de l'interface en pointe
-for ti in 0 1 2; do demo tip_$ti lattice=hex disorder=0.3 lloydIterations=5 minEdgeRatio=0.4 minSides=5 tipInterface=$ti; done
+for ti in 0 1 2; do demo tip_$ti lattice=hex disorder=0.3 lloydIterations=5 minEdgeFactor=0.25 minSides=5 tipInterface=$ti; done
 
 # Exemple complet (géométrie de Frank-ouverture-fissure, paramètres fixes du tutoriel)
 $NG tutorial_params.txt > work/tutorial.log

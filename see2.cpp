@@ -408,6 +408,9 @@ void display(GLFWwindow *window) {
   if (show_cells) {
     drawCells();
   }
+  if (show_bbox) {
+    drawBoundingBox();
+  }
   lastDirsName = nullptr;
   if (show_strain_dirs) {
     lastDirsMax = drawTensorDirections(cellStrains, strainDirsMax);
@@ -653,6 +656,31 @@ void drawPressure() {
 /**
  * Draws the cells on the screen.
  */
+// Cadre de l'échantillon : boîte englobante des noeuds de la conf affichée, élargie du rayon des barres
+void drawBoundingBox() {
+  double x0 = 1e300, x1 = -1e300, y0 = 1e300, y1 = -1e300;
+  for (auto &c : Conf.cells) {
+    for (auto &n : c.nodes) {
+      x0 = std::min(x0, n.pos.x - c.radius);
+      x1 = std::max(x1, n.pos.x + c.radius);
+      y0 = std::min(y0, n.pos.y - c.radius);
+      y1 = std::max(y1, n.pos.y + c.radius);
+    }
+  }
+  if (x0 > x1) {
+    return;
+  }
+  glLineWidth(1.5f);
+  glColor4f(0.0f, 0.0f, 0.0f, 1.0f);
+  glBegin(GL_LINE_LOOP);
+  glVertex2d(x0, y0);
+  glVertex2d(x1, y0);
+  glVertex2d(x1, y1);
+  glVertex2d(x0, y1);
+  glEnd();
+  glLineWidth(1.0f);
+}
+
 void drawCells() {
   glLineWidth(2.0f);
 
@@ -1851,6 +1879,7 @@ void readTomlOptions() {
     show_strain_dirs        = tbl["display"]["show_strain_dirs"].value_or(show_strain_dirs);
     show_stress             = tbl["display"]["show_stress"].value_or(show_stress);
     show_stress_dirs        = tbl["display"]["show_stress_dirs"].value_or(show_stress_dirs);
+    show_bbox               = tbl["display"]["show_bbox"].value_or(show_bbox);
     if (show_strain < 0 || show_strain >= nbStrainModes) show_strain = 0;
     if (show_stress < 0 || show_stress >= nbStressModes) show_stress = 0;
 
@@ -1924,6 +1953,7 @@ void saveTomlOptions() {
       {"show_strain_dirs",        show_strain_dirs},
       {"show_stress",             show_stress},
       {"show_stress_dirs",        show_stress_dirs},
+      {"show_bbox",               show_bbox},
       {"bottom_color", toml::array{bottom_r, bottom_g, bottom_b}},
       {"top_color",    toml::array{top_r,    top_g,    top_b}},
     }},
@@ -2003,6 +2033,7 @@ std::vector<SetOption> setOptions() {
       {"show_background", &show_background, nullptr, "fond en dégradé (0/1)"},
       {"show_hud", &show_hud, nullptr, "panneau d'état des options (0/1)"},
       {"show_colorbar", &show_colorbar, nullptr, "barre de couleur du champ affiché (0/1)"},
+      {"show_bbox", &show_bbox, nullptr, "cadre de l'échantillon, boîte englobante des noeuds (0/1)"},
       {"fit_at_loading", &fit_at_loading, nullptr, "cadrage automatique sur l'échantillon (0/1)"},
       {"refConf", &refConfNum, nullptr, "conf de référence des déformations"},
       {"eScale", nullptr, &eScale, "longueur des traits de directions principales"},

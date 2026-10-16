@@ -92,10 +92,17 @@ cd work && ../../../run input.txt     # le calcul se lance directement
 
 Les lignes à surveiller :
 \begin{itemize}[nosep]
-  \item \textbf{barres} : le rapport $\ell_{\min}/\bar\ell$ doit rester de l'ordre de \code{minEdgeRatio} ; c'est
-    lui qui fixe le pas de temps critique de flexion dans \textsc{l-hyphen} ($\Delta t_{\text{crit}}\propto\ell_{\min}$) ;
-  \item \textbf{côtés (intérieur)} : répartition des cellules par nombre de côtés, hors cellules de bord, qui
-    sont coupées par le rectangle ;
+  \item \textbf{arêtes courtes} : seuil $\ell_c$ et longueur caractéristique $\ell_{\text{ref}}$ utilisés, nombre
+    d'arêtes sous le seuil et la façon dont elles ont été traitées (transitions T1, étirements, amas,
+    section~\ref{sec:short}) ;
+  \item \textbf{branches/sommet} : nombre de sommets par nombre de branches ; seuls les sommets de la fissure
+    ouverte (lèvres et extrémités) peuvent en avoir 4 ;
+  \item \textbf{barres} : le rapport $\ell_{\min}/\ell_{\text{ref}}$ doit être de l'ordre de \code{minEdgeFactor}
+    (un peu moins, à cause du décalage des parois) ; c'est $\ell_{\min}$ qui fixe le pas de temps critique de
+    flexion dans \textsc{l-hyphen} ($\Delta t_{\text{crit}}\propto\ell_{\min}$) ;
+  \item \textbf{cellules par nombre de côtés} : effectif et pourcentage des cellules à $n$ côtés, pour toutes les
+    cellules et pour les cellules intérieures (sans sommet sur le bord du domaine), les cellules de bord étant
+    coupées par le rectangle ;
   \item \textbf{pré-fissure} : position effective de la pointe, qui est toujours un sommet du pavage ;
   \item \textbf{lignes d'input} : nombre de nœuds dans chacun des mors haut et bas.
 \end{itemize}
@@ -104,7 +111,8 @@ Les lignes à surveiller :
   \centering
   \includegraphics[width=0.62\linewidth]{figures/example_legend.png}
   \caption{Vue produite par \toolgen{} pour \code{tutorial\_params.txt}. En gris : parois collées ; en orange :
-    parois libres (bords du domaine et pré-fissure) ; en bleu : barres courtes (aucune ici).}
+    parois libres (bords du domaine et pré-fissure) ; en bleu : barres courtes (aucune ici) ; cerclée de rouge :
+    jonction à 4 branches (seule la pointe de la fissure).}
   \label{fig:example}
 \end{figure}
 
@@ -130,8 +138,10 @@ Le fichier de paramètres contient un mot-clé par ligne ; tout ce qui suit \cod
   \code{lloydIterations} & 10 & itérations de régularisation de Lloyd \\
   \code{seed} & 1 & graine du générateur aléatoire \\
   \midrule
-  \code{minEdgeRatio} & 0.3 & seuil des arêtes courtes, en fraction de la longueur moyenne \\
-  \code{minSides} & 5 & une fusion d'arête ne peut faire passer une cellule sous \code{minSides} côtés ;
+  \code{minEdgeFactor} & 0.2 & seuil des arêtes courtes, en fraction de $\ell_{\text{ref}}=\sqrt{L_xL_y/N}$
+    ($N$ : nombre de cellules) \\
+  \code{t1Margin} & 1.2 & longueur de l'arête créée par une transition T1 ou un éclatement, en multiple du seuil \\
+  \code{minSides} & 5 & une transition T1 ne peut faire passer une cellule sous \code{minSides} côtés ;
     sinon l'arête est étirée \\
   \midrule
   \code{crack x0 y0 x1 y1} & --- & pré-fissure (segment), facultative \\
@@ -162,10 +172,10 @@ obtient pour les cellules intérieures :
   \toprule
   Réglage & 4 côtés & 5 côtés & 6 côtés & 7 côtés \\
   \midrule
-  \code{lattice random}, \code{lloydIterations 10} & \SI{0.3}{\%} & \SI{44}{\%} & \SI{47}{\%} & \SI{8}{\%} \\
-  \code{lattice hex}, \code{disorder 0.2} & \SI{0.1}{\%} & \SI{4.5}{\%} & \SI{95}{\%} & \SI{0.4}{\%} \\
-  \code{lattice hex}, \code{disorder 0.3} & \SI{0.1}{\%} & \SI{5}{\%} & \SI{94}{\%} & \SI{1.3}{\%} \\
-  \code{lattice hex}, \code{disorder 0.4} & \SI{0}{\%} & \SI{16}{\%} & \SI{83}{\%} & \SI{0.8}{\%} \\
+  \code{lattice random}, \code{lloydIterations 10} & \SI{0}{\%} & \SI{23}{\%} & \SI{54}{\%} & \SI{22}{\%} \\
+  \code{lattice hex}, \code{disorder 0.2} & \SI{0.1}{\%} & \SI{3.0}{\%} & \SI{95}{\%} & \SI{1.5}{\%} \\
+  \code{lattice hex}, \code{disorder 0.3} & \SI{0.1}{\%} & \SI{4.3}{\%} & \SI{93}{\%} & \SI{2.7}{\%} \\
+  \code{lattice hex}, \code{disorder 0.4} & \SI{0}{\%} & \SI{10}{\%} & \SI{81}{\%} & \SI{8.5}{\%} \\
   \bottomrule
 \end{tabular}
 \end{center}
@@ -180,10 +190,13 @@ obtient pour les cellules intérieures :
   \label{fig:disorder}
 \end{figure}
 
+Les transitions T1 qui éliminent les arêtes courtes (section~\ref{sec:short}) retirent un côté à deux cellules et
+en ajoutent un à deux autres : pentagones et heptagones apparaissent par paires, d'où des proportions voisines.
+
 \paragraph{Pré-fissure.} Le segment \code{crack} peut partir d'un bord (fissure débouchante) ou être entièrement
 intérieur, et avoir une orientation quelconque. \code{opening} doit être nettement supérieur à \code{distGlue}
-pour que les lèvres ne soient pas collées. \code{tipInterface} fixe la longueur de l'interface collée qui prolonge
-la fissure au-delà de la pointe (section~\ref{sec:tip}).
+pour que les lèvres ne soient pas collées. \code{tipInterface} fixe l'étendue de la symétrie au-delà de la pointe, donc
+la distance entre la pointe et le défaut de raccordement au réseau (section~\ref{sec:tip}).
 
 %======================================================================
 \section{Visualiser et contrôler un nodeFile avec \toolview}
@@ -202,8 +215,17 @@ produit un SVG (vectoriel : le zoom est illimité dans un navigateur). Chaque pa
     parois collées est égal au nombre de « liens collés » affiché par \code{diagnostic.txt} ;
   \item \textcolor{free}{\textbf{libre}} sinon : bord du domaine, pré-fissure, trou ;
   \item les barres plus courtes que \code{ratio} $\times\,\bar\ell$ (défaut 0.3) sont surlignées en
-    \textcolor{short}{\textbf{bleu}}.
+    \textcolor{short}{\textbf{bleu}}. Dans la vue produite par \toolgen, ce sont les barres dont l'arête du pavage
+    est sous le seuil $\ell_c$ (section~\ref{sec:short}), c'est-à-dire exactement les arêtes signalées en erreur
+    par le contrôle final ; le décalage des parois raccourcit chaque barre d'environ \code{barWidth}, et une arête
+    étirée au seuil n'est donc pas signalée ;
+  \item les jonctions à 4 branches ou plus sont cerclées de \textcolor{red}{\textbf{rouge}} : au moins 4
+    cellules en un sommet, ou 3 cellules sur un bord libre (2 parois + le bord). Les jonctions sont reconstruites
+    à partir des parois collées : chaque extrémité d'une paroi collée est rattachée au nœud le plus proche de la
+    cellule voisine, si bien que les deux lèvres libres d'une fissure ne sont pas rattachées entre elles.
 \end{itemize}
+\toolview{} affiche aussi le nombre de jonctions par nombre de cellules. Sur un nodeFile de \toolgen, seules les
+extrémités de la pré-fissure sont cerclées.
 Sans \code{-w}, la largeur des barres est estimée par la distance minimale entre nœuds de cellules différentes.
 \code{-box} restreint le dessin à une fenêtre (zoom), \code{-nodes} dessine les nœuds, \code{-bare} supprime
 titre et légende.
@@ -216,7 +238,8 @@ titre et légende.
     \caption{Pointe de la fissure (fenêtre de \SI{0.8}{mm})}\end{subfigure}
   \caption{Zooms obtenus avec \code{-box} et \code{-nodes}. (a) Les lèvres de la fissure sont écartées de
     \code{barWidth + opening} = \SI{4}{\micro m}, les parois collées de \code{barWidth} = \SI{2}{\micro m}.
-    (b) La fissure se termine sur un sommet et se prolonge par une interface collée.}
+    (b) La fissure se termine sur un sommet à 4 branches (le seul du maillage) et se prolonge par une interface
+    collée, qui part en zigzag.}
   \label{fig:zoom}
 \end{figure}
 
@@ -333,7 +356,7 @@ rangées suivantes, dont \toolgen{} affiche le nombre. \code{gripHeight} impose 
 
 \code{cleanShortBars} est inutile avec un nodeFile produit par \toolgen. Avec les mors d'une rangée, l'input du
 tutoriel a été lancé sur \num{20000} pas : aucune rupture, et des forces égales et opposées sur les deux mors
-(\SI{-1.405}{mN} en haut, \SI{1.403}{mN} en bas à $t=\SI{1}{ms}$). Après un premier lancement, vérifier dans
+(\SI{-1.380}{mN} en haut, \SI{1.379}{mN} en bas à $t=\SI{1}{ms}$). Après un premier lancement, vérifier dans
 \code{diagnostic.txt} que le nombre de « liens collés » est égal au nombre de parois collées de \toolview, et que le
 rapport $\Delta t_{\text{crit}}/\Delta t$ de la ligne « flexion » est confortable. Sur l'échantillon du tutoriel,
 avec les paramètres mécaniques de \code{Frank-ouverture-fissure} :
@@ -343,10 +366,11 @@ avec les paramètres mécaniques de \code{Frank-ouverture-fissure} :
   \toprule
   & Frank (\code{cellPrepro}) & \toolgen{} (tutoriel) \\
   \midrule
-  cellules / nœuds & 2155 / 12798 & 2222 / 13084 \\
-  $\ell_{\min}/\bar\ell$ & 0.012 & 0.40 \\
-  $\Delta t_{\text{crit,flexion}}$ & \SI{2.4e-8}{s} & \SI{7.9e-7}{s} \\
-  liens collés (\code{diagnostic.txt}) & 12542 & 12902 \\
+  cellules / nœuds & 2155 / 12798 & 2222 / 13150 \\
+  $\ell_{\min}/\bar\ell$ & 0.012 & 0.39 \\
+  $\Delta t_{\text{crit,flexion}}$ & \SI{2.4e-8}{s} & \SI{7.7e-7}{s} \\
+  liens collés (\code{diagnostic.txt}) & 12542 & 12966 \\
+  jonctions à 4 branches (\toolview) & 4 & 1 (pointe) \\
   ruptures au démarrage (\num{20000} pas) & --- & 0 \\
   \bottomrule
 \end{tabular}
@@ -367,7 +391,7 @@ avec les paramètres mécaniques de \code{Frank-ouverture-fissure} :
     \node[box, right=of l] (v) {4. Voronoï\\\footnotesize demi-plans};
     \node[below=1mm of l, font=\footnotesize] {répété \code{lloydIterations} fois};
     \node[box, below=10mm of v] (t) {5. Sommets\\\footnotesize partagés, types};
-    \node[box, left=of t] (e) {6. Arêtes courtes\\\footnotesize fusion/étirement};
+    \node[box, left=of t] (e) {6. Arêtes courtes\\\footnotesize T1/étirement, 3 branches};
     \node[box, left=of e] (o) {7. Décalage\\\footnotesize des parois};
     \node[box, left=of o] (w) {8. nodeFile\\\footnotesize + SVG};
     \draw[->] (s) -- (sym); \draw[->] (sym) -- (l); \draw[->] (l) -- (v); \draw[->] (v) -- (t);
@@ -382,14 +406,18 @@ avec les paramètres mécaniques de \code{Frank-ouverture-fissure} :
   \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/stage_raw.png}
     \caption{Voronoï brut}\end{subfigure}\hfill
   \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/stage_lloyd.png}
-    \caption{Lloyd + fusion seule}\end{subfigure}\hfill
+    \caption{Lloyd + T1 seule}\end{subfigure}\hfill
   \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/stage_hex.png}
     \caption{Réseau hex + \code{minSides 5}}\end{subfigure}
   \caption{Trois réglages sur un domaine de \SI{3}{mm}. (a) Germes aléatoires, sans Lloyd ni traitement des
-    arêtes courtes : nombreuses barres courtes (bleu), $\ell_{\min}=0.01\,\bar\ell$ et \SI{29}{\%} d'heptagones.
-    (b) Lloyd (10 itérations) et fusion seule : $\ell_{\min}=0.34\,\bar\ell$, mais la fusion multiplie les pentagones
-    (\SI{56}{\%}). (c) Réseau hexagonal, \code{disorder 0.3}, fusion limitée par \code{minSides 5} et étirement :
-    $\ell_{\min}=0.40\,\bar\ell$, uniquement des pentagones et des hexagones.}
+    arêtes courtes : nombreuses barres courtes (en bleu, plus courtes que $0.3\,\bar\ell$),
+    $\ell_{\min}=0.007\,\ell_{\text{ref}}$ et \SI{29}{\%} d'heptagones.
+    (b) Lloyd (10 itérations), \code{minEdgeFactor 0.19} et T1 sans limite (\code{minSides 3}) :
+    $\ell_{\min}=0.19\,\ell_{\text{ref}}$, \SI{29}{\%} de pentagones, \SI{53}{\%} d'hexagones et \SI{18}{\%}
+    d'heptagones (cellules intérieures). (c) Réseau hexagonal, \code{disorder 0.3}, \code{minEdgeFactor 0.25},
+    T1 limitée par \code{minSides 5} et étirement : $\ell_{\min}=0.25\,\ell_{\text{ref}}$, \SI{70}{\%}
+    d'hexagones. Dans les trois cas, tous les sommets ont 3 branches,
+    sauf la pointe de la fissure (cerclée de rouge).}
   \label{fig:stages}
 \end{figure}
 
@@ -434,10 +462,25 @@ hachage spatiale), ce qui donne une topologie cohérente : chaque arête est par
 par le domaine). Chaque sommet reçoit un type : bord gauche, droit, bas, haut, ligne de fissure, ou une
 combinaison (coin, embouchure de la fissure).
 
-\subsection{Arêtes courtes : fusion ou étirement}
+\subsection{Arêtes courtes et jonctions à 3 branches}
+\label{sec:short}
 
-Les arêtes plus courtes que $\ell_c=$ \code{minEdgeRatio}~$\times\,\bar\ell$ sont traitées de la plus courte à
-la plus longue (figure~\ref{fig:merge}).
+\paragraph{Pourquoi 3 branches.} Dans un pavage de Voronoï générique, chaque sommet est partagé par 3 cellules :
+3 parois s'y rejoignent. Une jonction de 4 parois (ou plus) est mécaniquement indésirable : deux cellules opposées
+ne s'y touchent qu'en un point, et la jonction en croix offre aux parois un mécanisme de glissement que n'a pas
+la jonction en Y. \toolgen{} garantit donc que tous les sommets ont 3 branches (bords compris : 2 côtés de bord
+et une paroi), à la seule exception des extrémités de la pré-fissure (section~\ref{sec:tip}). En conséquence, une
+arête courte n'est \emph{jamais} fusionnée (la fusion de ses deux sommets crée un sommet à 4 branches).
+
+\paragraph{Seuil.} Une arête est courte si elle mesure moins de $\ell_c=$ \code{minEdgeFactor}~$\times\,\ell_{\text{ref}}$,
+avec $\ell_{\text{ref}}=\sqrt{L_xL_y/N}$ la longueur caractéristique des cellules : c'est le côté du carré de même
+aire qu'une cellule, $N$ étant le nombre de cellules du pavage. $\ell_{\text{ref}}$ ne dépend que de la densité de
+cellules. La longueur moyenne des arêtes $\bar\ell$ (environ $0.62\,\ell_{\text{ref}}$ pour des hexagones,
+$\sqrt{2/(3\sqrt3)}$) dépend aussi de la forme des cellules, donc du traitement lui-même, et ne convient pas
+comme référence. L'ancien mot-clé \code{minEdgeRatio} (fraction de $\bar\ell$) est refusé, avec la valeur
+équivalente de \code{minEdgeFactor} (environ $0.62\times$ \code{minEdgeRatio}).
+
+Les arêtes courtes sont traitées de la plus courte à la plus longue (figure~\ref{fig:merge}).
 
 \begin{figure}[H]
   \centering
@@ -451,11 +494,12 @@ la plus longue (figure~\ref{fig:merge}).
       \node[below=12mm] at (0.22,0) {arête courte $uv$};
     \end{scope}
     \begin{scope}[xshift=4.3cm]
-      \coordinate (m) at (0.22,0);
-      \draw[ink] (m) -- ++(-1.2,0.9) (m) -- ++(-1.2,-0.9) (m) -- ++(1.2,0.9) (m) -- ++(1.2,-0.9);
-      \fill (m) circle (1.5pt) node[above=3pt] {$M$};
-      \node at (0.22,0.8) {$A$}; \node at (0.22,-0.8) {$B$}; \node at (-0.9,0) {$C$}; \node at (1.35,0) {$D$};
-      \node[below=12mm,align=center] at (0.22,0) {fusion : $A$ et $B$ perdent\\un côté};
+      \coordinate (u) at (0.22,0.42); \coordinate (v) at (0.22,-0.42);
+      \draw[ink, thick] (u) -- (v);
+      \draw[ink] (u) -- ++(-1.2,0.48) (u) -- ++(1.2,0.48) (v) -- ++(-1.2,-0.48) (v) -- ++(1.2,-0.48);
+      \fill (u) circle (1.3pt) node[right=2pt] {$u'$}; \fill (v) circle (1.3pt) node[right=2pt] {$v'$};
+      \node at (0.22,1.0) {$A$}; \node at (0.22,-1.0) {$B$}; \node at (-0.6,0) {$C$}; \node at (1.05,0) {$D$};
+      \node[below=12mm,align=center] at (0.22,-0.2) {T1 : $A$ et $B$ perdent un côté,\\$C$ et $D$ en gagnent un};
     \end{scope}
     \begin{scope}[xshift=8.6cm]
       \coordinate (u) at (-0.35,0); \coordinate (v) at (0.8,0);
@@ -467,28 +511,55 @@ la plus longue (figure~\ref{fig:merge}).
       \node[below=12mm,align=center] at (0.22,0) {étirement : la topologie\\est conservée};
     \end{scope}
   \end{tikzpicture}
-  \caption{Traitement d'une arête courte $uv$ bordée par les cellules $A$ et $B$.}
+  \caption{Traitement d'une arête courte $uv$ bordée par les cellules $A$ et $B$ ; $C$ et $D$ touchent chacune une
+    extrémité. Dans les deux cas, tous les sommets gardent 3 branches.}
   \label{fig:merge}
 \end{figure}
 
-\paragraph{Fusion.} Les deux sommets sont réunis (union-find sur les sommets partagés, donc pour toutes les
-cellules à la fois). Les cellules $A$ et $B$ qui bordaient l'arête perdent un côté, $C$ et $D$ se touchent en
-un point. La fusion est refusée si une cellule concernée passait sous \code{minSides} côtés (et jamais sous 3).
-La position du sommet fusionné respecte les contraintes : un coin ou l'embouchure de la fissure reste fixe, un
-sommet de bord ou de fissure reste sur sa ligne (moyenne des sommets contraints de même type), sinon le sommet
-est placé au barycentre.
+\paragraph{Transition T1.} L'arête $uv$ est remplacée par une arête $u'v'$ de même milieu, de longueur
+\code{t1Margin}~$\times\,\ell_c$ (défaut 1.2), orientée transversalement : elle est partagée par $C$ et $D$, qui
+deviennent voisines, tandis que $A$ et $B$ ne se touchent plus et perdent un côté. En pratique, $uv$ est contractée
+en un sommet provisoire à 4 branches, aussitôt éclaté dans l'autre sens. La transition n'est faite que si les
+deux sommets sont intérieurs (hors bords et fissure), si $A$ et $B$ gardent au moins \code{minSides} côtés, si les
+quatre cellules restent convexes, et si elle réduit le nombre d'arêtes courtes de ces cellules sans raccourcir leur
+plus petite arête. Elle est annulée sinon.
 
-\paragraph{Étirement.} Si la fusion est refusée, les deux sommets sont écartés le long de l'arête,
-$\mathbf u \leftarrow \mathbf u - \tfrac{\delta}{2}\mathbf e$, $\mathbf v \leftarrow \mathbf v + \tfrac{\delta}{2}\mathbf e$,
-avec $\mathbf e$ la direction de l'arête et $\delta=\ell_c-\ell$. Un sommet contraint ne se déplace que le long de
-sa ligne (projection), un coin ne bouge pas (l'autre sommet fait alors tout le chemin). Le déplacement est annulé
-s'il rendait une cellule voisine non convexe. Jusqu'à 20 passes sont effectuées ; les arêtes qui restent trop
-courtes sont signalées.
+\paragraph{Étirement.} Si la transition T1 est refusée ou impossible, les deux sommets sont écartés le long de
+l'arête, $\mathbf u \leftarrow \mathbf u - \tfrac{\delta}{2}\mathbf e$,
+$\mathbf v \leftarrow \mathbf v + \tfrac{\delta}{2}\mathbf e$, avec $\mathbf e$ la direction de l'arête et
+$\delta=1.02\,\ell_c-\ell$ (la petite marge évite que deux arêtes courtes voisines se raccourcissent l'une
+l'autre en alternance). Un sommet contraint ne se déplace que le long de sa ligne (projection), un coin ne bouge
+pas (l'autre sommet fait alors tout le chemin). Le déplacement est annulé s'il rendait une cellule voisine non
+convexe.
 
-\paragraph{Pourquoi \code{minSides}.} La fusion seule réduit systématiquement le nombre de côtés des deux cellules
-voisines de l'arête : sur un pavage aléatoire régularisé, elle produit \SI{6}{\%} de quadrilatères et \SI{45}{\%}
-de pentagones. Avec \code{minSides 5}, les fusions qui créeraient des quadrilatères sont remplacées par des
-étirements.
+\paragraph{Amas d'arêtes courtes.} Deux arêtes courtes qui se touchent peuvent se bloquer mutuellement : aucune
+transition T1 isolée n'améliore la situation, et l'étirement de l'une raccourcit l'autre. En dernier recours,
+l'amas (arêtes courtes connexes entre sommets intérieurs, ainsi que les arêtes voisines de moins de
+$1.1\,\ell_c$) est contracté en un sommet, aussitôt éclaté en sommets à 3 branches. Plusieurs éclatements
+aléatoires sont essayés, et le premier qui réduit le nombre d'arêtes courtes sans faire passer une cellule sous
+\code{minSides} côtés est retenu.
+
+\paragraph{Éclatement des sommets à 4 branches.} Le pavage de Voronoï contient aussi des sommets à 4 branches
+ou plus : sommets quasi confondus (germes presque cocycliques), et surtout les sommets de la ligne de symétrie
+au-delà de la pointe (section~\ref{sec:tip}). Un sommet $v$ partagé par les cellules $c_0,\dots,c_{k-1}$ (dans
+l'ordre angulaire) est éclaté en $v$, qui garde $c_i, c_{i+1}, c_{i+2}$, et un nouveau sommet $w$, qui reçoit les
+autres cellules. $c_i$ et $c_{i+2}$ deviennent voisines par l'arête $vw$, et $w$ est éclaté à son tour s'il a
+encore plus de 3 branches. Le choix de $i$ privilégie les cellules qui ont le moins de côtés (avec un tirage pour
+départager les égalités) ; un éclatement qui rendrait une cellule non convexe est refusé. Si nécessaire,
+l'arête créée est plus courte que le seuil, et l'étirement l'allonge ensuite.
+
+\paragraph{Enchaînement et contrôle.} Transitions T1, étirement, contraction des amas et éclatement des sommets
+restants alternent tant que le nombre de défauts (arêtes courtes, sommets à 4 branches) diminue. \toolgen{} compte
+ensuite les branches de chaque sommet et s'arrête avec le code d'erreur 2 s'il reste un sommet à 4 branches hors
+des extrémités de la fissure, ou une arête sous le seuil. Les fichiers sont tout de même écrits pour pouvoir être
+examinés. Sur la géométrie du tutoriel, avec 20 graines par réglage, aucun échec jusqu'à
+\code{minEdgeFactor 0.22} ; à \code{minEdgeFactor 0.33}, 3 graines sur 20 échouent avec \code{disorder 0.6} ou
+\code{lattice random} (aucune avec \code{disorder 0.3}). Changer de graine suffit en général.
+
+\paragraph{Pourquoi \code{minSides}.} Une transition T1 retire un côté à deux cellules. Sans limite, des
+quadrilatères apparaissent ; avec \code{minSides 5}, les transitions qui en créeraient sont remplacées par des
+étirements. \code{minSides 6} réduit encore le nombre de transitions (davantage d'hexagones, moins de pentagones et
+d'heptagones), au prix de plus d'étirements.
 
 \subsection{Pré-fissure par symétrie}
 \label{sec:crack}
@@ -535,13 +606,21 @@ lien cohésif n'y est créé (figure~\ref{fig:zoom}a).
 
 La bande symétrique est prolongée au-delà de la pointe : la ligne se continue par une interface \emph{collée}
 entre deux cellules, et la pointe est un sommet où se rejoignent quatre cellules, en face d'une interface plutôt
-que contre une cellule (figure~\ref{fig:zoom}b). La pointe est le sommet de la ligne le plus proche de
-$(x_1,y_1)$ ; sa position effective est affichée.
+que contre une cellule (figure~\ref{fig:zoom}b). C'est la seule jonction à 4 branches conservée ; il en va de même
+pour l'origine d'une fissure intérieure. La pointe est le sommet de la ligne le plus proche de $(x_1,y_1)$ ; sa
+position effective est affichée.
+
+Par symétrie, chaque sommet de la ligne a 4 branches (deux cellules de chaque côté). Le long de la fissure ouverte,
+ce n'est pas une jonction au sens mécanique : les lèvres sont libres, et chacune ne porte qu'une jonction à 3
+branches. Au-delà de la pointe, en revanche, ces sommets sont éclatés (section~\ref{sec:short}) : chacun donne deux
+sommets à 3 branches qui rendent voisines deux cellules en diagonale. L'interface collée qui prolonge la fissure
+n'est donc pas rectiligne mais en zigzag.
 
 Une ligne droite d'arêtes n'existe pas dans un pavage hexagonal : la rangée de pentagones qui borde la ligne doit se
 raccorder au réseau régulier, ce qui crée un défaut (quelques pentagones et heptagones) au bout de l'interface.
-\code{tipInterface} fixe la longueur de l'interface, donc la distance entre la pointe et ce défaut
-(figure~\ref{fig:tip}). Au-delà, le réseau est régulier, afin de ne pas prolonger la fissure par une interface
+\code{tipInterface} fixe l'étendue de la symétrie au-delà de la pointe, donc la distance entre la pointe et
+ce défaut (figure~\ref{fig:tip}). Comme l'interface part en zigzag, sa partie rectiligne se réduit à la première
+arête après la pointe. Au-delà, le réseau est régulier, afin de ne pas prolonger la fissure par une interface
 rectiligne qui serait un chemin de rupture privilégié.
 
 \begin{figure}[H]
@@ -549,7 +628,9 @@ rectiligne qui serait un chemin de rupture privilégié.
   \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tip_0.png}\caption{\code{tipInterface 0}}\end{subfigure}\hfill
   \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tip_1.png}\caption{\code{tipInterface 1}}\end{subfigure}\hfill
   \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tip_2.png}\caption{\code{tipInterface 2}}\end{subfigure}
-  \caption{Longueur de l'interface collée qui prolonge la fissure (en orange) au-delà de la pointe.}
+  \caption{Étendue de la symétrie au-delà de la pointe (fissure en orange, pointe cerclée de rouge).
+    L'interface collée qui prolonge la fissure part en zigzag ; \code{tipInterface} déplace le défaut de
+    raccordement au réseau.}
   \label{fig:tip}
 \end{figure}
 
@@ -598,6 +679,10 @@ Le nodeFile du tutoriel a été utilisé à la place de celui de \code{Frank-ouv
 fichier d'input (sans \code{cleanShortBars}), ainsi qu'un nodeFile produit par une première version de \toolgen{}
 (germes aléatoires, fusion seule, fissure butant sur une cellule).
 
+\emph{Ces calculs ont été faits avec la version précédente de \toolgen, qui fusionnait les arêtes courtes et
+créait donc des jonctions à 4 branches ; ils n'ont pas été refaits avec les transitions T1. Les maillages
+actuels ne sont pas identiques à ceux de cette section.}
+
 \begin{figure}[H]
   \centering
   \begin{subfigure}{0.48\linewidth}\includegraphics[width=\linewidth]{figures/crack_random.png}
@@ -629,9 +714,10 @@ long d'une rangée (figure~\ref{fig:crack}b), ce qui est un artefact de l'ordre 
 
 \subsection{Contrôle du nombre de côtés}
 
-Le nombre de côtés n'est contrôlé qu'indirectement (réseau, \code{minSides}). Une optimisation explicite est
-possible : transitions T1 (rotation d'une arête courte, qui retire un côté à deux cellules et en ajoute un aux
-deux autres) choisies pour rapprocher chaque cellule de 5--6 côtés, ou pavage de puissance (Voronoï pondéré),
+Le nombre de côtés n'est contrôlé qu'indirectement (réseau, \code{minSides}). Les transitions T1 servent
+aujourd'hui seulement à éliminer les arêtes courtes ; une optimisation explicite est possible : transitions T1
+supplémentaires, choisies pour rapprocher chaque cellule de 6 côtés (en appariant pentagones et heptagones),
+ou pavage de puissance (Voronoï pondéré),
 dont les poids permettent d'agrandir les cellules à trop peu de côtés et de réduire les autres (loi de Lewis :
 l'aire d'une cellule croît avec son nombre de côtés).
 
@@ -655,8 +741,8 @@ l'aire d'une cellule croît avec son nombre de côtés).
 \subsection{Robustesse et outillage}
 
 \begin{itemize}[nosep]
-  \item L'étirement est local ; pour un pavage très désordonné (\code{disorder} $\ge0.6$), quelques arêtes peuvent
-    rester trop courtes. Une relaxation globale des sommets (réseau de ressorts avec longueur minimale) serait plus
+  \item Les traitements sont locaux : avec un seuil élevé (\code{minEdgeFactor} $\gtrsim0.25$) et un pavage
+    désordonné, une ou deux arêtes restent parfois trop courtes, et \toolgen{} s'arrête en erreur. Une relaxation globale des sommets (réseau de ressorts avec longueur minimale) serait plus
     robuste.
   \item Proposer d'autres chargements que la traction par mors (cisaillement, flexion trois points) ; reconnaître
     dans le modèle d'autres dispositions de boîtes de contrôle que deux mors haut et bas.

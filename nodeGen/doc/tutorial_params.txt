@@ -12,8 +12,8 @@ barWidth        2e-6      # écart entre parois voisines (= barWidth de readNode
 lattice         hex       # réseau hexagonal perturbé
 disorder        0.3       # perturbation des germes (fraction du pas du réseau)
 lloydIterations 5         # régularisation de Lloyd
-minEdgeRatio    0.4       # seuil des arêtes courtes (fraction de la longueur moyenne)
-minSides        5         # fusion interdite si une cellule passait sous 5 côtés (étirement à la place)
+minEdgeFactor   0.25      # seuil des arêtes courtes (fraction de lRef = sqrt(Lx Ly / Ncell))
+minSides        5         # transition T1 interdite si une cellule passait sous 5 côtés (étirement à la place)
 seed            1
 
 # Pré-fissure depuis le bord gauche, à mi-hauteur, longueur 1.2 mm

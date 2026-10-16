@@ -2,7 +2,8 @@
 //
 // Les parois sont colorées selon qu'elles seront collées ou non par Lhyphen (un noeud d'une autre cellule à
 // moins de barWidth + distGlue), ce qui fait apparaître les bords libres et les pré-fissures, et les barres
-// courtes (raideur de flexion kr/l² élevée) sont mises en évidence.
+// courtes (raideur de flexion kr/l² élevée) sont mises en évidence, ainsi que les jonctions à 4 branches ou plus
+// (au moins 4 cellules en un sommet, ou 3 cellules sur un bord libre).
 //
 // Usage : nodeview nodefile.txt [options]
 //   -w <barWidth>          largeur des barres (défaut : distance minimale entre noeuds de cellules différentes)
@@ -77,9 +78,12 @@ int main(int argc, char *argv[]) {
   std::cout << "  cellules : " << st.nCells << ", noeuds : " << st.nNodes << "\n";
   std::cout << "  barres   : l_moy = " << st.lMean << ", l_min = " << st.lMin << " (l_min/l_moy = " << st.lMin / st.lMean
             << "), " << st.nShort << " barres < " << opt.shortRatio << " l_moy\n";
-  std::cout << "  côtés    : " << sidesHistogram(st) << "\n";
+  std::cout << "  cellules par nombre de côtés :\n" << sidesTable({{"cellules", st}}, "      ");
   std::cout << "  parois   : " << st.nGlued << " collées, " << st.nFree << " libres (barWidth = " << st.barWidth
             << ", distGlue = " << opt.distGlue << ")\n";
+  std::cout << "  jonctions: " << junctionsHistogram(st) << "(cellules par jonction)\n";
+  std::cout << "             " << st.nJunction4 << " à au moins 4 cellules, " << st.nBorderJunction3
+            << " à 3 cellules sur un bord libre\n";
   std::cout << "  -> " << out << "\n";
   return 0;
 }

@@ -54,6 +54,7 @@ static bool crackContactPos(size_t ci, size_t cj, size_t in, size_t jn, vec2r &p
 
 struct Connection {
   size_t i, j;
+  size_t ev{0}; // indice de la rupture (breakEvents) qui a créé cette connexion
 };
 
 struct CrackNode {
@@ -187,7 +188,7 @@ std::vector<Crack> splitCracks(const Crack &crack) {
   }
   for (size_t c = 0; c < crack.Conns.size(); c++) {
     size_t ci = rootToCrack[find(crack.Conns[c].i)];
-    result[ci].Conns.push_back({nodeMap[crack.Conns[c].i], nodeMap[crack.Conns[c].j]});
+    result[ci].Conns.push_back({nodeMap[crack.Conns[c].i], nodeMap[crack.Conns[c].j], crack.Conns[c].ev});
   }
   return result;
 }
@@ -356,7 +357,7 @@ int main(/*int argc, const char *argv[]*/) {
     size_t na = addNode(crack, segments[i].a, tol2);
     size_t nb = addNode(crack, segments[i].b, tol2);
     if (na != nb) {
-      crack.Conns.push_back({na, nb});
+      crack.Conns.push_back({na, nb, segments[i].ev});
     }
   }
   for (size_t i = 0; i < crack.nodes.size(); i++) {
@@ -373,9 +374,39 @@ int main(/*int argc, const char *argv[]*/) {
 
   // Pour chaque fissure : chemin principal (plus long des plus courts chemins entre
   // extrémités) et sauvegarde SVG avec ce chemin surligné.
+  // Sorties exploitables par les scripts de dépouillement :
+  //   crackwatch_summary.txt  une ligne par fissure (composante connexe)
+  //   crackwatch_main.txt     segments du chemin principal de la fissure dont ce chemin est le plus long, avec
+  //                           l'instant de leur rupture
+  //   crackwatch_graph.txt    toutes les connexions de toutes les fissures
+  std::ofstream summary("crackwatch_summary.txt");
+  summary << "# fissure noeuds connexions longueur_totale longueur_chemin_principal extremites bifurcations "
+             "t_premiere_rupture t_derniere_rupture\n";
+  double bestL = -1.0;
+  size_t bestC = 0;
+  std::vector<size_t> bestPath;
   for (size_t c = 0; c < cracks.size(); c++) {
     double L = 0.0;
     std::vector<size_t> path = mainPath(cracks[c], L);
+
+    double Ltot = 0.0, t0 = std::numeric_limits<double>::max(), t1 = 0.0;
+    for (auto &cn : cracks[c].Conns) {
+      Ltot += norm(cracks[c].nodes[cn.i].pos - cracks[c].nodes[cn.j].pos);
+      t0 = std::min(t0, breakEvents[cn.ev].time);
+      t1 = std::max(t1, breakEvents[cn.ev].time);
+    }
+    int nEnds = 0, nForks = 0;
+    for (auto &nd : cracks[c].nodes) {
+      if (nd.order == 1) nEnds++;
+      if (nd.order >= 3) nForks++;
+    }
+    summary << c << ' ' << cracks[c].nodes.size() << ' ' << cracks[c].Conns.size() << ' ' << Ltot << ' ' << L << ' '
+            << nEnds << ' ' << nForks << ' ' << t0 << ' ' << t1 << '\n';
+    if (L > bestL) {
+      bestL = L;
+      bestC = c;
+      bestPath = path;
+    }
 
     std::cout << "  fissure " << c << " : " << cracks[c].nodes.size() << " nodes, " << cracks[c].Conns.size()
               << " connections, chemin principal = " << path.size() << " noeuds, longueur = " << L << std::endl;
@@ -384,6 +415,38 @@ int main(/*int argc, const char *argv[]*/) {
     snprintf(fname, sizeof(fname), "crack_%zu.svg", c);
     saveCrackSVG(cracks[c], fname, path.empty() ? nullptr : &path);
   }
+
+  // segments du chemin principal de la fissure principale, avec l'instant de leur rupture
+  std::ofstream mainFile("crackwatch_main.txt");
+  mainFile << "# fissure principale " << bestC << " ; une ligne par segment du chemin principal, dans l'ordre du "
+              "chemin\n# t_rupture longueur xa ya xb yb\n";
+  if (!cracks.empty()) {
+    const Crack &K = cracks[bestC];
+    for (size_t k = 0; k + 1 < bestPath.size(); k++) {
+      size_t a = bestPath[k], b = bestPath[k + 1];
+      for (auto &cn : K.Conns) {
+        if ((cn.i == a && cn.j == b) || (cn.i == b && cn.j == a)) {
+          const vec2r &pa = K.nodes[a].pos, &pb = K.nodes[b].pos;
+          mainFile << breakEvents[cn.ev].time << ' ' << norm(pb - pa) << ' ' << pa.x << ' ' << pa.y << ' ' << pb.x
+                   << ' ' << pb.y << '\n';
+          break;
+        }
+      }
+    }
+  }
+
+  // graphe complet de toutes les fissures (permet de choisir un autre chemin principal, par exemple depuis la pointe
+  // d'une entaille) : une ligne par connexion, noeuds numérotés dans leur fissure
+  std::ofstream graphFile("crackwatch_graph.txt");
+  graphFile << "# fissure noeud_a noeud_b t_rupture longueur xa ya xb yb\n";
+  for (size_t c = 0; c < cracks.size(); c++) {
+    for (auto &cn : cracks[c].Conns) {
+      const vec2r &pa = cracks[c].nodes[cn.i].pos, &pb = cracks[c].nodes[cn.j].pos;
+      graphFile << c << ' ' << cn.i << ' ' << cn.j << ' ' << breakEvents[cn.ev].time << ' ' << norm(pb - pa) << ' '
+                << pa.x << ' ' << pa.y << ' ' << pb.x << ' ' << pb.y << '\n';
+    }
+  }
+  std::cout << "save files: crackwatch_summary.txt, crackwatch_main.txt, crackwatch_graph.txt" << std::endl;
 
   return 0;
 }

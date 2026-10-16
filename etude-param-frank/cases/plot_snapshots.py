@@ -65,7 +65,9 @@ VIEWS = {
                         "titre": "Directions principales de contrainte à l'initiation de la fissure",
                         "unite": "contrainte principale (N/m)"},
 }
-COMMON = ["show_hud=0", "show_colorbar=0", "show_background=0", "show_cells=1", "show_contours=1"]
+# réglages communs : pas de parois de cellules (show_cells : barres, show_contours : contours), mais le cadre de
+# l'échantillon (show_bbox)
+COMMON = ["show_hud=0", "show_colorbar=0", "show_background=0", "show_cells=0", "show_contours=0", "show_bbox=1"]
 
 # palettes de see2 (TensorSphTable : bleu-blanc-rouge pour un champ signé ; TensorDevTable : blanc-jaune-rouge)
 CMAP_SIGNED = LinearSegmentedColormap.from_list("see2_signe", [(40 / 255, 60 / 255, 200 / 255), (1, 1, 1),

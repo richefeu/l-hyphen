@@ -9,11 +9,11 @@ Ly   0.016
 # Cellules
 cellSize        3.53e-4   # diamètre équivalent visé
 barWidth        2e-6      # écart entre parois voisines (= barWidth de readNodeFile)
-lattice         hex       # hex : réseau hexagonal perturbé (surtout des hexagones) ; random : tirage aléatoire
+lattice         random       # hex : réseau hexagonal perturbé (surtout des hexagones) ; random : tirage aléatoire
 disorder        0.6       # perturbation des germes du réseau hex (fraction du pas) : 0 = hexagones parfaits
-lloydIterations 5         # régularisation de Lloyd
-minEdgeRatio    0.33       # arêtes plus courtes que 0.4 x longueur moyenne : fusionnées, ou étirées si
-minSides        5         #   la fusion ferait passer une cellule sous minSides côtés
+lloydIterations 10         # régularisation de Lloyd
+minEdgeFactor   0.3      # arêtes plus courtes que 0.33 x lRef (lRef = sqrt(Lx Ly / Ncell)) : T1, ou étirement si
+minSides        4         #   la T1 ferait passer une cellule sous minSides côtés (jamais de fusion)
 seed            1
 
 # Pré-fissure : segment x0 y0 x1 y1 (ici depuis le bord gauche, à mi-hauteur, longueur 1.2 mm)

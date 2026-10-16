@@ -2864,7 +2864,7 @@ void Lhyphen::integrate() {
           meanPos /= (double)capturedNodes[c].cellNodeIDs.size();
           meanForce = sumForce / (double)capturedNodes[c].cellNodeIDs.size();
         }
-        of[c] << meanPos << ' ' << sumForce << ' ' << meanForce << '\n' << std::flush;
+        of[c] << t << ' ' << meanPos << ' ' << sumForce << ' ' << meanForce << '\n' << std::flush;
       }
     }
 

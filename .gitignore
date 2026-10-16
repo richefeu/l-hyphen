@@ -78,8 +78,17 @@ etude-param-frank/cases/*
 !etude-param-frank/cases/plot_maps.py
 !etude-param-frank/cases/plot_curves.py
 !etude-param-frank/cases/plot_snapshots.py
+!etude-param-frank/cases/plot_breaks.py
+!etude-param-frank/cases/plot_crackwatch.py
 etude-param-frank/echantillon/nodegen_input.txt
 etude-param-frank/run_cases.log
 
 # dépendances générées par le compilateur (-MMD)
 *.d
+# compte rendu de etude-param-frank : fichiers de compilation LaTeX
+etude-param-frank/rapport/*.aux
+etude-param-frank/rapport/*.log
+etude-param-frank/rapport/*.fls
+etude-param-frank/rapport/*.fdb_latexmk
+etude-param-frank/rapport/*.out
+etude-param-frank/rapport/*.toc

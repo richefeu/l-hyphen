@@ -28,27 +28,62 @@ Un tutoriel détaillé (utilisation, algorithmes, validation, améliorations pos
      heptagones d'autant plus nombreux que `disorder` est grand. En présence d'une pré-fissure, le réseau est
      orienté selon celle-ci (rangées parallèles et symétriques par rapport à la fissure).
    - `random` : `N = Lx·Ly / (π·cellSize²/4)` points tirés avec une distance minimale (0.7 × espacement moyen) ;
-     pavage plus désordonné (environ 45 % de pentagones et 45 % d'hexagones).
+     pavage plus désordonné (environ 20 % de pentagones, 60 % d'hexagones et 20 % d'heptagones).
 2. **Régularisation de Lloyd** (`lloydIterations`) : chaque germe est déplacé au centroïde de sa cellule.
 3. **Pavage de Voronoï** découpé au rectangle (découpe par demi-plans, cellules convexes).
-4. **Arêtes courtes** (plus courtes que `minEdgeRatio` × longueur moyenne) : elles sont fusionnées (sommets
-   partagés par toutes les cellules voisines) tant que les deux cellules qui les bordent gardent au moins
-   `minSides` côtés ; sinon leurs deux sommets sont écartés le long de l'arête jusqu'à la longueur seuil, ce qui
-   conserve le nombre de côtés (un écartement qui rendrait une cellule non convexe est annulé). Les sommets sur
-   les bords du domaine ou sur la fissure restent sur leur ligne. Les barres très courtes, qui imposent un pas
+4. **Arêtes courtes et jonctions à 3 branches.** Une jonction où se rejoignent plus de 3 parois est
+   mécaniquement indésirable : tous les sommets du pavage ont 3 branches (bords compris), sauf les extrémités de
+   la pré-fissure. Les arêtes courtes ne sont donc **jamais fusionnées**, puisque la fusion crée un sommet à
+   4 branches. Une arête est courte si elle mesure moins de `minEdgeFactor` × `lRef`, avec
+   `lRef = sqrt(Lx·Ly / Ncell)` la longueur caractéristique des cellules : c'est le côté du carré de même aire
+   qu'une cellule (`Ncell` est le nombre de cellules du pavage). `lRef` ne dépend que de la densité de cellules,
+   alors que la longueur moyenne des arêtes `l_moy` (environ 0.62 `lRef` pour des hexagones) dépend aussi de leur
+   forme, donc du traitement lui-même. Les arêtes courtes sont traitées :
+   - par une **transition T1** si les deux cellules qui la bordent gardent au moins `minSides` côtés : l'arête
+     est remplacée par une arête transversale de longueur `t1Margin` × seuil, et ses deux cellules cessent
+     d'être voisines tandis que les deux autres le deviennent ;
+   - sinon par **étirement** : ses deux sommets sont écartés le long de l'arête jusqu'à un peu plus que le
+     seuil, ce qui conserve le nombre de côtés. Les sommets sur les bords du domaine ou sur la fissure restent
+     sur leur ligne, et un écartement qui rendrait une cellule non convexe est annulé ;
+   - en dernier recours, un **amas** d'arêtes courtes voisines est contracté en un sommet, aussitôt éclaté en
+     sommets à 3 branches, sans faire passer une cellule sous `minSides` côtés.
+
+   Les sommets à 4 branches ou plus du pavage de Voronoï (sommets quasi confondus, ligne de symétrie prolongeant
+   la fissure, voir plus bas) sont éclatés en sommets à 3 branches. Les barres très courtes, qui imposent un pas
    de temps minuscule en flexion (`kr/l²`), sont ainsi évitées à la source (voir
    `Frank-ouverture-fissure/note_barres_courtes`).
+
+   `nodegen` vérifie le résultat. Il affiche le nombre de sommets par nombre de branches et **s'arrête avec un
+   code d'erreur (2)** s'il reste un sommet à 4 branches hors des extrémités de la fissure, ou une arête sous le
+   seuil. Les fichiers sont tout de même écrits pour pouvoir être examinés. Sur la géométrie de l'exemple, 20
+   graines par réglage :
+
+   | `minEdgeFactor` | `hex`, `disorder 0.3` | `hex`, `disorder 0.6` | `random`, `lloydIterations 10` |
+   |---|---|---|---|
+   | 0.22 | 0 échec | 0 échec | 0 échec |
+   | 0.25 | — | 1 échec | 0 échec |
+   | 0.28 | — | 2 échecs | 0 échec |
+   | 0.33 | 0 échec | 3 échecs | 3 échecs |
+
+   Changer de graine suffit en général.
 5. **Décalage des parois** de `barWidth/2` vers l'intérieur (même construction que cellPrepro) : deux cellules
    voisines sont exactement à `barWidth` l'une de l'autre, condition du collage par `glue` / `distGcGlue`.
 
-Répartition obtenue sur l'exemple (géométrie de Frank, cellules intérieures) :
+Répartition obtenue sur la géométrie de l'exemple (`minEdgeFactor 0.22`, `minSides 5`, cellules intérieures) :
 
-| Réglage | 4 côtés | 5 côtés | 6 côtés | 7 côtés |
-|---|---|---|---|---|
-| `lattice random`, `lloydIterations 10`, `minSides 5` | 0.3 % | 44 % | 47 % | 8 % |
-| `lattice hex`, `disorder 0.2`, `lloydIterations 5`, `minSides 5` | 0.1 % | 4.5 % | 95 % | 0.4 % |
-| `lattice hex`, `disorder 0.3`, `lloydIterations 5`, `minSides 5` | 0.1 % | 5 % | 94 % | 0.6 % |
-| `lattice hex`, `disorder 0.4`, `lloydIterations 5`, `minSides 5` | 0 % | 16 % | 83 % | 0.8 % |
+| Réglage | 4 côtés | 5 côtés | 6 côtés | 7 côtés | 8 côtés |
+|---|---|---|---|---|---|
+| `lattice random`, `lloydIterations 10` | 0 % | 22 % | 57 % | 20 % | 0.7 % |
+| `lattice hex`, `disorder 0.2`, `lloydIterations 5` | 0.1 % | 2.3 % | 96 % | 1.4 % | 0.1 % |
+| `lattice hex`, `disorder 0.3`, `lloydIterations 5` | 0 % | 2.9 % | 95 % | 1.7 % | 0.1 % |
+| `lattice hex`, `disorder 0.4`, `lloydIterations 5` | 0.1 % | 7.6 % | 85 % | 6.7 % | 0 % |
+| `lattice hex`, `disorder 0.6`, `lloydIterations 5` | 0.1 % | 26 % | 51 % | 21 % | 1.9 % |
+
+Avec un seuil plus élevé (`minEdgeFactor 0.33`, réglage de `example/params.txt`), les transitions T1 sont plus
+nombreuses : avec `disorder 0.3`, 92 % d'hexagones ; avec `disorder 0.6`, 48 %.
+
+Une transition T1 retire un côté à deux cellules et en ajoute un à deux autres. Par rapport à l'ancienne fusion,
+qui ne faisait que retirer des côtés, il y a donc plus d'heptagones et moins de pentagones.
 
 Les cellules de bord, coupées par le rectangle, ont naturellement moins de côtés ; `nodegen` affiche la
 répartition sur toutes les cellules et sur les cellules intérieures.
@@ -65,8 +100,13 @@ vaut `barWidth + opening`, supérieur à `barWidth + distGcGlue`, donc ces paroi
 
 **Pointe de fissure.** La symétrie est prolongée au-delà de la pointe : la ligne de fissure s'y continue par
 une interface **collée** entre deux cellules. La fissure se termine donc sur un sommet où se rejoignent quatre
-cellules, en face d'une interface, et non contre une cellule. La pointe est le sommet de la ligne le plus
-proche de `(x1, y1)` ; sa position effective est affichée.
+cellules, en face d'une interface, et non contre une cellule. C'est la seule jonction à 4 branches conservée.
+La pointe est le sommet de la ligne le plus proche de `(x1, y1)` ; sa position effective est affichée.
+
+Au-delà de la pointe, chaque sommet de la ligne de symétrie a 4 branches (deux cellules de chaque côté). Il est
+éclaté en deux sommets à 3 branches qui rendent voisines deux cellules en diagonale : l'interface collée qui
+prolonge la fissure n'est donc pas rectiligne mais en **zigzag**. Le long de la fissure ouverte, les sommets
+gardent leur structure : les lèvres sont libres, et il n'y a mécaniquement que 3 branches de chaque côté.
 
 Une ligne droite d'arêtes n'existe pas dans un pavage hexagonal : la rangée de pentagones qui borde la fissure
 doit se raccorder au réseau régulier, ce qui crée un défaut (dislocation : quelques pentagones et heptagones)
@@ -88,8 +128,9 @@ quelconque.
 | `lattice` | hex | `hex` : réseau hexagonal perturbé ; `random` : tirage aléatoire |
 | `disorder` | 0.3 | perturbation des germes du réseau `hex`, en fraction du pas (0 : hexagones parfaits) |
 | `lloydIterations` | 10 | itérations de régularisation de Lloyd |
-| `minEdgeRatio` | 0.3 | seuil des arêtes courtes, en fraction de la longueur moyenne (0 : aucun traitement, déconseillé) |
-| `minSides` | 5 | nombre de côtés minimal conservé par la fusion des arêtes courtes (au-delà : étirement) |
+| `minEdgeFactor` | 0.2 | seuil des arêtes courtes, en fraction de `lRef = sqrt(Lx·Ly / Ncell)` (0 : aucun traitement, déconseillé). L'ancien mot-clé `minEdgeRatio` (fraction de la longueur moyenne des arêtes) est refusé avec la valeur équivalente, environ 0.62 × `minEdgeRatio` |
+| `t1Margin` | 1.2 | longueur de l'arête créée par une transition T1 ou un éclatement, en multiple du seuil |
+| `minSides` | 5 | nombre de côtés minimal d'une cellule après une transition T1 (sinon : étirement) |
 | `seed` | 1 | graine du générateur aléatoire |
 | `crack x0 y0 x1 y1` | — | pré-fissure (optionnelle) |
 | `tipInterface` | 1 | longueur de l'interface collée qui prolonge la fissure au-delà de la pointe (en cellules) |
@@ -118,7 +159,17 @@ nodeview nodefile.txt [-w barWidth] [-g distGlue] [-r ratio] [-box x0 x1 y0 y1] 
 - **gris** : paroi collée (son milieu est à moins de `barWidth + distGlue` d'une barre d'une autre cellule,
   critère de création des liens cohésifs) ;
 - **orange** : paroi libre (bord du domaine, pré-fissure, trou) ;
-- **bleu** : barre plus courte que `ratio` × longueur moyenne.
+- **bleu** : barre plus courte que `ratio` × longueur moyenne. Dans le SVG produit par `nodegen`, ce sont les
+  barres dont l'arête du pavage est sous le seuil `minEdgeFactor` × `lRef`, c'est-à-dire exactement les arêtes
+  signalées en `ERREUR` par le contrôle final (deux barres par arête, une par cellule). Le décalage des parois
+  raccourcit chaque barre d'environ `barWidth` : une barre à peine sous le seuil, dont l'arête est au seuil, n'est
+  pas signalée ;
+- **cercle rouge** : jonction à 4 branches ou plus, c'est-à-dire au moins 4 cellules en un sommet, ou 3 cellules
+  sur un bord libre. Avec `nodegen`, seules les extrémités de la pré-fissure doivent apparaître. Les jonctions
+  sont reconstruites à partir des parois collées : les lèvres libres d'une fissure ne sont pas rattachées entre
+  elles.
+
+`nodeview` affiche aussi le nombre de jonctions par nombre de cellules.
 
 Sans `-w`, `barWidth` est estimé comme la distance minimale entre nœuds de cellules différentes. Le nombre de
 parois collées affiché correspond au nombre de « Liens collés » de `diagnostic.txt`.

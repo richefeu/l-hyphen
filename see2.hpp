@@ -101,6 +101,7 @@ const char *lastFieldName{nullptr};           // champ coloré lors du dernier r
 double lastFieldBound{0.0};                   // borne de son échelle de couleur
 bool lastFieldDivergent{false};               // échelle signée (bleu-blanc-rouge) ou non (blanc-jaune-rouge)
 int show_colorbar{1};                         // barre de couleur du champ affiché (--set show_colorbar=0)
+int show_bbox{0};                             // cadre de l'échantillon (boîte englobante des noeuds)
 double strainDirsMax{0.0};  // valeur principale donnant le plus grand trait (0 = maximum de la conf affichée)
 double stressDirsMax{0.0};
 const char *lastDirsName{nullptr}; // directions tracées lors du dernier rendu (« strain » ou « stress »)
@@ -194,6 +195,7 @@ int mouse_start[2];
 void drawCircle(double xc, double yc, double radius, int nbDiv = 18);
 void drawBar(size_t ci, size_t in, size_t jn, double radius, color4f &BarColor, color4f &NodeColor);
 void drawCells();
+void drawBoundingBox();
 void drawGluePoints();
 void drawCrackPath();
 void readBreakHistory(const char *fname = "breakHistory.txt");

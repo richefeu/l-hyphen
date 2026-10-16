@@ -1,8 +1,10 @@
 // nodegen : génère un nodeFile (x y idCellule) pour Lhyphen::readNodeFile.
 //
 // Pavage de Voronoï d'un rectangle (germes tirés avec une distance minimale puis régularisés par Lloyd),
-// fusion des arêtes trop courtes, puis décalage des parois de barWidth/2 vers l'intérieur (même
-// construction que cellPrepro) : deux cellules voisines sont exactement à barWidth l'une de l'autre.
+// traitement des arêtes trop courtes par transitions T1 ou étirement (jamais par fusion, qui créerait des
+// sommets à 4 branches), éclatement des sommets à plus de 3 branches, puis décalage des parois de barWidth/2
+// vers l'intérieur (même construction que cellPrepro) : deux cellules voisines sont exactement à barWidth
+// l'une de l'autre. Seules les extrémités de la pré-fissure gardent un sommet à 4 branches.
 //
 // Pré-fissure nette : les germes proches de la ligne de fissure sont placés par paires symétriques par
 // rapport à cette ligne, de sorte que la fissure suit exactement des arêtes du pavage. Les parois le long
@@ -25,11 +27,12 @@ struct Params {
   double cellSize{3.5e-4}; // diamètre équivalent visé des cellules
   double barWidth{2e-6};
   int lloydIterations{10};
-  double minEdgeRatio{0.3}; // fusion des arêtes de Voronoï plus courtes que minEdgeRatio * longueur moyenne
+  double minEdgeFactor{0.2}; // longueur minimale des arêtes, en fraction de lRef = sqrt(Lx * Ly / nombre de cellules)
+  double t1Margin{1.2};     // longueur de l'arête créée par une transition T1, en multiple du seuil
   unsigned seed{1};
   std::string lattice{"hex"};    // random : tirage aléatoire ; hex : réseau hexagonal perturbé
   double disorder{0.3};          // réseau hex : amplitude de la perturbation des germes (fraction du pas)
-  int minSides{5};               // la fusion des arêtes courtes ne descend pas une cellule sous minSides côtés
+  int minSides{5};               // une transition T1 ne descend pas une cellule sous minSides côtés
   bool hasCrack{false};
   V c0, c1;               // pré-fissure : segment [c0, c1]
   double tipInterface{1.0}; // longueur d'interface collée prolongeant la fissure au-delà de la pointe (en cellules)
@@ -78,7 +81,16 @@ static Params readParams(const std::string &name) {
     else if (k == "cellSize") is >> p.cellSize;
     else if (k == "barWidth") is >> p.barWidth;
     else if (k == "lloydIterations") is >> p.lloydIterations;
-    else if (k == "minEdgeRatio") is >> p.minEdgeRatio;
+    else if (k == "minEdgeFactor") is >> p.minEdgeFactor;
+    else if (k == "minEdgeRatio") { // ancien mot-clé, rapporté à la longueur moyenne des arêtes (~0.62 lRef)
+      double r = 0.0;
+      is >> r;
+      std::cerr << "minEdgeRatio n'est plus accepté : le seuil est maintenant rapporté à lRef = sqrt(Lx * Ly / nombre "
+                   "de cellules), environ 1.6 fois la longueur moyenne des arêtes. Remplacer par minEdgeFactor "
+                << std::setprecision(2) << 0.62 * r << " (équivalent de minEdgeRatio " << r << ").\n";
+      std::exit(1);
+    }
+    else if (k == "t1Margin") is >> p.t1Margin;
     else if (k == "seed") is >> p.seed;
     else if (k == "lattice") is >> p.lattice;
     else if (k == "disorder") is >> p.disorder;
@@ -253,20 +265,10 @@ static std::vector<Polygon> voronoi(const std::vector<V> &seeds, const Params &P
 }
 
 // ======================================================================================================
-// Topologie : sommets partagés, types et fusion des arêtes courtes
+// Topologie : sommets partagés, types, arêtes courtes et sommets à plus de 3 branches
 // ======================================================================================================
 
 enum : int { LEFT = 1, RIGHT = 2, BOTTOM = 4, TOP = 8, CRACK = 16 };
-
-static int priority(int flags) {
-  int nb = 0;
-  for (int b : {LEFT, RIGHT, BOTTOM, TOP, CRACK}) {
-    if (flags & b) {
-      nb++;
-    }
-  }
-  return nb >= 2 ? 3 : (nb == 1 ? 2 : 1);
-}
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -434,245 +436,39 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // 4. Fusion des arêtes courtes (union-find sur les sommets, une cellule garde au moins 3 sommets)
-  std::vector<std::vector<int>> vertCells(verts.size());
-  std::map<std::pair<int, int>, double> edges;
-  for (size_t c = 0; c < cellV.size(); c++) {
-    auto &ids = cellV[c];
-    for (size_t k = 0; k < ids.size(); k++) {
-      vertCells[ids[k]].push_back((int)c);
-      int a = ids[k], b = ids[(k + 1) % ids.size()];
-      edges[{std::min(a, b), std::max(a, b)}] = norm(verts[a] - verts[b]);
-    }
-  }
-  double eMean = 0.0;
-  for (auto &e : edges) {
-    eMean += e.second;
-  }
-  eMean /= (double)edges.size();
-
-  std::vector<int> parent(verts.size());
-  std::vector<std::vector<int>> members(verts.size());
-  for (size_t v = 0; v < verts.size(); v++) {
-    parent[v] = (int)v;
-    members[v] = {(int)v};
-  }
-  auto find = [&](int v) {
-    while (parent[v] != v) {
-      parent[v] = parent[parent[v]];
-      v = parent[v];
-    }
-    return v;
-  };
-  auto distinctInCell = [&](int c) {
-    std::set<int> r;
-    for (int v : cellV[c]) {
-      r.insert(find(v));
-    }
-    return r.size();
-  };
-  std::vector<std::pair<double, std::pair<int, int>>> shortEdges;
-  for (auto &e : edges) {
-    if (e.second < P.minEdgeRatio * eMean) {
-      shortEdges.push_back({e.second, e.first});
-    }
-  }
-  std::sort(shortEdges.begin(), shortEdges.end());
-  size_t nMerged = 0, nRefused = 0;
-  for (auto &se : shortEdges) {
-    int ra = find(se.second.first), rb = find(se.second.second);
-    if (ra == rb) {
-      continue;
-    }
-    std::set<int> ca, both;
-    for (int v : members[ra]) {
-      ca.insert(vertCells[v].begin(), vertCells[v].end());
-    }
-    for (int v : members[rb]) {
-      for (int c : vertCells[v]) {
-        if (ca.count(c)) {
-          both.insert(c);
-        }
-      }
-    }
-    bool ok = true;
-    for (int c : both) {
-      if ((int)distinctInCell(c) <= std::max(3, P.minSides)) {
-        ok = false;
-        break;
-      }
-    }
-    if (!ok) {
-      nRefused++;
-      continue;
-    }
-    if (members[ra].size() < members[rb].size()) {
-      std::swap(ra, rb);
-    }
-    parent[rb] = ra;
-    members[ra].insert(members[ra].end(), members[rb].begin(), members[rb].end());
-    members[rb].clear();
-    nMerged++;
-  }
-
-  // Position et type des sommets fusionnés : les sommets contraints (coins, bords, fissure) imposent leur position
+  // 4. Arêtes courtes et sommets à plus de 3 branches. Une jonction de plus de 3 parois est mécaniquement
+  //    indésirable : les arêtes courtes ne sont donc jamais fusionnées (la fusion créerait un sommet à 4
+  //    branches). Elles sont traitées par une transition T1 (l'arête est remplacée par une arête de longueur
+  //    t1Margin * seuil, orientée transversalement : ses deux cellules cessent d'être voisines, les deux autres
+  //    le deviennent) si ses deux cellules gardent au moins minSides côtés, sinon par étirement (étape 4bis).
+  //    Les sommets à 4 branches ou plus (sommets quasi confondus, ligne de symétrie prolongeant la fissure
+  //    au-delà de ses extrémités) sont éclatés en sommets à 3 branches ; sur la ligne prolongée, l'interface
+  //    collée devient ainsi un zigzag. Seules les extrémités de la fissure gardent 4 branches.
   std::vector<V> pos = verts;
   std::vector<int> rflags = flags;
-  for (size_t r = 0; r < verts.size(); r++) {
-    if (members[r].size() < 2) {
-      continue;
-    }
-    int best = 0;
-    for (int v : members[r]) {
-      best = std::max(best, priority(flags[v]));
-    }
-    std::vector<int> top;
-    for (int v : members[r]) {
-      if (priority(flags[v]) == best) {
-        top.push_back(v);
-      }
-    }
-    bool sameType = std::all_of(top.begin(), top.end(), [&](int v) { return flags[v] == flags[top[0]]; });
-    V m;
-    if (sameType) {
-      for (int v : top) {
-        m += verts[v];
-      }
-      m = m * (1.0 / (double)top.size());
-    } else {
-      m = verts[top[0]];
-    }
-    pos[r] = m;
-    rflags[r] = flags[top[0]];
-  }
-
-  // Polygones du pavage après fusion
-  std::vector<std::vector<int>> poly(cellV.size());
-  for (size_t c = 0; c < cellV.size(); c++) {
-    for (int v : cellV[c]) {
-      int r = find(v);
-      if (poly[c].empty() || poly[c].back() != r) {
-        poly[c].push_back(r);
-      }
-    }
-    while (poly[c].size() > 1 && poly[c].front() == poly[c].back()) {
-      poly[c].pop_back();
+  std::vector<std::vector<int>> poly = cellV;
+  // Longueur caractéristique : côté du carré de même aire qu'une cellule, lRef = sqrt(Lx * Ly / nombre de cellules).
+  // Elle ne dépend que de la densité de cellules (la longueur moyenne des arêtes, environ 0.62 lRef pour des
+  // hexagones, dépend aussi de la forme des cellules et donc du traitement des arêtes courtes).
+  size_t nCellsTiling = 0;
+  for (auto &ids : poly) {
+    if (ids.size() >= 3) {
+      nCellsTiling++;
     }
   }
+  const double lRef = std::sqrt(P.Lx * P.Ly / (double)std::max<size_t>(1, nCellsTiling));
+  const double lCrit = P.minEdgeFactor * lRef;
+  // longueur des arêtes créées par T1 ou éclatement (sans seuil, minEdgeFactor 0 : 0.06 lRef, environ 0.1 fois la
+  // longueur moyenne des arêtes)
+  const double lT1 = std::max(1.0, P.t1Margin) * (lCrit > 0.0 ? lCrit : 0.06 * lRef);
 
-  // 4bis. Arêtes encore trop courtes (fusion refusée pour respecter minSides) : leurs deux sommets sont écartés
-  //       le long de l'arête jusqu'à la longueur seuil, ce qui conserve le nombre de côtés. Un sommet de bord ne se
-  //       déplace que le long du bord, un sommet de la fissure le long de la fissure, un coin reste fixe ; un
-  //       déplacement qui rendrait une cellule voisine non convexe est annulé.
-  size_t nStretched = 0, nStillShort = 0;
-  {
-    const double lCrit = P.minEdgeRatio * eMean;
-    std::vector<std::vector<int>> rootCells(verts.size());
-    for (size_t c = 0; c < poly.size(); c++) {
-      for (int r : poly[c]) {
-        rootCells[r].push_back((int)c);
-      }
-    }
-    auto allowedMove = [&](int r, V d) {
-      int f = rflags[r];
-      int nb = 0;
-      for (int b : {LEFT, RIGHT, BOTTOM, TOP, CRACK}) {
-        if (f & b) {
-          nb++;
-        }
-      }
-      if (nb >= 2) {
-        return V(0.0, 0.0);
-      }
-      if (f & (LEFT | RIGHT)) {
-        return V(0.0, d.y);
-      }
-      if (f & (BOTTOM | TOP)) {
-        return V(d.x, 0.0);
-      }
-      if (f & CRACK) {
-        return F.t * dot(d, F.t);
-      }
-      return d;
-    };
-    auto convex = [&](int c) {
-      auto &ids = poly[c];
-      size_t n = ids.size();
-      double area2 = 0.0;
-      for (size_t k = 0; k < n; k++) {
-        area2 += cross(pos[ids[k]], pos[ids[(k + 1) % n]]);
-      }
-      double sgn = area2 >= 0.0 ? 1.0 : -1.0;
-      for (size_t k = 0; k < n; k++) {
-        V e1 = pos[ids[(k + 1) % n]] - pos[ids[k]];
-        V e2 = pos[ids[(k + 2) % n]] - pos[ids[(k + 1) % n]];
-        if (sgn * cross(e1, e2) < -1e-12 * eMean * eMean || norm(e1) < 1e-3 * lCrit) {
-          return false;
-        }
-      }
-      return true;
-    };
-    for (int pass = 0; pass < 20; pass++) {
-      std::set<std::pair<int, int>> E;
-      for (auto &ids : poly) {
-        for (size_t k = 0; k < ids.size(); k++) {
-          int a = ids[k], b = ids[(k + 1) % ids.size()];
-          E.insert({std::min(a, b), std::max(a, b)});
-        }
-      }
-      size_t moved = 0;
-      nStillShort = 0;
-      for (auto &e : E) {
-        int a = e.first, b = e.second;
-        double l = norm(pos[b] - pos[a]);
-        if (l >= lCrit * (1.0 - 1e-9)) {
-          continue;
-        }
-        V d = unit(pos[b] - pos[a]);
-        double deficit = lCrit - l;
-        V ma = allowedMove(a, d * (-0.5 * deficit)), mb = allowedMove(b, d * (0.5 * deficit));
-        // si un sommet est bloqué, l'autre fait tout le chemin (projeté sur sa ligne)
-        if (norm(ma) < 1e-15) {
-          mb = allowedMove(b, d * deficit);
-        } else if (norm(mb) < 1e-15) {
-          ma = allowedMove(a, d * (-deficit));
-        }
-        V pa = pos[a], pb = pos[b];
-        pos[a] += ma;
-        pos[b] += mb;
-        bool ok = true;
-        for (int r : {a, b}) {
-          for (int c : rootCells[r]) {
-            if (!convex(c)) {
-              ok = false;
-            }
-          }
-        }
-        if (!ok) {
-          pos[a] = pa;
-          pos[b] = pb;
-          nStillShort++;
-        } else if (norm(ma) + norm(mb) > 0.0) {
-          moved++;
-          if (pass == 0) {
-            nStretched++;
-          }
-        }
-      }
-      if (moved == 0) {
-        break;
-      }
-    }
-  }
-
-  // 5. Décalage des parois vers l'intérieur : barWidth/2, plus opening/2 le long de la pré-fissure
-  // La fissure s'ouvre entre les sommets de la ligne les plus proches de c0 et de c1 : au-delà de la pointe,
-  // la ligne se poursuit par une interface collée entre deux cellules.
+  // Extrémités de la fissure : sommets de la ligne les plus proches de c0 et de c1. La fissure s'ouvre entre
+  // eux ; leurs sommets (lèvres libres) ne sont pas des jonctions à 4 branches au sens mécanique.
   double startAlong = 0.0, tipAlong = 0.0;
-  if (P.hasCrack) {
+  auto findCrackEnds = [&]() {
     double dS = 1e300, dT = 1e300;
-    for (size_t c = 0; c < poly.size(); c++) {
-      for (int r : poly[c]) {
+    for (auto &ids : poly) {
+      for (int r : ids) {
         if (!(rflags[r] & CRACK)) {
           continue;
         }
@@ -687,6 +483,533 @@ int main(int argc, char *argv[]) {
         }
       }
     }
+  };
+  if (P.hasCrack) {
+    findCrackEnds();
+  }
+  auto onOpenCrack = [&](int r) {
+    const double tol = 1e-6 * spacing;
+    if (!P.hasCrack || !(rflags[r] & CRACK)) {
+      return false;
+    }
+    double a = F.along(pos[r]);
+    return a >= startAlong - tol && a <= tipAlong + tol;
+  };
+
+  std::vector<std::set<int>> vCells(pos.size());
+  for (size_t c = 0; c < poly.size(); c++) {
+    for (int r : poly[c]) {
+      vCells[r].insert((int)c);
+    }
+  }
+  auto center = [&](int c) {
+    V m;
+    for (int r : poly[c]) {
+      m += pos[r];
+    }
+    return m * (1.0 / (double)poly[c].size());
+  };
+  auto sortCell = [&](int c) {
+    V m = center(c);
+    std::sort(poly[c].begin(), poly[c].end(), [&](int a, int b) {
+      return std::atan2(pos[a].y - m.y, pos[a].x - m.x) < std::atan2(pos[b].y - m.y, pos[b].x - m.x);
+    });
+  };
+  auto convex = [&](int c) {
+    auto &ids = poly[c];
+    size_t n = ids.size();
+    double area2 = 0.0;
+    for (size_t k = 0; k < n; k++) {
+      area2 += cross(pos[ids[k]], pos[ids[(k + 1) % n]]);
+    }
+    double sgn = area2 >= 0.0 ? 1.0 : -1.0;
+    for (size_t k = 0; k < n; k++) {
+      V e1 = pos[ids[(k + 1) % n]] - pos[ids[k]];
+      V e2 = pos[ids[(k + 2) % n]] - pos[ids[(k + 1) % n]];
+      if (sgn * cross(e1, e2) < -1e-12 * lRef * lRef || norm(e1) < 1e-3 * lCrit) {
+        return false;
+      }
+    }
+    return true;
+  };
+  // arêtes issues du sommet r toutes au moins égales au seuil
+  auto longEdgesAt = [&](int r) {
+    for (int c : vCells[r]) {
+      auto &ids = poly[c];
+      size_t n = ids.size();
+      for (size_t k = 0; k < n; k++) {
+        if (ids[k] != r) {
+          continue;
+        }
+        if (norm(pos[ids[(k + 1) % n]] - pos[r]) < lCrit * (1.0 - 1e-9) ||
+            norm(pos[ids[(k + n - 1) % n]] - pos[r]) < lCrit * (1.0 - 1e-9)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  // cellules autour du sommet r, dans l'ordre angulaire
+  auto cellsAround = [&](int r) {
+    std::vector<int> cyc(vCells[r].begin(), vCells[r].end());
+    std::vector<double> ang(poly.size());
+    for (int c : cyc) {
+      V d = center(c) - pos[r];
+      ang[c] = std::atan2(d.y, d.x);
+    }
+    std::sort(cyc.begin(), cyc.end(), [&](int a, int b) { return ang[a] < ang[b]; });
+    return cyc;
+  };
+  // Sauvegarde locale (cellules et sommets touchés) pour annuler une opération refusée
+  struct Snapshot {
+    std::map<int, std::vector<int>> polys;
+    std::map<int, std::set<int>> vc;
+    std::map<int, V> p;
+    std::map<int, int> fl;
+  };
+  auto save = [&](const std::vector<int> &cs, const std::vector<int> &rs) {
+    Snapshot S;
+    for (int c : cs) {
+      S.polys[c] = poly[c];
+    }
+    for (int r : rs) {
+      S.vc[r] = vCells[r];
+      S.p[r] = pos[r];
+      S.fl[r] = rflags[r];
+    }
+    return S;
+  };
+  auto restore = [&](const Snapshot &S) {
+    for (auto &kv : S.polys) {
+      poly[kv.first] = kv.second;
+    }
+    for (auto &kv : S.vc) {
+      vCells[kv.first] = kv.second;
+    }
+    for (auto &kv : S.p) {
+      pos[kv.first] = kv.second;
+    }
+    for (auto &kv : S.fl) {
+      rflags[kv.first] = kv.second;
+    }
+  };
+  // Éclatement du sommet v (cellules cyc dans l'ordre angulaire) : v garde cyc[i], cyc[i+1], cyc[i+2] et se
+  // déplace vers cyc[i+1] ; w reçoit les autres cellules plus cyc[i] et cyc[i+2], qui deviennent voisines par
+  // la nouvelle arête [v, w] de longueur len.
+  auto split = [&](int v, int w, const std::vector<int> &cyc, size_t i, double len) {
+    size_t k = cyc.size();
+    int ca = cyc[i], cm = cyc[(i + 1) % k], cb = cyc[(i + 2) % k];
+    V p = pos[v];
+    V u = unit(center(cm) - p);
+    pos[v] = p + u * (0.5 * len);
+    pos[w] = p - u * (0.5 * len);
+    rflags[v] = rflags[w] = 0;
+    vCells[w].clear();
+    for (int c : cyc) {
+      if (c == ca || c == cm || c == cb) {
+        continue;
+      }
+      std::replace(poly[c].begin(), poly[c].end(), v, w);
+      vCells[v].erase(c);
+      vCells[w].insert(c);
+    }
+    for (int c : {ca, cb}) {
+      poly[c].push_back(w);
+      vCells[w].insert(c);
+    }
+    for (int c : cyc) {
+      sortCell(c);
+    }
+  };
+
+  // Éclate le sommet v, puis les sommets créés, jusqu'à ce qu'ils aient tous 3 branches. Chaque éclatement
+  // préfère rendre voisines les cellules qui ont le moins de côtés et refuse une cellule non convexe ; il
+  // respecte si possible le seuil sur les arêtes créées (sinon l'étirement complétera). Renvoie le nombre
+  // d'éclatements, ou -1 en cas d'échec (l'état est alors partiellement modifié). noise : part aléatoire du
+  // choix (petite : départage des égalités ; grande : essais successifs d'autres éclatements).
+  std::uniform_real_distribution<double> uTie(0.0, 1.0);
+  auto explode = [&](int v0, double noise) {
+    int nDone = 0;
+    std::vector<int> todo = {v0};
+    while (!todo.empty()) {
+      int v = todo.back();
+      todo.pop_back();
+      if (vCells[v].size() < 4) {
+        continue;
+      }
+      std::vector<int> cyc = cellsAround(v);
+      size_t k = cyc.size();
+      std::vector<std::pair<double, size_t>> order;
+      for (size_t i = 0; i < k; i++) {
+        order.push_back({(double)(poly[cyc[i]].size() + poly[cyc[(i + 2) % k]].size()) + noise * uTie(rng), i});
+      }
+      std::sort(order.begin(), order.end());
+      int w = (int)pos.size();
+      pos.emplace_back();
+      rflags.push_back(0);
+      vCells.emplace_back();
+      // passe 0 : arêtes au seuil respectées ; passes 1 à 3 : seulement convexe, avec une arête créée de plus en
+      // plus courte (petites arêtes voisines), que l'étirement allongera ensuite
+      int done = -1;
+      for (int pass = 0; pass < 4 && done < 0; pass++) {
+        double len = pass <= 1 ? lT1 : (pass == 2 ? 0.5 * lT1 : 0.25 * lT1);
+        for (auto &o : order) {
+          Snapshot S = save(cyc, {v, w});
+          split(v, w, cyc, o.second, len);
+          bool ok = std::all_of(cyc.begin(), cyc.end(), [&](int c) { return convex(c); });
+          if (ok && (pass >= 1 || (longEdgesAt(v) && longEdgesAt(w)))) {
+            done = pass;
+            break;
+          }
+          restore(S);
+        }
+      }
+      if (done < 0) {
+        pos.pop_back();
+        rflags.pop_back();
+        vCells.pop_back();
+        return -1;
+      }
+      nDone++;
+      todo.push_back(v);
+      todo.push_back(w);
+    }
+    return nDone;
+  };
+
+  // 4a. Sommets à 4 branches ou plus (hors extrémités et lèvres de la fissure). Un échec est retenté après
+  //     chaque tour de traitement des arêtes courtes.
+  size_t nSplit = 0, nSplitFailed = 0;
+  auto explodeAll = [&]() {
+    nSplitFailed = 0;
+    for (int v = 0, nv = (int)pos.size(); v < nv; v++) {
+      if (vCells[v].size() >= 4 && !onOpenCrack(v) && (rflags[v] & ~CRACK) == 0) {
+        int n = explode(v, 0.5);
+        if (n < 0) {
+          nSplitFailed++;
+        } else {
+          nSplit += (size_t)n;
+        }
+      }
+    }
+  };
+  explodeAll();
+
+  // arêtes sous le seuil, de la plus courte à la plus longue
+  auto collectShort = [&]() {
+    std::set<std::pair<int, int>> E;
+    for (auto &ids : poly) {
+      for (size_t k = 0; k < ids.size(); k++) {
+        int a = ids[k], b = ids[(k + 1) % ids.size()];
+        E.insert({std::min(a, b), std::max(a, b)});
+      }
+    }
+    std::vector<std::pair<double, std::pair<int, int>>> shortEdges;
+    for (auto &e : E) {
+      double l = norm(pos[e.second] - pos[e.first]);
+      if (l < lCrit * (1.0 - 1e-9)) {
+        shortEdges.push_back({l, e});
+      }
+    }
+    std::sort(shortEdges.begin(), shortEdges.end());
+    return shortEdges;
+  };
+  // nombre d'arêtes sous le seuil et longueur minimale des arêtes des cellules cs (hors arête [ea, eb])
+  auto localEdges = [&](const std::vector<int> &cs, int ea, int eb) {
+    size_t nShort = 0;
+    double lMin = std::numeric_limits<double>::max();
+    for (int c : cs) {
+      auto &ids = poly[c];
+      for (size_t k = 0; k < ids.size(); k++) {
+        int a = ids[k], b = ids[(k + 1) % ids.size()];
+        if ((a == ea && b == eb) || (a == eb && b == ea)) {
+          nShort++;
+          continue;
+        }
+        double l = norm(pos[b] - pos[a]);
+        lMin = std::min(lMin, l);
+        if (l < lCrit * (1.0 - 1e-9)) {
+          nShort++;
+        }
+      }
+    }
+    return std::make_pair(nShort, lMin);
+  };
+
+  // 4b. Arêtes courtes intérieures : transition T1 si les deux cellules qui perdent un côté en gardent au moins
+  //     minSides et restent convexes, et si la transition réduit le nombre d'arêtes courtes de ces cellules sans
+  //     raccourcir leur plus petite arête (des arêtes courtes voisines sont traitées l'une après l'autre).
+  //     Les transitions T1, l'étirement (4bis), la contraction des amas (4c) et l'éclatement des sommets restants
+  //     (4a) alternent jusqu'à ce que le nombre de défauts ne diminue plus.
+  size_t nT1 = 0, nShortInitial = 0, nStretched = 0, nCluster = 0;
+  size_t nDefectsPrev = std::numeric_limits<size_t>::max();
+  for (int round = 0; round < 8; round++) {
+    for (int pass = 0; pass < 10; pass++) {
+      std::vector<std::pair<double, std::pair<int, int>>> shortEdges = collectShort();
+      if (round == 0 && pass == 0) {
+        nShortInitial = shortEdges.size();
+      }
+      size_t done = 0;
+      for (auto &se : shortEdges) {
+        int a = se.second.first, b = se.second.second;
+        if (norm(pos[b] - pos[a]) >= lCrit * (1.0 - 1e-9) || rflags[a] || rflags[b] || vCells[a].size() != 3 ||
+            vCells[b].size() != 3) {
+          continue;
+        }
+        std::vector<int> LR, U, D;
+        for (int c : vCells[a]) {
+          (vCells[b].count(c) ? LR : U).push_back(c);
+        }
+        for (int c : vCells[b]) {
+          if (!vCells[a].count(c)) {
+            D.push_back(c);
+          }
+        }
+        if (LR.size() != 2 || U.size() != 1 || D.size() != 1 || U[0] == D[0]) {
+          continue;
+        }
+        if ((int)poly[LR[0]].size() - 1 < std::max(3, P.minSides) ||
+            (int)poly[LR[1]].size() - 1 < std::max(3, P.minSides)) {
+          continue;
+        }
+        std::vector<int> four = {LR[0], LR[1], U[0], D[0]};
+        auto before = localEdges(four, a, b);
+        Snapshot S = save(four, {a, b});
+        // contraction de [a, b] en a (sommet provisoire à 4 branches), puis éclatement dans l'autre sens
+        pos[a] = (pos[a] + pos[b]) * 0.5;
+        for (int c : LR) {
+          poly[c].erase(std::remove(poly[c].begin(), poly[c].end(), b), poly[c].end());
+        }
+        std::replace(poly[D[0]].begin(), poly[D[0]].end(), b, a);
+        vCells[a] = {LR[0], LR[1], U[0], D[0]};
+        vCells[b].clear();
+        std::vector<int> cyc = cellsAround(a);
+        size_t iU = std::find(cyc.begin(), cyc.end(), U[0]) - cyc.begin();
+        bool ok = cyc.size() == 4 && cyc[(iU + 2) % 4] == D[0];
+        if (ok) {
+          split(a, b, cyc, iU, lT1);
+          auto after = localEdges(four, -1, -1);
+          ok = std::all_of(four.begin(), four.end(), [&](int c) { return convex(c); }) && after.first < before.first &&
+               after.second >= std::min(lCrit, before.second) * (1.0 - 1e-9);
+        }
+        if (!ok) {
+          restore(S);
+          continue;
+        }
+        nT1++;
+        done++;
+      }
+      if (done == 0) {
+        break;
+      }
+    }
+
+    // 4bis. Arêtes encore trop courtes (T1 refusée ou impossible) : leurs deux sommets sont écartés
+    //       le long de l'arête jusqu'à 1.02 fois le seuil, ce qui conserve le nombre de côtés. Un sommet de bord ne se
+    //       déplace que le long du bord, un sommet de la fissure le long de la fissure, un coin reste fixe ; un
+    //       déplacement qui rendrait une cellule voisine non convexe est annulé.
+    {
+      std::vector<std::vector<int>> rootCells(pos.size());
+      for (size_t c = 0; c < poly.size(); c++) {
+        for (int r : poly[c]) {
+          rootCells[r].push_back((int)c);
+        }
+      }
+      auto allowedMove = [&](int r, V d) {
+        int f = rflags[r];
+        int nb = 0;
+        for (int b : {LEFT, RIGHT, BOTTOM, TOP, CRACK}) {
+          if (f & b) {
+            nb++;
+          }
+        }
+        if (nb >= 2) {
+          return V(0.0, 0.0);
+        }
+        if (f & (LEFT | RIGHT)) {
+          return V(0.0, d.y);
+        }
+        if (f & (BOTTOM | TOP)) {
+          return V(d.x, 0.0);
+        }
+        if (f & CRACK) {
+          return F.t * dot(d, F.t);
+        }
+        return d;
+      };
+      for (int pass = 0; pass < 20; pass++) {
+        std::set<std::pair<int, int>> E;
+        for (auto &ids : poly) {
+          for (size_t k = 0; k < ids.size(); k++) {
+            int a = ids[k], b = ids[(k + 1) % ids.size()];
+            E.insert({std::min(a, b), std::max(a, b)});
+          }
+        }
+        size_t moved = 0;
+        for (auto &e : E) {
+          int a = e.first, b = e.second;
+          double l = norm(pos[b] - pos[a]);
+          if (l >= lCrit * (1.0 - 1e-9)) {
+            continue;
+          }
+          V d = unit(pos[b] - pos[a]);
+          double deficit = 1.02 * lCrit - l; // marge : deux arêtes courtes voisines ne se raccourcissent plus en alternance
+          V ma = allowedMove(a, d * (-0.5 * deficit)), mb = allowedMove(b, d * (0.5 * deficit));
+          // si un sommet est bloqué, l'autre fait tout le chemin (projeté sur sa ligne)
+          if (norm(ma) < 1e-15) {
+            mb = allowedMove(b, d * deficit);
+          } else if (norm(mb) < 1e-15) {
+            ma = allowedMove(a, d * (-deficit));
+          }
+          V pa = pos[a], pb = pos[b];
+          pos[a] += ma;
+          pos[b] += mb;
+          bool ok = true;
+          for (int r : {a, b}) {
+            for (int c : rootCells[r]) {
+              if (!convex(c)) {
+                ok = false;
+              }
+            }
+          }
+          if (!ok) {
+            pos[a] = pa;
+            pos[b] = pb;
+            } else if (norm(ma) + norm(mb) > 0.0) {
+            moved++;
+            if (pass == 0) {
+              nStretched++;
+            }
+          }
+        }
+        if (moved == 0) {
+          break;
+        }
+      }
+    }
+    // 4c. Amas d'arêtes courtes voisines (aucune T1 isolée acceptable, étirement bloqué) : l'amas est contracté
+    //     en un sommet, aussitôt éclaté en sommets à 3 branches. Accepté s'il réduit le nombre d'arêtes courtes
+    //     sans faire passer une cellule sous minSides côtés (ni sous son nombre de côtés initial s'il est plus
+    //     petit).
+    for (auto &se : collectShort()) {
+      int a = se.second.first, b = se.second.second;
+      if (norm(pos[b] - pos[a]) >= lCrit * (1.0 - 1e-9)) {
+        continue;
+      }
+      std::vector<int> Q = {a};
+      std::set<int> inQ = {a};
+      bool okQ = true;
+      for (size_t qi = 0; qi < Q.size() && okQ; qi++) {
+        int r = Q[qi];
+        if (rflags[r] || vCells[r].size() != 3) {
+          okQ = false;
+          break;
+        }
+        for (int c : vCells[r]) {
+          auto &ids = poly[c];
+          size_t n = ids.size();
+          for (size_t k = 0; k < n; k++) {
+            if (ids[k] != r) {
+              continue;
+            }
+            for (int q : {ids[(k + 1) % n], ids[(k + n - 1) % n]}) {
+              if (!inQ.count(q) && norm(pos[q] - pos[r]) < 1.1 * lCrit) { // voisines tout juste au seuil comprises
+                inQ.insert(q);
+                Q.push_back(q);
+              }
+            }
+          }
+        }
+      }
+      if (!okQ || Q.size() > 6) {
+        continue;
+      }
+      std::set<int> cs;
+      for (int r : Q) {
+        cs.insert(vCells[r].begin(), vCells[r].end());
+      }
+      std::vector<int> cl(cs.begin(), cs.end());
+      auto before = localEdges(cl, -1, -1);
+      std::map<int, size_t> sidesBefore;
+      for (int c : cl) {
+        sidesBefore[c] = poly[c].size();
+      }
+      const size_t nPos = pos.size();
+      Snapshot S = save(cl, Q);
+      bool ok = false;
+      for (int attempt = 0; attempt < 30 && !ok; attempt++) {
+        if (attempt > 0) {
+          restore(S);
+          pos.resize(nPos);
+          rflags.resize(nPos);
+          vCells.resize(nPos);
+        }
+        int r0 = Q[0];
+        V m;
+        for (int r : Q) {
+          m += pos[r];
+        }
+        pos[r0] = m * (1.0 / (double)Q.size());
+        ok = true;
+        for (int c : cl) {
+          std::vector<int> ids;
+          for (int r : poly[c]) {
+            int rr = inQ.count(r) ? r0 : r;
+            if (ids.empty() || ids.back() != rr) {
+              ids.push_back(rr);
+            }
+          }
+          while (ids.size() > 1 && ids.front() == ids.back()) {
+            ids.pop_back();
+          }
+          if (ids.size() < 3 || std::count(ids.begin(), ids.end(), r0) > 1) {
+            ok = false;
+          }
+          poly[c] = ids;
+        }
+        if (!ok) {
+          break; // contraction impossible : inutile d'essayer d'autres éclatements
+        }
+        for (int r : Q) {
+          vCells[r].clear();
+        }
+        vCells[r0] = cs;
+        ok = explode(r0, attempt == 0 ? 0.5 : 4.0) >= 0;
+        if (ok) {
+          auto after = localEdges(cl, -1, -1);
+          ok = std::all_of(cl.begin(), cl.end(), [&](int c) { return convex(c); }) && after.first < before.first;
+          for (int c : cl) {
+            if (poly[c].size() < std::min(sidesBefore[c], (size_t)std::max(3, P.minSides))) {
+              ok = false;
+            }
+          }
+        }
+      }
+      if (!ok) {
+        restore(S);
+        pos.resize(nPos);
+        rflags.resize(nPos);
+        vCells.resize(nPos);
+        continue;
+      }
+      nCluster++;
+    }
+
+    if (nSplitFailed > 0) {
+      explodeAll();
+    }
+    size_t nDefects = collectShort().size() + nSplitFailed; // arêtes courtes + sommets non éclatés
+    if (nDefects == 0 || nDefects >= nDefectsPrev) {
+      break;
+    }
+    nDefectsPrev = nDefects;
+  }
+
+  // 5. Décalage des parois vers l'intérieur : barWidth/2, plus opening/2 le long de la pré-fissure
+  // La fissure s'ouvre entre les sommets de la ligne les plus proches de c0 et de c1 : au-delà de la pointe,
+  // la ligne se poursuit par une interface collée entre deux cellules.
+  if (P.hasCrack) {
+    findCrackEnds(); // l'étirement a pu déplacer les extrémités le long de la fissure
   }
   auto isCrackEdge = [&](int a, int b) {
     if (!P.hasCrack || !(rflags[a] & CRACK) || !(rflags[b] & CRACK)) {
@@ -747,6 +1070,40 @@ int main(int argc, char *argv[]) {
   }
 
   writeNodeFile(P.output, cells);
+
+  // Contrôle final : nombre de branches de chaque sommet du pavage (arêtes issues du sommet, bords compris) et
+  // arêtes sous le seuil. Seuls les sommets de la fissure ouverte (lèvres libres et extrémités) peuvent avoir
+  // 4 branches.
+  std::map<int, size_t> degreeHist;
+  std::vector<V> badJunctions;
+  size_t nShortFinal = 0, nCrackJunctions = 0;
+  {
+    std::set<std::pair<int, int>> E;
+    for (auto &ids : poly) {
+      for (size_t k = 0; k < ids.size() && ids.size() >= 3; k++) {
+        int a = ids[k], b = ids[(k + 1) % ids.size()];
+        E.insert({std::min(a, b), std::max(a, b)});
+      }
+    }
+    std::map<int, int> degree;
+    for (auto &e : E) {
+      degree[e.first]++;
+      degree[e.second]++;
+      if (norm(pos[e.second] - pos[e.first]) < lCrit * (1.0 - 1e-6)) {
+        nShortFinal++;
+      }
+    }
+    for (auto &kv : degree) {
+      degreeHist[kv.second]++;
+      if (kv.second >= 4) {
+        if (onOpenCrack(kv.first)) {
+          nCrackJunctions++;
+        } else {
+          badJunctions.push_back(pos[kv.first]);
+        }
+      }
+    }
+  }
 
   // Mors : hauteur des boîtes de contrôle. Les rangées de noeuds sont définies topologiquement : la rangée 1 est
   // formée des sommets du bord, la rangée k des sommets à k-1 barres du bord. Une boîte ne sélectionne que par
@@ -848,7 +1205,18 @@ int main(int argc, char *argv[]) {
   ViewOptions vo;
   vo.barWidth = P.barWidth;
   vo.distGlue = P.distGlue;
-  vo.shortRatio = 0.3;
+  // barres courtes : celles dont l'arête du pavage (avant décalage des parois, qui les raccourcit d'environ barWidth)
+  // est sous le seuil, comme dans le contrôle final ; une arête étirée tout juste au seuil n'est pas signalée
+  vo.shortLength = lCrit;
+  vo.shortBars.resize(cells.size());
+  for (size_t c = 0; c < cells.size(); c++) {
+    auto &ids = cellRoots[c];
+    size_t n = ids.size();
+    vo.shortBars[c].assign(n, 0);
+    for (size_t k = 0; k < n; k++) {
+      vo.shortBars[c][k] = norm(pos[ids[(k + 1) % n]] - pos[ids[k]]) < lCrit * (1.0 - 1e-6);
+    }
+  }
   vo.title = "nodegen : " + P.output;
   if (P.hasCrack) {
     vo.guides.push_back({P.c0, P.c1});
@@ -860,13 +1228,19 @@ int main(int argc, char *argv[]) {
   std::cout << "  domaine           : [" << P.xmin << ", " << P.xmin + P.Lx << "] x [" << P.ymin << ", "
             << P.ymin + P.Ly << "]\n";
   std::cout << "  cellules          : " << st.nCells << " (visé " << N << "), noeuds : " << st.nNodes << "\n";
-  std::cout << "  arêtes fusionnées : " << nMerged << " (" << nRefused << " refusées : minSides), seuil "
-            << P.minEdgeRatio << " x " << eMean << "\n";
-  std::cout << "  arêtes étirées    : " << nStretched << " (fusion refusée pour garder >= " << P.minSides
-            << " côtés)" << (nStillShort ? ", " + std::to_string(nStillShort) + " encore trop courtes" : std::string())
-            << "\n";
+  std::cout << "  arêtes courtes    : " << nShortInitial << " sous le seuil " << P.minEdgeFactor << " x lRef = " << lCrit
+            << " (lRef = sqrt(Lx Ly / " << nCellsTiling << ") = " << lRef << ")\n";
+  std::cout << "                      " << nT1 << " T1 (longueur " << lT1 << "), " << nStretched << " étirées, " << nCluster
+            << " amas contractés puis éclatés\n";
+  std::cout << "  sommets éclatés   : " << nSplit << " (4 branches ou plus)"
+            << (nSplitFailed ? ", " + std::to_string(nSplitFailed) + " échecs" : std::string()) << "\n";
+  std::cout << "  branches/sommet   : ";
+  for (auto &kv : degreeHist) {
+    std::cout << kv.first << ": " << kv.second << "  ";
+  }
+  std::cout << "(" << nCrackJunctions << " sur la fissure ouverte, extrémités comprises)\n";
   std::cout << "  barres            : l_moy = " << st.lMean << ", l_min = " << st.lMin
-            << " (l_min/l_moy = " << st.lMin / st.lMean << ")\n";
+            << " (l_min/l_moy = " << st.lMin / st.lMean << ", l_min/lRef = " << st.lMin / lRef << ")\n";
   {
     // cellules intérieures : aucun sommet sur le bord du domaine (les cellules de bord sont coupées par le rectangle)
     MeshStats inner;
@@ -880,8 +1254,8 @@ int main(int argc, char *argv[]) {
         inner.nCells++;
       }
     }
-    std::cout << "  côtés             : " << sidesHistogram(st) << "\n";
-    std::cout << "  côtés (intérieur) : " << sidesHistogram(inner) << "(" << inner.nCells << " cellules)\n";
+    std::cout << "  cellules par nombre de côtés (intérieures : sans sommet sur le bord du domaine) :\n"
+              << sidesTable({{"toutes", st}, {"intérieures", inner}}, "      ");
   }
   std::cout << "  parois            : " << st.nGlued << " collées, " << st.nFree << " libres (bords + fissure)\n";
   if (P.hasCrack) {
@@ -892,6 +1266,13 @@ int main(int argc, char *argv[]) {
   }
   if (nBad > 0) {
     std::cout << "  ATTENTION         : " << nBad << " cellule(s) retournée(s) par le décalage des parois\n";
+  }
+  if (!badJunctions.empty()) {
+    std::cout << "  ERREUR            : " << badJunctions.size() << " sommet(s) à 4 branches ou plus, ex. ("
+              << badJunctions[0].x << ", " << badJunctions[0].y << ")\n";
+  }
+  if (nShortFinal > 0) {
+    std::cout << "  ERREUR            : " << nShortFinal << " arête(s) encore sous le seuil " << lCrit << "\n";
   }
   std::cout << "  fichiers          : " << P.output << ", " << P.svg << ", " << P.input << "\n";
   // 6. Lignes d'input l-hyphen
@@ -1124,5 +1505,9 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  if (!badJunctions.empty() || nShortFinal > 0) {
+    std::cerr << "nodegen : maillage non conforme (sommets à 4 branches ou arêtes courtes), voir ci-dessus\n";
+    return 2;
+  }
   return 0;
 }
