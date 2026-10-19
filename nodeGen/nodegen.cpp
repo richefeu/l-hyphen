@@ -10,7 +10,12 @@
 // rapport à cette ligne, de sorte que la fissure suit exactement des arêtes du pavage. Les parois le long
 // de la fissure sont décalées de opening/2 en plus : l'écart barWidth + opening empêche le collage.
 //
-// Usage : nodegen params.txt      (voir README.md et example/params.txt)
+// Tissu végétal (Trivino, PlantCom) : une fraction des germes sont des bundles
+// (faisceaux vasculaires) ; à chaque itération de Lloyd, les autres germes vont en p' = (c + alpha b)/(1 + alpha),
+// c centroïde de leur cellule, b bundle le plus proche au sens de Mahalanobis (matrice Sigma, anisotropie K).
+// C'est une descente de la fonctionnelle E = E_CVL - alpha E_att de l'article.
+//
+// Usage : nodegen params.txt      (voir README.md, example/params.txt et exampleTissu/params.txt)
 
 #include "common.hpp"
 
@@ -54,6 +59,17 @@ struct Params {
   bool hasGlueProps{false};
   double knCoh{0}, ktCoh{0}, Gc{0};
   double nodeMass{-1.0};     // pour estimer le pas de temps critique de flexion
+  // Tissu végétal (Trivino et al., morphogenèse de Voronoï variationnelle) : à chaque itération de Lloyd, le
+  // germe d'une cellule ordinaire est placé en p' = (c + alpha b) / (1 + alpha), où c est le centroïde de sa
+  // cellule et b le bundle (faisceau vasculaire) le plus proche au sens de la distance de Mahalanobis de
+  // matrice Sigma.
+  double alpha{0.0};                      // intensité de l'attraction vers les bundles (0 : Lloyd pur)
+  double sxx{1.0}, sxy{0.0}, syy{1.0};    // matrice de covariance Sigma (identité : distance euclidienne)
+  double bundleFraction{0.0};             // fraction des germes tirés au hasard comme bundles
+  std::vector<V> bundleAt;                // bundles imposés : germe le plus proche de chaque point
+  std::string bundleMotion{"lloyd"};      // déplacement des bundles : lloyd, fixed ou attract
+  std::string bundleOutput{"bundles.txt"}; // identifiants des cellules bundles (ceux du nodeFile)
+  std::string morphology;                 // fichier (ajout d'une ligne) des métriques morphologiques
 };
 
 static Params readParams(const std::string &name) {
@@ -129,6 +145,34 @@ static Params readParams(const std::string &name) {
       is >> p.knCoh >> p.ktCoh >> p.Gc;
       p.hasGlueProps = true;
     } else if (k == "nodeMass") is >> p.nodeMass;
+    else if (k == "alpha") is >> p.alpha;
+    else if (k == "anisotropy") {
+      // Sigma = K u u^T + v v^T : u axe des colonnes (angle en degrés depuis l'axe x, 90 par défaut, soit
+      // Sigma = diag(1, K) comme dans l'article), v axe perpendiculaire
+      double K = 1.0, deg = 90.0;
+      is >> K;
+      if (!(is >> deg)) {
+        deg = 90.0;
+        is.clear();
+      }
+      double th = deg * M_PI / 180.0, c = std::cos(th), s = std::sin(th);
+      p.sxx = K * c * c + s * s;
+      p.syy = K * s * s + c * c;
+      p.sxy = (K - 1.0) * c * s;
+      for (double *v : {&p.sxx, &p.sxy, &p.syy}) { // arrondis de cos(90°)
+        if (std::fabs(*v) < 1e-12 * std::max(1.0, K)) {
+          *v = 0.0;
+        }
+      }
+    } else if (k == "sigma") is >> p.sxx >> p.sxy >> p.syy;
+    else if (k == "bundleFraction") is >> p.bundleFraction;
+    else if (k == "bundle") {
+      V b;
+      is >> b.x >> b.y;
+      p.bundleAt.push_back(b);
+    } else if (k == "bundleMotion") is >> p.bundleMotion;
+    else if (k == "bundleOutput") is >> p.bundleOutput;
+    else if (k == "morphology") is >> p.morphology;
     else {
       std::cerr << "Mot-clé inconnu : " << k << "\n";
       std::exit(1);
@@ -137,6 +181,25 @@ static Params readParams(const std::string &name) {
       std::cerr << "Valeur invalide pour " << k << "\n";
       std::exit(1);
     }
+  }
+  if (p.lattice == "poisson") {
+    p.lattice = "random";
+  }
+  if (p.lattice != "hex" && p.lattice != "square" && p.lattice != "random" && p.lattice != "uniform") {
+    std::cerr << "lattice : " << p.lattice << " inconnu (hex, square, random/poisson, uniform)\n";
+    std::exit(1);
+  }
+  if (p.bundleMotion != "lloyd" && p.bundleMotion != "fixed" && p.bundleMotion != "attract") {
+    std::cerr << "bundleMotion : " << p.bundleMotion << " inconnu (lloyd, fixed, attract)\n";
+    std::exit(1);
+  }
+  if (p.sxx <= 0.0 || p.syy <= 0.0 || p.sxx * p.syy - p.sxy * p.sxy <= 0.0) {
+    std::cerr << "sigma / anisotropy : la matrice de covariance doit être définie positive\n";
+    std::exit(1);
+  }
+  if (p.alpha < 0.0 || p.bundleFraction < 0.0 || p.bundleFraction > 1.0) {
+    std::cerr << "alpha doit être positif et bundleFraction compris entre 0 et 1\n";
+    std::exit(1);
   }
   return p;
 }
@@ -173,21 +236,46 @@ static bool inside(const Params &P, const V &q) {
 
 // Rend les germes symétriques par rapport à la ligne de fissure dans une bande autour de celle-ci :
 // les germes du côté n < 0 sont supprimés, ceux du côté n >= 0 sont dupliqués par symétrie.
-static std::vector<V> symmetrize(const std::vector<V> &seeds, const Params &P, const CrackFrame &F, double band,
-                                 double ext, double rmin) {
+// tag (bundle ou non) suit les germes ; un bundle supprimé côté n < 0 transmet son statut au germe du côté
+// n >= 0 le plus proche de son symétrique, pour que la paire symétrique reste un bundle.
+static void symmetrize(std::vector<V> &seeds, std::vector<char> &tag, const Params &P, const CrackFrame &F,
+                       double band, double ext, double rmin) {
   if (!P.hasCrack) {
-    return seeds;
+    return;
   }
-  std::vector<V> out;
-  for (V s : seeds) {
+  // la symétrie est prolongée au-delà de la pointe : la ligne de fissure s'y continue par une interface
+  // collée entre deux cellules (la fissure ne bute pas sur une cellule)
+  auto inBand = [&](const V &s) {
     double a = F.along(s), nn = F.normal(s);
-    // la symétrie est prolongée au-delà de la pointe : la ligne de fissure s'y continue par une interface
-    // collée entre deux cellules (la fissure ne bute pas sur une cellule)
-    bool inBand = a >= -ext && a <= F.L + ext && std::fabs(nn) < band;
-    if (!inBand) {
-      out.push_back(s);
+    return a >= -ext && a <= F.L + ext && std::fabs(nn) < band;
+  };
+  for (size_t i = 0; i < seeds.size(); i++) {
+    if (!tag[i] || !inBand(seeds[i]) || F.normal(seeds[i]) >= 0.0) {
       continue;
     }
+    V mirror = seeds[i] - F.n * (2.0 * F.normal(seeds[i]));
+    int best = -1;
+    double dBest = 1e300;
+    for (size_t j = 0; j < seeds.size(); j++) {
+      if (inBand(seeds[j]) && F.normal(seeds[j]) >= 0.0 && norm(seeds[j] - mirror) < dBest) {
+        dBest = norm(seeds[j] - mirror);
+        best = (int)j;
+      }
+    }
+    if (best >= 0) {
+      tag[best] = 1;
+    }
+  }
+  std::vector<V> out;
+  std::vector<char> outTag;
+  for (size_t i = 0; i < seeds.size(); i++) {
+    V s = seeds[i];
+    if (!inBand(s)) {
+      out.push_back(s);
+      outTag.push_back(tag[i]);
+      continue;
+    }
+    double a = F.along(s), nn = F.normal(s);
     if (nn < 0.0) {
       continue;
     }
@@ -197,9 +285,46 @@ static std::vector<V> symmetrize(const std::vector<V> &seeds, const Params &P, c
     if (inside(P, up) && inside(P, down)) {
       out.push_back(up);
       out.push_back(down);
+      outTag.push_back(tag[i]);
+      outTag.push_back(tag[i]);
     }
   }
-  return out;
+  seeds = out;
+  tag = outTag;
+}
+
+// ======================================================================================================
+// Attraction vers les bundles (distance de Mahalanobis)
+// ======================================================================================================
+
+// Carré de la distance de Mahalanobis d² = u^T Sigma^-1 u, avec Sigma = [[sxx, sxy], [sxy, syy]]
+struct Mahalanobis {
+  double ixx{1.0}, ixy{0.0}, iyy{1.0}; // Sigma^-1
+  explicit Mahalanobis(const Params &P) {
+    double det = P.sxx * P.syy - P.sxy * P.sxy;
+    ixx = P.syy / det;
+    ixy = -P.sxy / det;
+    iyy = P.sxx / det;
+  }
+  double d2(const V &u) const { return ixx * u.x * u.x + 2.0 * ixy * u.x * u.y + iyy * u.y * u.y; }
+};
+
+// Indice du bundle le plus proche de q au sens de Mahalanobis (exclude : bundle à ignorer, -1 si aucun)
+static int nearestBundle(const V &q, const std::vector<V> &seeds, const std::vector<int> &bundles,
+                         const Mahalanobis &M, int exclude = -1) {
+  int best = -1;
+  double dBest = 1e300;
+  for (int b : bundles) {
+    if (b == exclude) {
+      continue;
+    }
+    double d = M.d2(seeds[b] - q);
+    if (d < dBest) {
+      dBest = d;
+      best = b;
+    }
+  }
+  return best;
 }
 
 // ======================================================================================================
@@ -298,11 +423,12 @@ int main(int argc, char *argv[]) {
   std::mt19937_64 rng(P.seed);
   std::uniform_real_distribution<double> ux(P.xmin, P.xmin + P.Lx), uy(P.ymin, P.ymin + P.Ly);
   std::vector<V> seeds;
-  if (P.lattice == "hex") {
-    // Réseau hexagonal (cellules de même aire que cellSize), orienté selon la fissure : les rangées sont
-    // parallèles à la fissure, symétriques par rapport à elle, et un sommet tombe sur la pointe.
-    const double a = std::sqrt(2.0 * cellArea / std::sqrt(3.0));
-    const double dy = 0.5 * std::sqrt(3.0) * a;
+  if (P.lattice == "hex" || P.lattice == "square") {
+    // Réseau hexagonal ou carré (cellules de même aire que cellSize), orienté selon la fissure : les rangées
+    // sont parallèles à la fissure, symétriques par rapport à elle, et un sommet tombe sur la pointe.
+    const bool hex = P.lattice == "hex";
+    const double a = hex ? std::sqrt(2.0 * cellArea / std::sqrt(3.0)) : std::sqrt(cellArea);
+    const double dy = hex ? 0.5 * std::sqrt(3.0) * a : a;
     V o = P.hasCrack ? F.o : V(P.xmin, P.ymin);
     V t = P.hasCrack ? F.t : V(1.0, 0.0);
     V n = P.hasCrack ? F.n : V(0.0, 1.0);
@@ -323,7 +449,7 @@ int main(int argc, char *argv[]) {
         // une interface rectiligne qui serait un chemin de rupture privilégié.
         double a0 = L + ((double)i + 0.5) * a;
         bool mirrored = P.hasCrack && a0 >= -ext && a0 <= L + ext;
-        long parity = mirrored ? ((k >= 0) ? k : -k - 1) % 2 : ((k % 2) + 2) % 2;
+        long parity = !hex ? 0 : mirrored ? ((k >= 0) ? k : -k - 1) % 2 : ((k % 2) + 2) % 2;
         double ak = a0 + (double)parity * 0.5 * a; // sommets du réseau sur la ligne en L + i*a
         double r = P.disorder * a * std::sqrt(u01(rng)), th = 2.0 * M_PI * u01(rng);
         V q = o + t * (ak + r * std::cos(th)) + n * (nk + r * std::sin(th));
@@ -331,6 +457,11 @@ int main(int argc, char *argv[]) {
           seeds.push_back(q);
         }
       }
+    }
+  } else if (P.lattice == "uniform") {
+    // Tirage uniforme (processus de Poisson, sans distance minimale)
+    for (size_t i = 0; i < N; i++) {
+      seeds.emplace_back(ux(rng), uy(rng));
     }
   } else {
     // Tirage avec distance minimale rmin (puis complément aléatoire si besoin)
@@ -363,18 +494,68 @@ int main(int argc, char *argv[]) {
       seeds.emplace_back(ux(rng), uy(rng));
     }
   }
-  seeds = symmetrize(seeds, P, F, band, ext, rmin);
+  std::vector<char> isBundle(seeds.size(), 0);
+  symmetrize(seeds, isBundle, P, F, band, ext, rmin);
 
-  // 2. Régularisation de Lloyd (la symétrie autour de la fissure est rétablie à chaque itération)
+  // 1bis. Bundles (faisceaux vasculaires) : une fraction bundleFraction des germes, tirés au hasard, plus les
+  //       germes les plus proches des points imposés par 'bundle x y'
+  if (P.bundleFraction > 0.0) {
+    std::vector<int> idx(seeds.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+      idx[i] = (int)i;
+    }
+    std::shuffle(idx.begin(), idx.end(), rng);
+    size_t nb = std::min(idx.size(), (size_t)std::llround(P.bundleFraction * (double)seeds.size()));
+    for (size_t i = 0; i < nb; i++) {
+      isBundle[idx[i]] = 1;
+    }
+  }
+  for (const V &b : P.bundleAt) {
+    int best = -1;
+    double dBest = 1e300;
+    for (size_t i = 0; i < seeds.size(); i++) {
+      if (norm(seeds[i] - b) < dBest) {
+        dBest = norm(seeds[i] - b);
+        best = (int)i;
+      }
+    }
+    if (best >= 0) {
+      isBundle[best] = 1;
+    }
+  }
+  symmetrize(seeds, isBundle, P, F, band, ext, rmin);
+
+  // 2. Régularisation de Lloyd (la symétrie autour de la fissure est rétablie à chaque itération).
+  //    Avec des bundles et alpha > 0, c'est l'itération de point fixe de l'article : chaque germe ordinaire va au
+  //    centroïde c de sa cellule, déplacé vers le bundle b le plus proche (Mahalanobis) d'une fraction
+  //    alpha / (1 + alpha) du segment [c, b] :  p' = (c + alpha b) / (1 + alpha).
+  //    Les bundles suivent bundleMotion : 'lloyd' (centroïde), 'fixed' (immobiles) ou 'attract' (attirés comme
+  //    les autres germes, vers le bundle le plus proche autre qu'eux-mêmes).
+  //    Les positions des bundles sont celles du début de l'itération (mise à jour simultanée de tous les germes).
+  const Mahalanobis maha(P);
   std::vector<Polygon> vor;
   for (int it = 0; it < P.lloydIterations; it++) {
     vor = voronoi(seeds, P, spacing);
+    std::vector<int> bundles;
     for (size_t i = 0; i < seeds.size(); i++) {
-      if (vor[i].size() >= 3) {
-        seeds[i] = centroid(vor[i]);
+      if (isBundle[i]) {
+        bundles.push_back((int)i);
       }
     }
-    seeds = symmetrize(seeds, P, F, band, ext, rmin);
+    std::vector<V> next = seeds;
+    for (size_t i = 0; i < seeds.size(); i++) {
+      if (isBundle[i] && P.bundleMotion == "fixed") {
+        continue;
+      }
+      V c = vor[i].size() >= 3 ? centroid(vor[i]) : seeds[i];
+      int b = -1;
+      if (P.alpha > 0.0 && (!isBundle[i] || P.bundleMotion == "attract")) {
+        b = nearestBundle(c, seeds, bundles, maha, isBundle[i] ? (int)i : -1);
+      }
+      next[i] = (b >= 0) ? (c + seeds[b] * P.alpha) * (1.0 / (1.0 + P.alpha)) : c;
+    }
+    seeds = next;
+    symmetrize(seeds, isBundle, P, F, band, ext, rmin);
   }
   vor = voronoi(seeds, P, spacing);
 
@@ -1021,6 +1202,7 @@ int main(int argc, char *argv[]) {
   };
   std::vector<Polygon> cells;
   std::vector<std::vector<int>> cellRoots; // sommet du pavage de chaque noeud (même ordre que cells)
+  std::vector<int> cellSeed;               // germe de chaque cellule (même ordre que cells)
   size_t nCrackEdges = 0, nBad = 0;
   for (size_t c = 0; c < poly.size(); c++) {
     auto &ids = poly[c];
@@ -1067,6 +1249,7 @@ int main(int argc, char *argv[]) {
     }
     cells.push_back(out);
     cellRoots.push_back(ids);
+    cellSeed.push_back((int)c);
   }
 
   writeNodeFile(P.output, cells);
@@ -1100,6 +1283,122 @@ int main(int argc, char *argv[]) {
           nCrackJunctions++;
         } else {
           badJunctions.push_back(pos[kv.first]);
+        }
+      }
+    }
+  }
+
+  // Bundles : identifiants des cellules dans le nodeFile (= indices des cellules dans l-hyphen si le nodeFile est
+  // la seule source de cellules)
+  std::vector<char> cellIsBundle(cells.size(), 0);
+  size_t nBundles = 0;
+  for (size_t c = 0; c < cells.size(); c++) {
+    cellIsBundle[c] = isBundle[cellSeed[c]];
+    nBundles += cellIsBundle[c];
+  }
+  if (nBundles > 0) {
+    std::ofstream bf(P.bundleOutput);
+    bf << "# identifiants (nodeFile " << P.output << ") des " << nBundles << " cellules bundles\n";
+    for (size_t c = 0; c < cells.size(); c++) {
+      if (cellIsBundle[c]) {
+        bf << c << "\n";
+      }
+    }
+  }
+
+  // Métriques morphologiques de l'article, calculées sur le pavage avant décalage des parois :
+  //   <SI>        indice de forme moyen, SI = 4 pi A / P² (compacité ; hexagone régulier : 0.907)
+  //   sigma_A/<A> coefficient de variation des aires (hétérogénéité)
+  //   <d_NN>      distance moyenne au plus proche voisin (centroïdes), rapportée à l'espacement visé
+  //   <d_M>       distance de Mahalanobis moyenne d'une cellule ordinaire au bundle le plus proche, rapportée à
+  //               l'espacement visé
+  struct Morpho {
+    size_t n{0};
+    double SI{0.0}, A{0.0}, A2{0.0}, dNN{0.0};
+    double cvA() const { return n > 1 ? std::sqrt(std::max(0.0, A2 / n - (A / n) * (A / n))) / (A / n) : 0.0; }
+  };
+  Morpho mAll, mReg, mBun;
+  double dM = 0.0;
+  size_t nM = 0;
+  {
+    std::vector<V> cen(poly.size());
+    std::vector<char> ok(poly.size(), 0);
+    for (size_t c = 0; c < poly.size(); c++) {
+      if (poly[c].size() < 3) {
+        continue;
+      }
+      Polygon Pv;
+      for (int r : poly[c]) {
+        Pv.push_back(pos[r]);
+      }
+      cen[c] = centroid(Pv);
+      ok[c] = 1;
+    }
+    SeedGrid g(P.xmin, P.ymin, P.Lx, P.Ly, spacing);
+    for (size_t c = 0; c < poly.size(); c++) {
+      if (ok[c]) {
+        g.add((int)c, cen[c]);
+      }
+    }
+    std::vector<int> bundleCells;
+    for (size_t c = 0; c < poly.size(); c++) {
+      if (ok[c] && isBundle[c]) {
+        bundleCells.push_back((int)c);
+      }
+    }
+    for (size_t c = 0; c < poly.size(); c++) {
+      if (!ok[c]) {
+        continue;
+      }
+      Polygon Pv;
+      for (int r : poly[c]) {
+        Pv.push_back(pos[r]);
+      }
+      double A = std::fabs(signedArea(Pv)), per = 0.0;
+      for (size_t k = 0; k < Pv.size(); k++) {
+        per += norm(Pv[(k + 1) % Pv.size()] - Pv[k]);
+      }
+      // plus proche voisin : recherche par couronnes croissantes de la grille
+      double d = 1e300;
+      long cx = g.ix(cen[c].x), cy = g.iy(cen[c].y);
+      for (long k = 0; k <= std::max(g.nx, g.ny); k++) {
+        if (d < 1e300 && (double)(k - 1) * spacing > d) {
+          break;
+        }
+        for (long jy = cy - k; jy <= cy + k; jy++) {
+          for (long jx = cx - k; jx <= cx + k; jx++) {
+            if (std::max(std::labs(jx - cx), std::labs(jy - cy)) != k || jx < 0 || jy < 0 || jx >= g.nx ||
+                jy >= g.ny) {
+              continue;
+            }
+            for (int j : g.b[jy * g.nx + jx]) {
+              if (j != (int)c) {
+                d = std::min(d, norm(cen[j] - cen[c]));
+              }
+            }
+          }
+        }
+      }
+      for (Morpho *m : {&mAll, isBundle[c] ? &mBun : &mReg}) {
+        m->n++;
+        m->SI += 4.0 * M_PI * A / (per * per);
+        m->A += A;
+        m->A2 += A * A;
+        m->dNN += (d < 1e300) ? d : 0.0;
+      }
+      if (!isBundle[c] && !bundleCells.empty()) {
+        int b = -1;
+        double dBest = 1e300;
+        for (int j : bundleCells) {
+          double dd = maha.d2(cen[j] - cen[c]);
+          if (dd < dBest) {
+            dBest = dd;
+            b = j;
+          }
+        }
+        if (b >= 0) {
+          dM += std::sqrt(dBest);
+          nM++;
         }
       }
     }
@@ -1218,6 +1517,7 @@ int main(int argc, char *argv[]) {
     }
   }
   vo.title = "nodegen : " + P.output;
+  vo.fill = cellIsBundle;
   if (P.hasCrack) {
     vo.guides.push_back({P.c0, P.c1});
   }
@@ -1264,6 +1564,41 @@ int main(int argc, char *argv[]) {
               << "), pointe effective en (" << tip.x << ", " << tip.y << ") au lieu de (" << P.c1.x << ", "
               << P.c1.y << ")\n";
   }
+  if (nBundles > 0 || P.alpha > 0.0 || P.morphology.size()) {
+    auto mean = [](double v, size_t n) { return n ? v / (double)n : 0.0; };
+    std::cout << "  bundles           : " << nBundles << " (" << std::setprecision(3)
+              << 100.0 * (double)nBundles / (double)std::max<size_t>(1, cells.size()) << " %), alpha = " << P.alpha
+              << ", Sigma = [[" << P.sxx << ", " << P.sxy << "], [" << P.sxy << ", " << P.syy << "]] (K = "
+              << std::max(P.sxx, P.syy) / std::min(P.sxx, P.syy) << " si diagonale), bundleMotion "
+              << P.bundleMotion << (nBundles ? ", ids dans " + P.bundleOutput : std::string()) << "\n";
+    std::cout << std::setprecision(4);
+    std::cout << "  morphologie       : <SI> = " << mean(mAll.SI, mAll.n) << ", sigma_A/<A> = " << mAll.cvA()
+              << ", <d_NN>/espacement = " << mean(mAll.dNN, mAll.n) / spacing;
+    if (nM) {
+      std::cout << ", <d_M>/espacement = " << dM / (double)nM / spacing;
+    }
+    std::cout << "\n";
+    if (nBundles > 0) {
+      std::cout << "    ordinaires      : <A> = " << mean(mReg.A, mReg.n) << ", <SI> = " << mean(mReg.SI, mReg.n)
+                << ", <d_NN> = " << mean(mReg.dNN, mReg.n) << "\n";
+      std::cout << "    bundles         : <A> = " << mean(mBun.A, mBun.n) << ", <SI> = " << mean(mBun.SI, mBun.n)
+                << ", <d_NN> = " << mean(mBun.dNN, mBun.n) << "\n";
+    }
+    if (!P.morphology.empty()) {
+      // une ligne par exécution (balayages paramétriques) ; en-tête écrit si le fichier est nouveau
+      bool fresh = !std::filesystem::exists(P.morphology);
+      std::ofstream mf(P.morphology, std::ios::app);
+      if (fresh) {
+        mf << "# alpha sxx sxy syy seed lloydIterations nCells nBundles meanSI cvA dNN/espacement dM/espacement "
+              "A_ordinaires A_bundles\n";
+      }
+      mf << std::setprecision(8) << P.alpha << ' ' << P.sxx << ' ' << P.sxy << ' ' << P.syy << ' ' << P.seed << ' ' << P.lloydIterations << ' '
+         << mAll.n << ' ' << nBundles << ' ' << mean(mAll.SI, mAll.n) << ' ' << mAll.cvA() << ' '
+         << mean(mAll.dNN, mAll.n) / spacing << ' ' << (nM ? dM / (double)nM / spacing : 0.0) << ' '
+         << mean(mReg.A, mReg.n) << ' ' << mean(mBun.A, mBun.n) << '\n';
+      std::cout << "  métriques ajoutées à " << P.morphology << "\n";
+    }
+  }
   if (nBad > 0) {
     std::cout << "  ATTENTION         : " << nBad << " cellule(s) retournée(s) par le décalage des parois\n";
   }
@@ -1302,6 +1637,10 @@ int main(int argc, char *argv[]) {
       V tip = F.o + F.t * tipAlong;
       in << "# Pré-fissure : de (" << P.c0.x << ", " << P.c0.y << ") à la pointe effective (" << sh(tip.x) << ", "
          << sh(tip.y) << "), lèvres écartées de barWidth + opening = " << P.barWidth + P.opening << "\n";
+    }
+    if (nBundles > 0) {
+      in << "# Bundles : " << nBundles << " cellules (alpha = " << P.alpha << "), identifiants dans " << P.bundleOutput
+         << " (= indices des cellules dans l-hyphen si le nodeFile est lu en premier)\n";
     }
     in << "# Les lignes commentées contiennent des valeurs <...> à compléter (ou à fournir dans le fichier de\n"
           "# paramètres de nodegen : cellProperties, glueProperties).\n\n";

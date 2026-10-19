@@ -1,0 +1,18 @@
+nodegen
+  domaine           : [0, 0.008] x [0, 0.008]
+  cellules          : 1304 (visé 1304), noeuds : 7326
+  arêtes fusionnées : 187 (40 refusées : minSides), seuil 0.3 x 0.0001402
+  arêtes étirées    : 41 (fusion refusée pour garder >= 5 côtés)
+  barres            : l_moy = 0.0001445, l_min = 4.058e-05 (l_min/l_moy = 0.2807)
+  côtés             : 4: 0.6%  5: 44.9%  6: 46.9%  7: 7.4%  8: 0.2%  
+  côtés (intérieur) : 4: 0.3%  5: 40.8%  6: 50.5%  7: 8.2%  8: 0.3%  (1182 cellules)
+  parois            : 7200 collées, 126 libres (bords + fissure)
+  bundles           : 65 (4.98 %), alpha = 0.05, Sigma = [[1, 0], [0, 1]] (K = 1 si diagonale), bundleMotion lloyd, ids dans work/tissu_alpha_0.05_bundles.txt
+  morphologie       : <SI> = 0.8537, sigma_A/<A> = 0.6251, <d_NN>/espacement = 0.8814, <d_M>/espacement = 1.95
+    ordinaires      : <A> = 5.033e-08, <SI> = 0.8542, <d_NN> = 0.0001976
+    bundles         : <A> = 2.525e-08, <SI> = 0.8445, <d_NN> = 0.0001518
+  fichiers          : work/tissu_alpha_0.05.txt, work/tissu_alpha_0.05.svg, work/tissu_alpha_0.05_input.txt
+  lignes d'input    : work/tissu_alpha_0.05_input.txt
+  mors bas          : 62 noeuds (1 rangée)
+  mors haut         : 62 noeuds (1 rangée)
+  (readNodeFile commenté : fournir cellProperties Kn Kr Mz_max p_int pour l'activer)

@@ -138,6 +138,7 @@ struct ViewOptions {
   bool bare{false};        // sans titre, statistiques ni légende (figures)
   std::string title;
   std::vector<std::pair<V, V>> guides; // segments de repère (ex. ligne de pré-fissure), en pointillés
+  std::vector<char> fill;              // cellules à colorier (ex. bundles), indexées comme les cellules
 };
 
 struct MeshStats {
@@ -460,6 +461,10 @@ inline MeshStats analyseAndWriteSVG(const std::vector<Polygon> &cells, ViewOptio
       }
       legend("#2a78d6", 3.0, s.str());
     }
+    size_t nFill = std::count(opt.fill.begin(), opt.fill.end(), (char)1);
+    if (nFill > 0) {
+      legend("#f2b8aa", 8.0, "bundle (" + std::to_string(nFill) + ")");
+    }
     f << "<circle cx=\"" << lx + 6 << "\" cy=\"" << ly << "\" r=\"5\" fill=\"none\" stroke=\"#c8102e\" "
       << "stroke-width=\"1.6\"/><text x=\"" << lx + 16 << "\" y=\"" << ly + 4
       << "\" font-size=\"12\" fill=\"#3b3a35\">jonction à 4 branches ou plus ("
@@ -467,6 +472,20 @@ inline MeshStats analyseAndWriteSVG(const std::vector<Polygon> &cells, ViewOptio
   }
 
   f << "<g clip-path=\"url(#win)\" fill=\"none\" stroke-linecap=\"round\">\n";
+  if (std::count(opt.fill.begin(), opt.fill.end(), (char)1) > 0) {
+    f << "<path fill=\"#f2b8aa\" stroke=\"none\" d=\"";
+    for (size_t c = 0; c < cells.size() && c < opt.fill.size(); c++) {
+      if (!opt.fill[c] || cells[c].empty()) {
+        continue;
+      }
+      for (size_t i = 0; i < cells[c].size(); i++) {
+        V Q = px(cells[c][i]);
+        f << (i == 0 ? 'M' : 'L') << Q.x << ' ' << Q.y;
+      }
+      f << 'Z';
+    }
+    f << "\"/>\n";
+  }
   auto path = [&](const char *col, double w, auto pred) {
     f << "<path stroke=\"" << col << "\" stroke-width=\"" << w << "\" d=\"";
     for (auto &s : segs) {

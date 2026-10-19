@@ -1,0 +1,38 @@
+# nodegen : tissu végétal avec bundles (faisceaux vasculaires), d'après le draft TissuGenerationDraft
+# (morphogenèse de Voronoï variationnelle). Domaine carré de 1 cm, ~2000 cellules, 5 % de bundles.
+
+# Domaine
+xmin 0
+ymin 0
+Lx   0.01
+Ly   0.01
+
+# Cellules
+cellSize        2.5e-4    # diamètre équivalent visé
+barWidth        2e-6
+lattice         random    # état initial : hex, square (grille carrée), random (= poisson), uniform
+lloydIterations 50        # itérations de Lloyd modifiées (attraction comprise)
+seed            1
+
+# Bundles et attraction (les deux paramètres de forme de l'article : alpha et K)
+bundleFraction  0.05      # 5 % des germes tirés au hasard deviennent des bundles
+alpha           0.05      # intensité de l'attraction : p' = (c + alpha b) / (1 + alpha)
+anisotropy      1         # K = Sigma_yy / Sigma_xx (1 : euclidien ; >> 1 : organisation en colonnes)
+#anisotropy     1000 90   # K et orientation des colonnes (degrés depuis l'axe x)
+#sigma          1 0 1     # ou matrice Sigma complète : sxx sxy syy
+bundleMotion    lloyd     # lloyd (défaut), fixed ou attract
+#bundle 0.005 0.005       # bundle imposé : germe le plus proche du point (répétable)
+
+# Variante « coupe tomographique » de l'article : grille carrée exacte, 5 itérations, alpha faible, K très grand
+#lattice square
+#disorder 0
+#lloydIterations 5
+#alpha 0.02
+#anisotropy 10000
+
+# Sorties
+output        nodefile.txt
+svg           nodefile.svg
+input         nodegen_input.txt
+bundleOutput  bundles.txt
+morphology    morphology.txt   # une ligne de métriques ajoutée à chaque exécution (balayages)

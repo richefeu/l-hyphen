@@ -12,6 +12,9 @@
 \usepackage{float}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,calc,positioning,shapes.geometric}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
 \usepackage[margin=2.4cm]{geometry}
 \usepackage{xcolor}
 \usepackage{listings}
@@ -21,21 +24,25 @@
 \definecolor{glued}{HTML}{9A9990}
 \definecolor{free}{HTML}{EB6834}
 \definecolor{short}{HTML}{2A78D6}
+\definecolor{bundle}{HTML}{F2B8AA}
+\definecolor{attcol}{HTML}{C0392B}
+\definecolor{cvlcol}{HTML}{117864}
 \definecolor{ink}{HTML}{3B3A35}
 
 \lstset{basicstyle=\ttfamily\small,columns=fullflexible,frame=single,framerule=0.3pt,
   backgroundcolor=\color{gray!6},breaklines=true,keepspaces=true,
   literate={é}{{\'e}}1 {è}{{\`e}}1 {ê}{{\^e}}1 {à}{{\`{a}}}1 {É}{{\'E}}1 {À}{{\`A}}1 {ç}{{\c{c}}}1
-           {ù}{{\`u}}1 {œ}{{\oe}}1 {ô}{{\^o}}1 {î}{{\^i}}1 {â}{{\^a}}1 {×}{{$\times$}}1 {≥}{{$\geq$}}1}
+           {ù}{{\`u}}1 {œ}{{\oe}}1 {ô}{{\^o}}1 {î}{{\^i}}1 {â}{{\^a}}1 {×}{{$\times$}}1 {≥}{{$\geq$}}1
+           {⟨}{{$\langle$}}1 {⟩}{{$\rangle$}}1 {σ}{{$\sigma$}}1 {α}{{$\alpha$}}1 {Σ}{{$\Sigma$}}1}
 
 \newcommand{\code}[1]{\texttt{#1}}
 \newcommand{\toolgen}{\code{nodegen}}
 \newcommand{\toolview}{\code{nodeview}}
 
 \title{\toolgen{} et \toolview{}\\[3pt]
-  \large Tutoriel : génération de nodeFiles pour \textsc{l-hyphen},\\
-  algorithmes et améliorations possibles}
-\author{Répertoire \code{nodeGen/}}
+  \large Génération de nodeFiles pour \textsc{l-hyphen} :\\
+  échantillons pré-fissurés et tissus végétaux}
+\author{Répertoire \code{nodeGenPlantCom/}}
 \date{\today}
 
 \begin{document}
@@ -43,13 +50,15 @@
 
 \begin{abstract}
   \toolgen{} produit le fichier de nœuds (\emph{nodeFile}) lu par la commande \code{readNodeFile} de
-  \textsc{l-hyphen} : un pavage de cellules polygonales d'un rectangle, éventuellement entaillé par une
-  pré-fissure rectiligne. Il est conçu pour éviter les deux défauts rencontrés avec les maillages de
-  \code{cellPrepro} : des barres extrêmement courtes, qui imposent un pas de temps minuscule en flexion, et
-  une pré-fissure obtenue en retirant des cellules. À partir d'un fichier d'input existant pris comme modèle, il
-  produit aussi un \code{input.txt} complet, directement exécutable par \code{run}. \toolview{} produit une vue
-  SVG d'analyse de n'importe quel nodeFile. Ce document présente leur utilisation pas à pas, détaille les algorithmes et liste les
-  améliorations envisageables.
+  \textsc{l-hyphen} : un pavage de cellules polygonales d'un rectangle. Il couvre deux usages. (1) Des
+  échantillons d'essais mécaniques, éventuellement entaillés par une pré-fissure rectiligne nette, sans les
+  barres extrêmement courtes qui imposent un pas de temps minuscule en flexion ; à partir d'un input existant,
+  il produit aussi un \code{input.txt} complet, directement exécutable par \code{run}. (2) Des tissus végétaux
+  organisés autour de faisceaux vasculaires (\emph{bundles}), selon le modèle de morphogenèse de Voronoï
+  variationnelle de Trivino \emph{et al.} : deux paramètres, l'intensité d'attraction $\alpha$ et l'anisotropie
+  $K$ d'une métrique de Mahalanobis, font passer continûment d'un pavage hexagonal régulier à des tissus très
+  hétérogènes ou organisés en colonnes. \toolview{} produit une vue SVG d'analyse de n'importe quel nodeFile. Ce
+  document présente leur utilisation, détaille les algorithmes et liste les limites connues.
 \end{abstract}
 
 \tableofcontents
@@ -62,11 +71,14 @@
 
 Les deux outils sont écrits en C++17 sans aucune dépendance :
 \begin{lstlisting}
-cd nodeGen
-make                 # produit nodegen et nodeview
+make                 # dans nodeGenPlantCom/ : produit nodegen et nodeview
+\end{lstlisting}
+\toolgen{} se lance avec un fichier de paramètres (un mot-clé par ligne, \code{\#} introduit un commentaire) :
+\begin{lstlisting}
+nodegen params.txt
 \end{lstlisting}
 
-\subsection{Générer un premier échantillon}
+\subsection{Un échantillon pré-fissuré}
 
 Le fichier \code{doc/tutorial\_params.txt} décrit un échantillon de même géométrie que le cas
 \code{Frank-ouverture-fissure} : \SI{13.6}{mm} $\times$ \SI{16}{mm}, environ 2200 cellules de
@@ -75,18 +87,15 @@ Le fichier \code{doc/tutorial\_params.txt} décrit un échantillon de même géo
 \lstinputlisting{tutorial_params.txt}
 
 \begin{lstlisting}
-cd nodeGen/doc
+cd doc
 ../nodegen tutorial_params.txt
+cd work && ../../../run input.txt     # le calcul se lance directement
 \end{lstlisting}
 
 La génération prend moins d'un dixième de seconde. \toolgen{} écrit le nodeFile (\code{output}), une vue SVG
 d'analyse (\code{svg}), les lignes d'input \textsc{l-hyphen} propres au maillage (\code{input}) et, ici, un
 fichier d'input complet construit à partir de \code{modele\_input.txt} (\code{inputTemplate},
-section~\ref{sec:input}) :
-\begin{lstlisting}
-cd work && ../../../run input.txt     # le calcul se lance directement
-\end{lstlisting}
-\toolgen{} affiche un bilan :
+section~\ref{sec:input}). Il affiche un bilan :
 
 \lstinputlisting[basicstyle=\ttfamily\scriptsize]{figures/console.txt}
 
@@ -104,7 +113,7 @@ Les lignes à surveiller :
     cellules et pour les cellules intérieures (sans sommet sur le bord du domaine), les cellules de bord étant
     coupées par le rectangle ;
   \item \textbf{pré-fissure} : position effective de la pointe, qui est toujours un sommet du pavage ;
-  \item \textbf{lignes d'input} : nombre de nœuds dans chacun des mors haut et bas.
+  \item \textbf{mors} : nombre de nœuds dans chacun des mors haut et bas.
 \end{itemize}
 
 \begin{figure}[htbp]
@@ -116,15 +125,27 @@ Les lignes à surveiller :
   \label{fig:example}
 \end{figure}
 
+\subsection{Un tissu végétal}
+
+Le fichier \code{exampleTissu/params.txt} produit un tissu de \SI{1}{cm} de côté, environ 2000 cellules, dont
+\SI{5}{\%} de bundles attirant les autres cellules ($\alpha=0.05$, distance euclidienne) :
+\begin{lstlisting}
+cd exampleTissu
+../nodegen params.txt      # -> nodefile.txt, nodefile.svg, bundles.txt, morphology.txt
+\end{lstlisting}
+En plus du bilan habituel, \toolgen{} affiche le nombre de bundles et les métriques morphologiques du tissu
+(section~\ref{sec:metrics}) ; la vue SVG colorie les bundles. Voici le bilan d'un tissu de \SI{8}{mm} de la
+section~\ref{sec:tissue} :
+
+\lstinputlisting[basicstyle=\ttfamily\scriptsize]{figures/console_tissu.txt}
+
 %======================================================================
 \section{Paramètres}
 %======================================================================
 
-Le fichier de paramètres contient un mot-clé par ligne ; tout ce qui suit \code{\#} est un commentaire.
-
 \begin{center}
 \small
-\begin{tabular}{@{}llp{9.6cm}@{}}
+\begin{tabular}{@{}llp{9.4cm}@{}}
   \toprule
   Mot-clé & Défaut & Rôle \\
   \midrule
@@ -133,9 +154,10 @@ Le fichier de paramètres contient un mot-clé par ligne ; tout ce qui suit \cod
   \code{cellSize} & 3.5e-4 & diamètre équivalent visé ; le nombre de cellules vaut $L_xL_y/(\pi d^2/4)$ \\
   \code{barWidth} & 2e-6 & largeur des barres, à reporter dans \code{readNodeFile} \\
   \midrule
-  \code{lattice} & \code{hex} & \code{hex} : réseau hexagonal perturbé ; \code{random} : tirage aléatoire \\
-  \code{disorder} & 0.3 & perturbation des germes du réseau \code{hex} (fraction du pas) \\
-  \code{lloydIterations} & 10 & itérations de régularisation de Lloyd \\
+  \code{lattice} & \code{hex} & état initial : \code{hex} réseau hexagonal ; \code{square} grille carrée ;
+    \code{random} (ou \code{poisson}) tirage avec distance minimale ; \code{uniform} tirage uniforme \\
+  \code{disorder} & 0.3 & perturbation des germes des réseaux \code{hex} et \code{square} (fraction du pas) \\
+  \code{lloydIterations} & 10 & itérations de Lloyd (attraction vers les bundles comprise) \\
   \code{seed} & 1 & graine du générateur aléatoire \\
   \midrule
   \code{minEdgeFactor} & 0.2 & seuil des arêtes courtes, en fraction de $\ell_{\text{ref}}=\sqrt{L_xL_y/N}$
@@ -149,6 +171,16 @@ Le fichier de paramètres contient un mot-clé par ligne ; tout ce qui suit \cod
   \code{tipInterface} & 1 & longueur (en cellules) de l'interface collée qui prolonge la fissure \\
   \code{distGlue} & 2e-7 & valeur de \code{distGcGlue} de l'input, pour les contrôles \\
   \midrule
+  \code{bundleFraction} & 0 & fraction des germes tirés au hasard comme bundles \\
+  \code{bundle x y} & --- & bundle imposé : germe le plus proche du point (répétable) \\
+  \code{alpha} & 0 & intensité de l'attraction : $\mathbf p'=(\mathbf c+\alpha\mathbf b)/(1+\alpha)$ \\
+  \code{anisotropy K [angle]} & 1 90 & $\Sigma$ d'anisotropie $K$, colonnes à \code{angle} degrés de l'axe $x$
+    ($90$ : $\Sigma=\mathrm{diag}(1,K)$) \\
+  \code{sigma sxx sxy syy} & 1 0 1 & matrice de covariance $\Sigma$ quelconque (définie positive) \\
+  \code{bundleMotion} & \code{lloyd} & déplacement des bundles : \code{lloyd}, \code{fixed} ou \code{attract} \\
+  \code{bundleOutput} & \code{bundles.txt} & identifiants des cellules bundles \\
+  \code{morphology} & --- & fichier auquel est ajoutée une ligne de métriques morphologiques \\
+  \midrule
   \code{cellProperties} & --- & \code{Kn Kr Mz\_max p\_int} reportés dans \code{readNodeFile} \\
   \code{glueProperties} & --- & \code{kn\_coh kt\_coh Gc} reportés dans \code{setGcGlueSameProperties} \\
   \code{gripRows} & 1 & nombre de rangées de nœuds attrapées par chacun des mors bas et haut \\
@@ -158,12 +190,13 @@ Le fichier de paramètres contient un mot-clé par ligne ; tout ce qui suit \cod
   \midrule
   \code{inputTemplate} & --- & \code{modèle [sortie]} : input complet produit à partir d'un input existant
     (sortie par défaut \code{input.txt}) \\
-  \code{output}, \code{svg}, \code{input} & & nodeFile, vue SVG, lignes d'input \textsc{l-hyphen} \\
+  \code{output}, \code{svg}, \code{input} & & nodeFile, vue SVG, lignes d'input \textsc{l-hyphen}
+    (défauts \code{nodefile.txt}, \code{nodefile.svg}, \code{nodegen\_input.txt}) \\
   \bottomrule
 \end{tabular}
 \end{center}
 
-\paragraph{Choisir la régularité.} \code{lattice} et \code{disorder} règlent la forme des cellules
+\paragraph{Choisir la régularité.} Sans bundle, \code{lattice} et \code{disorder} règlent la forme des cellules
 (figure~\ref{fig:disorder}). Sur la géométrie du tutoriel, avec \code{lloydIterations 5} et \code{minSides 5}, on
 obtient pour les cellules intérieures :
 
@@ -196,7 +229,226 @@ en ajoutent un à deux autres : pentagones et heptagones apparaissent par paires
 \paragraph{Pré-fissure.} Le segment \code{crack} peut partir d'un bord (fissure débouchante) ou être entièrement
 intérieur, et avoir une orientation quelconque. \code{opening} doit être nettement supérieur à \code{distGlue}
 pour que les lèvres ne soient pas collées. \code{tipInterface} fixe l'étendue de la symétrie au-delà de la pointe, donc
-la distance entre la pointe et le défaut de raccordement au réseau (section~\ref{sec:tip}).
+la distance entre la pointe et le défaut de raccordement au réseau (section~\ref{sec:tip}). Une pré-fissure peut être combinée à un tissu avec bundles.
+
+%======================================================================
+\section{Tissus végétaux : bundles et attraction de Mahalanobis}
+\label{sec:tissue}
+%======================================================================
+
+\subsection{Modèle}
+
+Ce modèle est celui du draft \code{TissuGenerationDraft/} (Trivino, Radjai, Richefeu, Frank, Lampoh, Delenne,
+\emph{A continuous description of plant cellular tissues from variational Voronoi morphogenesis}). Un tissu
+végétal y est vu comme deux populations de cellules : les cellules ordinaires, qui remplissent l'espace, et les
+\emph{bundles} (faisceaux vasculaires), sources locales d'eau et de nutriments. La structure du tissu n'est pas
+imposée : elle émerge de la minimisation d'une unique fonctionnelle
+\[
+  E(P,B) \;=\; \underbrace{\sum_{i=1}^N \int_{V_i(P)} \|\mathbf x-\mathbf p_i\|^2\,\mathrm d\mathbf x}_{E_{\rm CVL}(P)}
+  \;-\;\alpha\,\underbrace{\sum_{i=1}^N \|\mathbf p_i-\mathbf b_{j(i)}\|^2_{\mathcal M}}_{E_{\rm att}(P,B)},
+\]
+où $P=\{\mathbf p_i\}$ sont les germes, $V_i(P)$ leurs cellules de Voronoï, $B=\{\mathbf b_j\}$ les bundles et
+$\mathbf b_{j(i)}$ le bundle le plus proche de la cellule $i$ au sens de la distance de Mahalanobis
+\[
+  d(\mathbf c,\mathbf b) \;=\; \sqrt{(\mathbf c-\mathbf b)^{\mathsf T}\,\Sigma^{-1}\,(\mathbf c-\mathbf b)} .
+\]
+Le terme de Lloyd $E_{\rm CVL}$ rend chaque cellule compacte : seul, il conduit au pavage hexagonal régulier, qui
+minimise la longueur totale de paroi à aire fixée (économie de matériau pariétal). Le terme $E_{\rm att}$ attire
+chaque cellule vers son bundle le plus proche ; le draft montre (annexe) que ce déplacement fait strictement
+décroître l'aire de la cellule : les cellules rétrécissent près des bundles.
+
+\subsection{Algorithme}
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[scale=1.25, every node/.style={font=\small}, >={Stealth[length=2mm]}]
+    \fill[gray!8] (-0.9,-0.6) -- (0.2,-0.95) -- (1.0,-0.3) -- (0.85,0.6) -- (-0.1,0.85) -- (-1.0,0.3) -- cycle;
+    \draw[ink, thick] (-0.9,-0.6) -- (0.2,-0.95) -- (1.0,-0.3) -- (0.85,0.6) -- (-0.1,0.85) -- (-1.0,0.3) -- cycle;
+    \node[ink] at (-0.55,-0.35) {$V_i$};
+    \coordinate (p) at (0.45,-0.45); \coordinate (c) at (0.0,0.0); \coordinate (b) at (4.2,1.6);
+    \fill[black] (p) circle (1.4pt) node[below right] {$\mathbf p_i$};
+    \fill[cvlcol] (c) circle (1.4pt) node[left=2pt] {$\mathbf c_i$};
+    \draw[->, cvlcol, thick] (p) -- (c);
+    \draw[attcol, dashed] (c) -- (b);
+    \fill[attcol] (b) circle (2pt) node[right=2pt] {bundle $\mathbf b_{j(i)}$};
+    \coordinate (q) at ($(c)!0.3!(b)$);
+    \draw[->, attcol, thick] (c) -- (q);
+    \fill[black] (q) circle (1.6pt) node[above=3pt] {$\mathbf p_i'$};
+    \node[cvlcol, align=left, anchor=west] at (-2.9,-1.35) {1. Lloyd : centroïde $\mathbf c_i$ de $V_i$ ($E_{\rm CVL}$)};
+    \node[attcol, align=left, anchor=west] at (-2.9,-1.75)
+      {2. attraction : $\mathbf p_i'=\dfrac{\mathbf c_i+\alpha\,\mathbf b_{j(i)}}{1+\alpha}$, fraction $\tfrac{\alpha}{1+\alpha}$ de $[\mathbf c_i,\mathbf b_{j(i)}]$ ($E_{\rm att}$)};
+  \end{tikzpicture}
+  \caption{Mise à jour d'un germe ordinaire à chaque itération.}
+  \label{fig:update}
+\end{figure}
+
+\begin{enumerate}[nosep]
+  \item L'état initial est construit (\code{lattice}, section~\ref{sec:seeds}).
+  \item Une fraction \code{bundleFraction} des germes, tirés au hasard (graine \code{seed}), devient des bundles,
+    ainsi que le germe le plus proche de chaque point \code{bundle x y}.
+  \item À chacune des \code{lloydIterations} itérations, le pavage de Voronoï est calculé ; pour chaque germe
+    ordinaire : centroïde $\mathbf c_i$ de sa cellule, bundle $\mathbf b_{j(i)}$ le plus proche de
+    $\mathbf c_i$ au sens de Mahalanobis, puis $\mathbf p_i'=(\mathbf c_i+\alpha\,\mathbf b_{j(i)})/(1+\alpha)$
+    (figure~\ref{fig:update}). Tous les germes sont mis à jour simultanément, avec les positions des bundles du
+    début de l'itération.
+\end{enumerate}
+Les bundles eux-mêmes suivent \code{bundleMotion} : \code{lloyd} (défaut ; ils vont au centroïde de leur cellule,
+$B$ étant optimisé avec $P$), \code{fixed} (immobiles) ou \code{attract} (attirés comme les autres cellules, vers le
+bundle le plus proche autre qu'eux-mêmes). Avec \code{alpha 0}, on retrouve exactement la régularisation de Lloyd ;
+sans bundle, \code{alpha} est sans effet. Les germes restant dans le domaine (combinaison convexe de points du
+domaine), aucune cellule n'en sort. La suite de la chaîne (traitement des arêtes courtes, décalage des parois) est
+celle de tous les nodeFiles (section~\ref{sec:algo}).
+
+\subsection{Les paramètres de forme}
+
+\paragraph{$\alpha$ : hétérogénéité des aires.} Les cellules proches d'un bundle sont tirées vers lui et
+rétrécissent, les autres grandissent (figure~\ref{fig:alpha}). $\alpha$ contrôle surtout le contraste de taille
+entre cellules proches et lointaines des bundles, beaucoup moins la forme individuelle des cellules.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_alpha_0.png}\caption{$\alpha=0$ (Lloyd seul)}\end{subfigure}\hfill
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_alpha_0.05.png}\caption{$\alpha=0.05$}\end{subfigure}\hfill
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_alpha_0.2.png}\caption{$\alpha=0.2$}\end{subfigure}
+  \caption{Effet de $\alpha$ pour $\Sigma=I$ (domaine de \SI{8}{mm}, \code{lattice random}, 30 itérations,
+    \SI{5}{\%} de bundles en rose). En (c), les arêtes bleues sont des barres courtes que \toolgen{} n'a pas pu
+    allonger (section~\ref{sec:limits}).}
+  \label{fig:alpha}
+\end{figure}
+
+\paragraph{$K$ : organisation spatiale.} Avec $\Sigma=\mathrm{diag}(1,K)$, $K=1$ donne la distance euclidienne :
+chaque bundle rassemble un amas de petites cellules. Pour $K\gg1$, la distance devient presque insensible aux écarts
+selon $y$ : un bundle attire toute la colonne de cellules de même abscisse, même lointaines, et le tissu s'organise
+en bandes plutôt qu'en amas ; les bundles ne sont alors plus les plus petites cellules (figure~\ref{fig:K}).
+\code{anisotropy K angle} oriente les colonnes ; \code{sigma} donne une matrice quelconque. Seule la forme de
+$\Sigma$ compte, pas son échelle.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_K_1.png}\caption{$K=1$}\end{subfigure}\hfill
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_K_100.png}\caption{$K=100$}\end{subfigure}\hfill
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_K_1000.png}\caption{$K=1000$}\end{subfigure}
+  \caption{Effet de l'anisotropie pour $\alpha=0.05$ (mêmes réglages que la figure~\ref{fig:alpha}).}
+  \label{fig:K}
+\end{figure}
+
+\paragraph{Nombre d'itérations.} L'itération ne converge pas vers un état stationnaire : à $\alpha$ et $K$ fixés,
+les cellules continuent de se resserrer autour des bundles et, à $K=1$, $\sigma_A/\langle A\rangle$ croît
+avec \code{lloydIterations} sans saturer ; à $K=1000$, elle passe par un maximum puis décroît
+(figure~\ref{fig:sweeps}c). \code{lloydIterations} est donc un troisième paramètre de forme :
+deux tissus ne se comparent qu'à nombre d'itérations égal.
+
+\paragraph{Déplacement des bundles.} \code{bundleMotion} a un effet secondaire à $\alpha=0.05$
+(figure~\ref{fig:motion}) : des bundles fixes conservent leur répartition initiale, des bundles attirés
+(\code{attract}) se regroupent.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_alpha_0.05.png}\caption{\code{lloyd}}\end{subfigure}\hfill
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_fixed.png}\caption{\code{fixed}}\end{subfigure}\hfill
+  \begin{subfigure}{0.32\linewidth}\includegraphics[width=\linewidth]{figures/tissu_attract.png}\caption{\code{attract}}\end{subfigure}
+  \caption{Effet de \code{bundleMotion} ($\alpha=0.05$, $K=1$).}
+  \label{fig:motion}
+\end{figure}
+
+\subsection{Métriques morphologiques}
+\label{sec:metrics}
+
+Comme dans le draft, chaque tissu est résumé par des grandeurs sans dimension, calculées sur toutes les cellules
+du pavage (bords compris), avant le décalage des parois :
+\begin{itemize}[nosep]
+  \item l'indice de forme moyen $\langle\mathrm{SI}\rangle$, $\mathrm{SI}=4\pi A/P^2$ (compacité ; 0.907 pour
+    l'hexagone régulier, 1 pour le disque) ;
+  \item le coefficient de variation des aires $\sigma_A/\langle A\rangle$ (hétérogénéité) ;
+  \item la distance moyenne au plus proche voisin $\langle d_{\rm NN}\rangle$, entre centroïdes ;
+  \item la distance de Mahalanobis moyenne d'une cellule ordinaire au bundle le plus proche
+    $\langle d_{\mathcal M}\rangle$.
+\end{itemize}
+$\langle d_{\rm NN}\rangle$ et $\langle d_{\mathcal M}\rangle$ sont rapportées à l'espacement visé
+$s=\sqrt{\pi d^2/4}$. L'aire, SI et $d_{\rm NN}$ sont aussi donnés séparément pour les cellules ordinaires et pour
+les bundles. Avec \code{morphology fichier}, une ligne est ajoutée au fichier à chaque exécution, avec les colonnes
+\begin{lstlisting}
+alpha sxx sxy syy seed lloydIterations nCells nBundles meanSI cvA dNN/espacement dM/espacement A_ordinaires A_bundles
+\end{lstlisting}
+Un balayage se fait en relançant \toolgen{} avec des paramètres différents et le même fichier \code{morphology}
+(voir \code{doc/make\_figures.sh}). La figure~\ref{fig:sweeps} en donne trois, sur un domaine de \SI{1}{cm}
+(environ 2000 cellules, \SI{5}{\%} de bundles, \code{lattice random}, graine 1, 30 itérations sauf en (c)).
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}
+    \begin{groupplot}[group style={group size=2 by 2, horizontal sep=18mm, vertical sep=18mm},
+        width=0.45\linewidth, height=0.33\linewidth, tick label style={font=\scriptsize},
+        label style={font=\small}, legend style={font=\scriptsize, draw=none, fill=none},
+        every axis plot/.append style={thick, mark size=1.3pt}]
+      % (a) balayage en alpha
+      \nextgroupplot[xlabel={$\alpha$}, ylabel={$\sigma_A/\langle A\rangle$}, title={\small (a) $K=1$}, scaled x ticks=false, xticklabel style={/pgf/number format/fixed}]
+        \addplot[short, mark=*] table[x index=0, y index=9, comment chars=\#] {figures/sweep_alpha.dat};
+      % (b) balayage en K
+      \nextgroupplot[xmode=log, xlabel={$K$}, ylabel={$\sigma_A/\langle A\rangle$}, title={\small (b) $\alpha=0.05$}]
+        \addplot[attcol, mark=*] table[x index=3, y index=9, comment chars=\#] {figures/sweep_K.dat};
+      % (c) nombre d'itérations
+      \nextgroupplot[xmode=log, xlabel={\code{lloydIterations}}, ylabel={$\sigma_A/\langle A\rangle$},
+          title={\small (c) $\alpha=0.05$}, legend pos=north west]
+        \addplot[short, mark=*] table[x index=5, y index=9, comment chars=\#] {figures/sweep_it_K1.dat};
+        \addplot[attcol, mark=square*] table[x index=5, y index=9, comment chars=\#] {figures/sweep_it_K1000.dat};
+        \legend{$K=1$, $K=1000$}
+      % (d) espace des formes
+      \nextgroupplot[xlabel={$\sigma_A/\langle A\rangle$}, ylabel={$\langle\mathrm{SI}\rangle$},
+          title={\small (d) espace des formes}, legend style={at={(0.5,-0.32)}, anchor=north}]
+        \addplot[short, mark=*] table[x index=9, y index=8, comment chars=\#] {figures/sweep_alpha.dat};
+        \addplot[attcol, mark=square*] table[x index=9, y index=8, comment chars=\#] {figures/sweep_K.dat};
+        \legend{{$\alpha\in[0,0.2]$ ($K=1$)}, {$K\in[1,1000]$ ($\alpha=0.05$)}}
+    \end{groupplot}
+  \end{tikzpicture}
+  \caption{Balayages. (a) $\sigma_A/\langle A\rangle$ croît d'un facteur 20 entre $\alpha=0$ et $\alpha=0.2$ (de
+    0.07 à 1.55), tandis que $\langle\mathrm{SI}\rangle$ ne baisse que de 0.87 à 0.82. (b) L'anisotropie modifie
+    peu l'hétérogénéité jusqu'à $K\approx20$, puis l'augmente. (c) À $K=1$, l'hétérogénéité croît sans saturer avec le nombre d'itérations ; à $K=1000$, elle passe par un maximum vers 30--50 itérations puis décroît.
+    (d) Les deux balayages partent du même point (Lloyd presque pur) et s'en écartent dans deux directions
+    différentes : $\alpha$ surtout vers l'hétérogénéité, $K$ surtout vers la perte de compacité.}
+  \label{fig:sweeps}
+\end{figure}
+
+Ces valeurs sont cohérentes avec celles du draft ($\langle\mathrm{SI}\rangle$ de 0.87 à 0.83 et
+$\sigma_A/\langle A\rangle$ de 0.14 à 1.5 pour $\alpha\in[0,0.2]$, avec 2000 cellules).
+
+\subsection{Recettes}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lp{10.3cm}@{}}
+  \toprule
+  Tissu & Réglage \\
+  \midrule
+  hexagonal & \code{alpha 0} (Lloyd seul) ou \code{lattice hex} \\
+  amas autour des bundles & \code{lattice random}, \code{bundleFraction 0.05}, \code{alpha 0.05}, \code{anisotropy 1} \\
+  colonnes & idem avec \code{anisotropy 1000} \\
+  coupe tomographique & \code{lattice square}, \code{disorder 0}, \code{lloydIterations 5}, \code{bundleFraction 0.05},
+    \code{alpha 0.02}, \code{anisotropy 10000} \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+La dernière recette est celle que le draft compare à des coupes tomographiques de tissus réels : une grille carrée
+exacte, légèrement perturbée par quelques itérations, devient un pavage de polygones irréguliers grossièrement
+alignés en colonnes autour des bundles (figure~\ref{fig:tomo}). Elle montre aussi l'intérêt de
+\code{lattice square} et de la possibilité de partir de n'importe quel état initial.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.42\linewidth]{figures/tissu_tomo.png}
+  \caption{Recette « coupe tomographique » (domaine de \SI{8}{mm}).}
+  \label{fig:tomo}
+\end{figure}
+
+\subsection{Utilisation dans \textsc{l-hyphen}}
+
+\code{bundleOutput} (défaut \code{bundles.txt}) contient les identifiants des cellules bundles dans le nodeFile,
+écrit seulement s'il y a des bundles. \code{readNodeFile} numérote les cellules dans l'ordre des identifiants : ce
+sont aussi les indices des cellules dans \textsc{l-hyphen} si le nodeFile est la première source de cellules de
+l'input. Ils permettent de donner aux bundles des réglages propres, par exemple avec les commandes par cellule
+\code{setCellInternalPressure c p} ou \code{setCellControl}. Les lignes d'input produites par \toolgen{} rappellent
+en commentaire le nombre de bundles et le nom de ce fichier.
 
 %======================================================================
 \section{Visualiser et contrôler un nodeFile avec \toolview}
@@ -204,7 +456,7 @@ la distance entre la pointe et le défaut de raccordement au réseau (section~\r
 
 \begin{lstlisting}
 nodeview nodefile.txt [-w barWidth] [-g distGlue] [-r ratio] [-box x0 x1 y0 y1]
-                      [-nodes] [-bare] [-px largeur] [-o out.svg]
+                      [-nodes] [-bare] [-px largeur] [-o out.svg] [-fill ids.txt]
 \end{lstlisting}
 
 \toolview{} lit n'importe quel nodeFile (y compris ceux de \code{cellPrepro}) comme \code{readNodeFile} le fait, et
@@ -226,9 +478,12 @@ produit un SVG (vectoriel : le zoom est illimité dans un navigateur). Chaque pa
 \end{itemize}
 \toolview{} affiche aussi le nombre de jonctions par nombre de cellules. Sur un nodeFile de \toolgen, seules les
 extrémités de la pré-fissure sont cerclées.
-Sans \code{-w}, la largeur des barres est estimée par la distance minimale entre nœuds de cellules différentes.
-\code{-box} restreint le dessin à une fenêtre (zoom), \code{-nodes} dessine les nœuds, \code{-bare} supprime
-titre et légende.
+Sans \code{-w}, la largeur des barres est estimée par la distance minimale entre nœuds de cellules différentes ;
+pour un maillage qui contient des barres quasi nulles, cette estimation est fausse et toutes les parois paraissent
+libres : donner alors \code{-w}. \code{-box} restreint le dessin à une fenêtre (zoom), \code{-nodes} dessine les
+nœuds, \code{-bare} supprime titre et légende, \code{-fill ids.txt} colorie en
+\textcolor{bundle!80!black}{\textbf{rose}} les cellules dont l'identifiant est listé (par exemple
+\code{bundles.txt}).
 
 \begin{figure}[H]
   \centering
@@ -255,6 +510,7 @@ titre et légende.
 %======================================================================
 \section{Produire le fichier d'input \textsc{l-hyphen}}
 \label{sec:input}
+%======================================================================
 
 \subsection{Input complet à partir d'un modèle (\code{inputTemplate})}
 
@@ -294,11 +550,7 @@ Différences entre le modèle (input de \code{Frank-ouverture-fissure}) et l'inp
 
 \lstinputlisting[basicstyle=\ttfamily\scriptsize]{figures/deck_diff.txt}
 
-L'input produit a été lancé sans autre modification que la durée simulée (\num{20000} pas) : aucune rupture au
-démarrage et 12902 liens collés, comme attendu.
-
 \subsection{Lignes d'input seules}
-%======================================================================
 
 Sans modèle, \toolgen{} écrit toujours dans le fichier \code{input} (défaut \code{nodegen\_input.txt}) les
 lignes d'input qui dépendent du maillage, à copier dans un fichier d'input aux endroits indiqués :
@@ -308,8 +560,8 @@ lignes d'input qui dépendent du maillage, à copier dans un fichier d'input aux
     (mode 1, force nulle) et à vitesse imposée $\mp v$ en $y$ (mode 0), avec le nombre de nœuds de chaque mors,
     et les deux \code{captureNodes} correspondants ;
   \item \code{distGcGlue} et \code{setGcGlueSameProperties} (propriétés de \code{glueProperties}) ;
-  \item en commentaire, les statistiques du maillage, la position effective de la pointe et, si \code{nodeMass}
-    est donné, le pas de temps critique de flexion $\ell_{\min}\sqrt{m/k_r}$.
+  \item en commentaire, les statistiques du maillage, la position effective de la pointe, le nombre de bundles et,
+    si \code{nodeMass} est donné, le pas de temps critique de flexion $\ell_{\min}\sqrt{m/k_r}$.
 \end{itemize}
 Une ligne dont une valeur n'est pas connue est écrite en commentaire, avec des repères \code{<...>} à compléter.
 Pour \code{tutorial\_params.txt} :
@@ -318,8 +570,7 @@ Pour \code{tutorial\_params.txt} :
 
 L'ordre compte : \code{readNodeFile} ouvre la section de l'échantillon (avant les masses et les amortissements),
 les contrôles et \code{captureNodes} suivent, et le collage vient en dernier, une fois \code{distVerlet} défini.
-Le nombre de nœuds de chaque mors permet de vérifier que la hauteur des mors est adaptée ; \toolgen{} signale un
-mors vide ou une pré-fissure qui entrerait dans un mors.
+\toolgen{} signale un mors vide ou une pré-fissure qui entrerait dans un mors.
 
 \subsection{Mors : rangées de nœuds attrapées}
 \label{sec:grips}
@@ -347,14 +598,14 @@ des \code{gripRows} premières rangées et le nœud suivant. Sur l'échantillon 
 \end{tabular}
 \end{center}
 
-La première rangée est attrapée exactement : le nœud suivant est à environ \SI{78}{\micro m} du bord. Au-delà,
-un pavage de Voronoï n'a pas de rangées horizontales (le nœud le plus haut de la rangée~2 est plus haut que le
-nœud le plus bas de la rangée~3) : la boîte attrape toutes les rangées demandées, plus quelques nœuds bas des
-rangées suivantes, dont \toolgen{} affiche le nombre. \code{gripHeight} impose directement une hauteur de boîte.
+La première rangée est attrapée exactement. Au-delà, un pavage de Voronoï n'a pas de rangées horizontales : la
+boîte attrape toutes les rangées demandées, plus quelques nœuds bas des rangées suivantes, dont \toolgen{} affiche
+le nombre. \code{gripHeight} impose directement une hauteur de boîte.
 
 \subsection{Vérifications}
 
-\code{cleanShortBars} est inutile avec un nodeFile produit par \toolgen. Avec les mors d'une rangée, l'input du
+\code{cleanShortBars} est inutile avec un nodeFile produit par \toolgen{} (sauf tissus extrêmes,
+section~\ref{sec:limits}). Avec les mors d'une rangée, l'input du
 tutoriel a été lancé sur \num{20000} pas : aucune rupture, et des forces égales et opposées sur les deux mors
 (\SI{-1.380}{mN} en haut, \SI{1.379}{mN} en bas à $t=\SI{1}{ms}$). Après un premier lancement, vérifier dans
 \code{diagnostic.txt} que le nombre de « liens collés » est égal au nombre de parois collées de \toolview, et que le
@@ -378,6 +629,7 @@ avec les paramètres mécaniques de \code{Frank-ouverture-fissure} :
 
 %======================================================================
 \section{Algorithmes}
+\label{sec:algo}
 %======================================================================
 
 \begin{figure}[H]
@@ -385,15 +637,15 @@ avec les paramètres mécaniques de \code{Frank-ouverture-fissure} :
   \begin{tikzpicture}[node distance=4mm and 5mm, every node/.style={font=\small},
       box/.style={draw=ink, rounded corners=2pt, fill=gray!6, align=center, minimum height=12mm, text width=27mm},
       >={Stealth[length=2mm]}]
-    \node[box] (s) {1. Germes\\\footnotesize réseau hex / aléatoire};
+    \node[box] (s) {1. Germes\\\footnotesize état initial, bundles};
     \node[box, right=of s] (sym) {2. Symétrie\\\footnotesize autour de la fissure};
-    \node[box, right=of sym] (l) {3. Lloyd\\\footnotesize (+ symétrie)};
+    \node[box, right=of sym] (l) {3. Lloyd\\\footnotesize + attraction, symétrie};
     \node[box, right=of l] (v) {4. Voronoï\\\footnotesize demi-plans};
     \node[below=1mm of l, font=\footnotesize] {répété \code{lloydIterations} fois};
     \node[box, below=10mm of v] (t) {5. Sommets\\\footnotesize partagés, types};
     \node[box, left=of t] (e) {6. Arêtes courtes\\\footnotesize T1/étirement, 3 branches};
     \node[box, left=of e] (o) {7. Décalage\\\footnotesize des parois};
-    \node[box, left=of o] (w) {8. nodeFile\\\footnotesize + SVG};
+    \node[box, left=of o] (w) {8. nodeFile, SVG\\\footnotesize métriques};
     \draw[->] (s) -- (sym); \draw[->] (sym) -- (l); \draw[->] (l) -- (v); \draw[->] (v) -- (t);
     \draw[->] (t) -- (e); \draw[->] (e) -- (o); \draw[->] (o) -- (w);
   \end{tikzpicture}
@@ -422,11 +674,9 @@ avec les paramètres mécaniques de \code{Frank-ouverture-fissure} :
 \end{figure}
 
 \subsection{Germes}
+\label{sec:seeds}
 
-\paragraph{Tirage aléatoire (\code{lattice random}).} On vise $N = L_xL_y/A$ cellules d'aire
-$A=\pi d^2/4$ ($d$ = \code{cellSize}), d'espacement moyen $s=\sqrt{A}$. Les germes sont tirés uniformément et
-acceptés s'ils sont à plus de $r_{\min}=0.7\,s$ des germes déjà placés (recherche par grille) ; si la saturation
-est atteinte avant $N$, le complément est tiré sans contrainte.
+On vise $N = L_xL_y/A$ cellules d'aire $A=\pi d^2/4$ ($d$ = \code{cellSize}), d'espacement moyen $s=\sqrt{A}$.
 
 \paragraph{Réseau hexagonal (\code{lattice hex}).} Un réseau triangulaire de germes, de pas
 $a=\sqrt{2A/\sqrt3}$ (aire de la cellule hexagonale égale à $A$) et d'interrangée $a\sqrt3/2$, donne un pavage
@@ -436,14 +686,34 @@ parallèles à la fissure) et décalé pour qu'un sommet du réseau tombe sur la
 rangées sont placées symétriquement de part et d'autre de la ligne (section~\ref{sec:crack}) ; ailleurs, elles
 alternent normalement.
 
-\subsection{Régularisation de Lloyd}
+\paragraph{Grille carrée (\code{lattice square}).} Même construction avec un réseau carré de pas $a=\sqrt{A}$,
+sans alternance des rangées (une grille carrée est naturellement symétrique par rapport à la ligne de fissure).
+Avec \code{disorder 0}, c'est une grille exacte ; ses sommets à quatre cellules sont alors dégénérés et
+résolus par le traitement des arêtes courtes.
+
+\paragraph{Tirage avec distance minimale (\code{lattice random} ou \code{poisson}).} Les germes sont tirés
+uniformément et acceptés s'ils sont à plus de $r_{\min}=0.7\,s$ des germes déjà placés (recherche par grille) ; si
+la saturation est atteinte avant $N$, le complément est tiré sans contrainte.
+
+\paragraph{Tirage uniforme (\code{lattice uniform}).} $N$ germes tirés uniformément, sans distance minimale
+(processus de Poisson) : l'état le plus désordonné.
+
+\paragraph{Bundles.} Ils sont choisis après la construction de l'état initial et sa symétrisation : un mélange
+aléatoire des indices (graine \code{seed}) donne les \code{bundleFraction}~$\times N$ premiers, auxquels s'ajoutent
+les germes les plus proches des points \code{bundle}. Sans bundle, aucun tirage supplémentaire n'est fait : les
+nodeFiles sans bundle sont identiques à ceux des versions précédentes de \toolgen.
+
+\subsection{Lloyd et attraction}
 
 À chaque itération, le pavage de Voronoï est calculé et chaque germe est déplacé au centroïde de sa cellule :
 \[
-  \mathbf x_i \leftarrow \frac{1}{|\Omega_i|}\int_{\Omega_i}\mathbf x\,\mathrm dA .
+  \mathbf c_i = \frac{1}{|V_i|}\int_{V_i}\mathbf x\,\mathrm dA ,
 \]
-Les itérations tendent vers un pavage de Voronoï centroïdal, aux cellules d'aires voisines et majoritairement
-hexagonales. La symétrie autour de la fissure est rétablie après chaque itération.
+puis, pour un germe ordinaire en présence de bundles, vers le bundle le plus proche au sens de Mahalanobis :
+$\mathbf p_i' = (\mathbf c_i+\alpha\,\mathbf b_{j(i)})/(1+\alpha)$. Le bundle le plus proche est cherché parmi tous
+les bundles (coût $O(N N_b)$, négligeable pour quelques milliers de cellules). Avec $\alpha=0$, les itérations
+tendent vers un pavage de Voronoï centroïdal, aux cellules d'aires voisines et majoritairement hexagonales. La
+symétrie autour de la fissure est rétablie après chaque itération.
 
 \subsection{Pavage de Voronoï par découpe de demi-plans}
 
@@ -597,6 +867,9 @@ proches est symétrique, et $\mathbf x$ est sur le bord de deux cellules symétr
 une suite d'arêtes du pavage : la fissure est rectiligne, aucune cellule n'est coupée ni retirée. Les germes trop
 proches de la ligne ($n<r_{\min}/2$) sont repoussés à $n=r_{\min}/2$ pour éviter des cellules très aplaties.
 
+Le statut de bundle suit les germes : un bundle supprimé du côté $n<0$ transmet son statut au germe du côté $n\ge0$
+le plus proche de son symétrique, et la paire symétrique est formée de deux bundles.
+
 \paragraph{Ouverture.} Le long de la fissure, les parois sont décalées de $w/2+o/2$ au lieu de $w/2$
 ($w$ = \code{barWidth}, $o$ = \code{opening}) : l'écart entre les lèvres vaut $w+o>w+$\code{distGlue}, donc aucun
 lien cohésif n'y est créé (figure~\ref{fig:zoom}a).
@@ -640,7 +913,6 @@ rectiligne qui serait un chemin de rupture privilégié.
   \centering
   \begin{tikzpicture}[scale=1.5, >={Stealth[length=2mm]}, font=\small]
     \coordinate (A) at (-2.4,0.35); \coordinate (P) at (0,0); \coordinate (B) at (1.1,1.7);
-    % côtés décalés vers l'intérieur (à gauche du parcours A -> P -> B)
     \coordinate (A1) at ($(A)!0.42cm!90:(P)$);  \coordinate (P1) at ($(P)!0.42cm!-90:(A)$);
     \coordinate (P2) at ($(P)!0.30cm!90:(B)$);  \coordinate (B2) at ($(B)!0.30cm!-90:(P)$);
     \coordinate (S) at (intersection of A1--P1 and P2--B2);
@@ -675,9 +947,8 @@ cohésifs par \code{glue} / \code{distGcGlue}. On vérifie enfin qu'aucun côté
 \section{Validation sur un essai d'ouverture}
 %======================================================================
 
-Le nodeFile du tutoriel a été utilisé à la place de celui de \code{Frank-ouverture-fissure}, avec le même
-fichier d'input (sans \code{cleanShortBars}), ainsi qu'un nodeFile produit par une première version de \toolgen{}
-(germes aléatoires, fusion seule, fissure butant sur une cellule).
+Le nodeFile du tutoriel (réseau hexagonal) a été utilisé à la place de celui de \code{Frank-ouverture-fissure}, avec
+le même fichier d'input, sans \code{cleanShortBars}.
 
 \emph{Ces calculs ont été faits avec la version précédente de \toolgen, qui fusionnait les arêtes courtes et
 créait donc des jonctions à 4 branches ; ils n'ont pas été refaits avec les transitions T1. Les maillages
@@ -685,12 +956,9 @@ actuels ne sont pas identiques à ceux de cette section.}
 
 \begin{figure}[H]
   \centering
-  \begin{subfigure}{0.48\linewidth}\includegraphics[width=\linewidth]{figures/crack_random.png}
-    \caption{Germes aléatoires (première version)}\end{subfigure}\hfill
-  \begin{subfigure}{0.48\linewidth}\includegraphics[width=\linewidth]{figures/crack_hex.png}
-    \caption{Réseau hexagonal (\code{tutorial\_params.txt})}\end{subfigure}
-  \caption{Chemins de fissuration obtenus avec \textsc{l-hyphen} (liens rompus, colorés selon l'instant de
-    rupture ; en orange, la pré-fissure).}
+  \includegraphics[width=0.5\linewidth]{figures/crack_hex.png}
+  \caption{Chemin de fissuration obtenu avec \textsc{l-hyphen} sur le nodeFile du tutoriel (liens rompus, colorés
+    selon l'instant de rupture ; en orange, la pré-fissure).}
   \label{fig:crack}
 \end{figure}
 
@@ -698,12 +966,35 @@ actuels ne sont pas identiques à ceux de cette section.}
 
 %======================================================================
 \section{Limites et améliorations possibles}
+\label{sec:limits}
 %======================================================================
+
+\subsection{Tissus végétaux}
+
+\begin{itemize}[nosep]
+  \item \textbf{Arêtes courtes dans les tissus très hétérogènes.} Le seuil des arêtes courtes est relatif à la
+    longueur \emph{moyenne} des arêtes. Quand les cellules proches des bundles sont beaucoup plus petites que la
+    moyenne ($\alpha=0.2$, ou $K\gtrsim100$), toutes leurs arêtes sont « courtes » et l'étirement, qui rendrait ces
+    petites cellules non convexes, est refusé : il reste des barres quasi nulles ($\ell_{\min}/\bar\ell$ de
+    \num{e-3} à \num{e-4} dans les figures~\ref{fig:alpha}c et~\ref{fig:K}b,c), qui imposent un pas de temps
+    minuscule dans \textsc{l-hyphen}. Surveiller la ligne « encore trop courtes ». Piste : un seuil relatif à la
+    taille locale des cellules (longueur moyenne des arêtes des deux cellules voisines).
+  \item \textbf{Pas d'état stationnaire.} L'itération ne converge pas (figure~\ref{fig:sweeps}c) : le nombre
+    d'itérations fait partie du réglage. Un critère d'arrêt sur une métrique cible ($\sigma_A/\langle A\rangle$
+    visé, par exemple) permettrait de régler directement la morphologie.
+  \item \textbf{Bundles mécaniquement identiques.} Les bundles sont des cellules comme les autres dans le nodeFile ;
+    leur donner des propriétés propres passe par les commandes par cellule de \textsc{l-hyphen} et
+    \code{bundles.txt}.
+  \item \textbf{Placement des bundles.} Aléatoire ou point par point ; des dispositions structurées (rangées de
+    faisceaux des monocotylédones, anneau) se construisent aujourd'hui avec des lignes \code{bundle x y}.
+  \item \textbf{Ajustement sur une image.} Le draft propose d'extraire $(\alpha,K)$ d'une coupe réelle ; les
+    métriques de \code{morphology} sont la base d'une telle recherche, qui reste à automatiser.
+\end{itemize}
 
 \subsection{Anisotropie du réseau hexagonal}
 
 Avec \code{lattice hex}, les rangées du réseau sont parallèles à la fissure : la fissure se propage en zigzag le
-long d'une rangée (figure~\ref{fig:crack}b), ce qui est un artefact de l'ordre du réseau. Pistes :
+long d'une rangée (figure~\ref{fig:crack}), ce qui est un artefact de l'ordre du réseau. Pistes :
 \begin{itemize}[nosep]
   \item augmenter \code{disorder} (0.4--0.5), au prix de davantage de pentagones et d'heptagones ;
   \item orienter le réseau hors de la zone de la fissure selon un angle différent (par exemple \ang{30}, ou un
@@ -734,8 +1025,6 @@ l'aire d'une cellule croît avec son nombre de côtés).
     à un arc, plusieurs bandes de symétrie (à condition qu'elles ne se chevauchent pas).
   \item \textbf{Domaines non rectangulaires, trous, inclusions} : découpe des cellules par un polygone quelconque
     au lieu du rectangle.
-  \item \textbf{Distribution de tailles} : gradient de taille ou population bimodale, par une densité dans
-    l'itération de Lloyd (centroïdes pondérés) ou par un pavage de puissance.
 \end{itemize}
 
 \subsection{Robustesse et outillage}
@@ -746,7 +1035,6 @@ l'aire d'une cellule croît avec son nombre de côtés).
     robuste.
   \item Proposer d'autres chargements que la traction par mors (cisaillement, flexion trois points) ; reconnaître
     dans le modèle d'autres dispositions de boîtes de contrôle que deux mors haut et bas.
-  \item Un visualiseur interactif (GLFW, comme \code{see2}) pour naviguer dans les grands maillages.
   \item Des tests automatiques : topologie (chaque arête intérieure partagée par exactement deux cellules),
     écartement des parois, rectitude de la fissure, reproductibilité à graine fixée.
 \end{itemize}
@@ -755,10 +1043,10 @@ l'aire d'une cellule croît avec son nombre de côtés).
 \section*{Régénérer les figures}
 %======================================================================
 
-Toutes les figures de maillage, ainsi que le bilan affiché et les lignes d'input reproduits dans ce document,
-sont produits par \code{doc/make\_figures.sh} (nécessite \code{inkscape} et ImageMagick) à partir de
-\code{doc/tutorial\_params.txt} ; les fichiers intermédiaires sont dans \code{doc/work/}. Les chemins de
-fissuration proviennent de calculs \textsc{l-hyphen} et les valeurs de la section de validation de
-\code{doc/validation\_results.tex}.
+Toutes les figures de maillage, les balayages de la figure~\ref{fig:sweeps}, ainsi que les bilans et les lignes
+d'input reproduits dans ce document, sont produits par \code{doc/make\_figures.sh} (nécessite \code{inkscape}, une
+vingtaine de secondes) à partir de \code{doc/tutorial\_params.txt} et de paramètres écrits par le script ; les
+fichiers intermédiaires sont dans \code{doc/work/}. Le chemin de fissuration provient d'un calcul \textsc{l-hyphen}
+et les valeurs de la section de validation de \code{doc/validation\_results.tex}.
 
 \end{document}

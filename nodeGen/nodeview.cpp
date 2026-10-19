@@ -14,18 +14,20 @@
 //   -bare                  sans titre, statistiques ni légende (pour des figures)
 //   -px <largeur>          largeur de l'image en pixels (défaut 1400)
 //   -o <fichier.svg>       fichier de sortie (défaut : <nodefile>.svg)
+//   -fill <fichier>        colorie les cellules dont l'identifiant est listé (ex. bundles.txt de nodegen)
 
 #include "common.hpp"
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
     std::cerr << "Usage : nodeview nodefile.txt [-w barWidth] [-g distGlue] [-r ratio] [-box x0 x1 y0 y1] "
-                 "[-nodes] [-bare] [-px largeur] [-o out.svg]\n";
+                 "[-nodes] [-bare] [-px largeur] [-o out.svg] [-fill ids.txt]\n";
     return 1;
   }
   std::string in = argv[1];
   std::string out = in.substr(0, in.find_last_of('.')) + ".svg";
   ViewOptions opt;
+  std::string fillFile;
   for (int i = 2; i < argc; i++) {
     std::string a = argv[i];
     auto need = [&](int n) {
@@ -57,6 +59,9 @@ int main(int argc, char *argv[]) {
     } else if (a == "-px") {
       need(1);
       opt.widthPx = std::stod(argv[++i]);
+    } else if (a == "-fill") {
+      need(1);
+      fillFile = argv[++i];
     } else if (a == "-o") {
       need(1);
       out = argv[++i];
@@ -69,6 +74,23 @@ int main(int argc, char *argv[]) {
   std::vector<Polygon> cells = readNodeFile(in);
   if (cells.empty()) {
     return 1;
+  }
+  if (!fillFile.empty()) {
+    // identifiants de cellules (lignes commençant par # ignorées) ; readNodeFile trie les identifiants, l'indice
+    // de cellule correspond donc à l'identifiant pour un nodeFile numéroté 0, 1, 2... comme ceux de nodegen
+    std::ifstream ff(fillFile);
+    if (!ff) {
+      std::cerr << "Impossible d'ouvrir " << fillFile << "\n";
+      return 1;
+    }
+    opt.fill.assign(cells.size(), 0);
+    for (std::string l; std::getline(ff, l);) {
+      std::istringstream is(l.substr(0, l.find('#')));
+      long id;
+      if (is >> id && id >= 0 && (size_t)id < cells.size()) {
+        opt.fill[id] = 1;
+      }
+    }
   }
   opt.title = "nodeview : " + in;
   MeshStats st = analyseAndWriteSVG(cells, opt, out);
