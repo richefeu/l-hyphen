@@ -67,7 +67,7 @@ OBJECTS = $(SOURCES:%.cpp=%.o)
 DEPFLAGS = -MMD -MP
 -include $(OBJECTS:.o=.d)
 
-.PHONY: all clean clone_toofus lhedit
+.PHONY: all clean clone_toofus lhedit doc
 
 all: run see2 crackwatch lhedit
 
@@ -123,3 +123,13 @@ see2: see2.cpp see2.hpp liblhyphen.a
 lhedit:
 	@echo "\033[0;32m-> BUILDING APPLICATION" $@ "\033[0m"
 	$(MAKE) -C lhyphen-edit
+
+# Documentations : tutoriel nodegen (LaTeX), cheatsheet (typst), doc Sphinx (HTML). Le rapport de
+# etude-param-frank n'est pas inclus : il dépend des résultats de l'étude (make -C etude-param-frank/rapport)
+doc:
+	@echo "\033[0;32m-> BUILDING DOCUMENTATION nodeGen/doc\033[0m"
+	$(MAKE) -C nodeGen/doc
+	@echo "\033[0;32m-> BUILDING DOCUMENTATION cheatsheets\033[0m"
+	$(MAKE) -C cheatsheets
+	@echo "\033[0;32m-> BUILDING DOCUMENTATION sphinxdoc\033[0m"
+	$(MAKE) -C sphinxdoc html
