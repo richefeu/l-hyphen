@@ -1,0 +1,8 @@
+a = 1.0033
+b = 0.3504
+erreur max = 3.99 %
+erreur mediane = 0.97 %
+rho = 4.810 kg/m2
+c0 min = 8.30 m/s, max = 24.93 m/s
+zeta in ]0,1.01[ : v/c0 0.54-0.65, ramif mediane 0.12
+zeta in ]1.99,11[ : v/c0 0.53-0.79, ramif mediane 0.25

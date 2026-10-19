@@ -1,0 +1,35 @@
+# SIMULATION INPUTS ===================================================       
+dt 1e-6                                                                       
+nstep 4000000                                                                
+numericalDissipation 0.0                                                      
+globalViscosity      4                                                        
+gravity 0 0                                                                  
+distVerlet 0.07                                                               
+nstepPeriodVerlet 1000                                                        
+isvg              0                                                           
+nstepPeriodSVG    10000                                                      
+iconf             0                                                           
+nstepPeriodConf   10000                                                       
+                                                                              
+kn 1e6                                                                        
+kt 1e6                                                                        
+mu 0.0
+adaptativeStiffness 1                                                                        
+                                                                              
+# SAMPLE ===================================================                            
+#             filename       barWidth     ks       kb     my_max   pressure
+readNodeFile  nodefile.txt   0.001      2e+06     0.2      1      1
+
+setCellDensities 1400 1
+cellContent 2
+compressFactor 1e+06
+
+# IMPOSED CONTROLS ===================================================        
+#                   xmin   xmax   ymin    ymax     xmode    xvalue   ymode   yvalue   
+setNodeControlInBox 0       2       0     0.1      1        0.0       0      -1e-2
+setNodeControlInBox 0       2     0.9    1      1        0.0       0      1e-2
+
+GcGlue 0.02                                                     
+
+setGcGlueSameProperties 1e6 1e6 1                               
+findDisplayArea 2.0

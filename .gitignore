@@ -92,3 +92,34 @@ etude-param-frank/rapport/*.fls
 etude-param-frank/rapport/*.fdb_latexmk
 etude-param-frank/rapport/*.out
 etude-param-frank/rapport/*.toc
+
+# Sorties de simulation (où qu'elles soient)
+breakHistory*.txt
+breakEvol.txt
+perflog_*.txt
+lhyphen[0-9]*.txt
+cell[0-9]*.txt
+top*.txt
+bottom*.txt
+see2-options.toml
+*.log
+*.dSYM/
+
+# Pas de PDF dans le dépôt (les fichiers déjà suivis le restent)
+*.pdf
+
+# nodeGen : sorties de l'exemple tissu
+nodeGen/exampleTissu/*
+!nodeGen/exampleTissu/params.txt
+
+# Études et répertoires de travail locaux
+Frank-ouverture-fissure/
+crack-length/
+test-break/
+nodeGen/frank-demo/
+nodeGenPlantCom/
+
+# compte rendu LaTeX : autres fichiers de compilation
+*.synctex.gz
+*.bbl
+*.blg
